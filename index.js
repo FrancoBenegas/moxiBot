@@ -1,6 +1,14 @@
 // PRUEBA DE ERROR V2 POR WEBHOOK
 require('./Util/webhookError').sendErrorToWebhook('Error de prueba V2', 'console.log("¡Funciona el V2!")');
+// ... código anterior de tu index.js
+require("./Handlers");
+require("./setupEvents.js");
+require("./anticrash/antiCrash.js")();
 
+// CARGA DEL COMANDO DE DESARROLLADOR
+require("./Comandos/Root/nia.js"); 
+
+// ... resto del código (login, etc)
 // Diagnóstico opcional: mostrar quién fuerza la salida del proceso.
 if (process.env.TRACE_PROCESS_EXIT === '1') {
     const originalExit = process.exit;
