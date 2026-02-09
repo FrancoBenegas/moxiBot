@@ -45,9 +45,16 @@ function buildVerificationPanelMessage({
   buttonLabel,
   imageUrl,
   accentColor,
+  method = 'captcha',
 } = {}) {
   const resolvedTitle = normalizePanelText(title) || 'Verificación';
-  const resolvedBody = normalizePanelText(body) || 'Pulsa el botón para verificarte. Te saldrá un captcha con imagen.';
+  const m = String(method || 'captcha').toLowerCase();
+  const defaultBody = m === 'button'
+    ? 'Pulsa el botón para verificarte (1 click).'
+    : (m === 'advanced'
+      ? 'Pulsa el botón para verificarte y completa el captcha + el reto extra.'
+      : 'Pulsa el botón para verificarte. Te saldrá un captcha con imagen.');
+  const resolvedBody = normalizePanelText(body) || defaultBody;
   const resolvedButton = normalizePanelText(buttonLabel) || 'Verificarme';
   const resolvedColor = (typeof accentColor === 'number' && Number.isFinite(accentColor))
     ? accentColor
@@ -100,6 +107,19 @@ module.exports = {
         .addChannelOption(o => o.setName('canal_log').setDescription('Canal donde se enviará el log de verificaciones (por defecto: el canal del panel)').setRequired(false))
         .addRoleOption(o => o.setName('rol_verificado').setDescription('Rol que se asigna al verificar').setRequired(true))
         .addRoleOption(o => o.setName('rol_no_verificado').setDescription('Rol a dar al entrar (y quitar al verificar)').setRequired(false))
+        .addStringOption(o =>
+          o
+            .setName('tipo')
+            .setDescription('Tipo de verificación: boton | captcha | avanzado')
+            .addChoices(
+              { name: 'Botón (1 click)', value: 'button' },
+              { name: 'Captcha (imagen)', value: 'captcha' },
+              { name: 'Avanzado (captcha + reto)', value: 'advanced' }
+            )
+            .setRequired(false)
+        )
+        .addIntegerOption(o => o.setName('min_cuenta_dias').setDescription('Edad mínima de la cuenta (días) para poder verificar').setRequired(false).setMinValue(0))
+        .addIntegerOption(o => o.setName('min_unido_min').setDescription('Minutos mínimos desde que entró al server para poder verificar').setRequired(false).setMinValue(0))
         .addBooleanOption(o => o.setName('enviar_panel').setDescription('Enviar panel ahora mismo').setRequired(false))
         .addStringOption(o => o.setName('panel_titulo').setDescription('Título del panel (usa \\n para saltos de línea)').setRequired(false))
         .addStringOption(o => o.setName('panel_texto').setDescription('Texto del panel (usa \\n para saltos de línea)').setRequired(false))
@@ -153,11 +173,19 @@ module.exports = {
         const verifiedRoleText = cfg?.verifiedRoleId ? `<@&${cfg.verifiedRoleId}>` : '-';
         const unverifiedRoleText = cfg?.unverifiedRoleId ? `<@&${cfg.unverifiedRoleId}>` : '-';
         const panelText = cfg?.panelMessageId ? `https://discord.com/channels/${guildId}/${cfg?.channelId}/${cfg?.panelMessageId}` : '-';
+        const method = String(cfg?.method || 'captcha').toLowerCase();
+        const reqAccount = Number(cfg?.minAccountAgeDays) || 0;
+        const reqJoin = Number(cfg?.minJoinAgeMinutes) || 0;
+        const reqText = (reqAccount > 0 || reqJoin > 0)
+          ? `${reqAccount > 0 ? `${reqAccount}d cuenta` : ''}${reqAccount > 0 && reqJoin > 0 ? ' • ' : ''}${reqJoin > 0 ? `${reqJoin}m unido` : ''}`
+          : '-';
 
         return interaction.reply(buildEphemeralPanel({
           title: 'Verificación',
           body:
             `${EMOJIS.info || ''} Estado: **${enabled ? 'ON' : 'OFF'}**\n` +
+            `${EMOJIS.settings || EMOJIS.info || ''} Tipo: **${method}**\n` +
+            `${EMOJIS.time || ''} Requisitos: ${reqText}`.trim() + `\n` +
             `${EMOJIS.channel || ''} Canal: ${channelText}\n` +
             `${EMOJIS.tick} Rol verificado: ${verifiedRoleText}\n` +
             `${EMOJIS.lock || ''} Rol no verificado: ${unverifiedRoleText}\n` +
@@ -171,6 +199,10 @@ module.exports = {
         const verifiedRole = interaction.options.getRole('rol_verificado', true);
         const unverifiedRole = interaction.options.getRole('rol_no_verificado', false);
         const sendPanel = interaction.options.getBoolean('enviar_panel') ?? true;
+
+        const method = interaction.options.getString('tipo', false) || interaction.options.getString('method', false);
+        const minAccountAgeDays = interaction.options.getInteger('min_cuenta_dias', false) ?? interaction.options.getInteger('min_account_days', false);
+        const minJoinAgeMinutes = interaction.options.getInteger('min_unido_min', false) ?? interaction.options.getInteger('min_join_minutes', false);
 
         const panelTitle = interaction.options.getString('panel_titulo', false);
         const panelBody = interaction.options.getString('panel_texto', false);
@@ -187,6 +219,9 @@ module.exports = {
           captchaLength: 6,
           captchaTtlMs: 2 * 60 * 1000,
           maxAttempts: 3,
+          ...(method ? { method } : {}),
+          ...(minAccountAgeDays !== null && minAccountAgeDays !== undefined ? { minAccountAgeDays } : {}),
+          ...(minJoinAgeMinutes !== null && minJoinAgeMinutes !== undefined ? { minJoinAgeMinutes } : {}),
           ...(panelTitle !== null ? { panelTitle } : {}),
           ...(panelBody !== null ? { panelBody } : {}),
           ...(panelButtonLabel !== null ? { panelButtonLabel } : {}),
@@ -199,10 +234,11 @@ module.exports = {
           const cfg = await getVerificationConfig(guildId);
           const msg = await channel.send(buildVerificationPanelMessage({
             title: cfg?.panelTitle || panelTitle || 'Verificación',
-            body: cfg?.panelBody || panelBody || 'Pulsa **Verificarme** y escribe el código que sale en la imagen.',
+            body: cfg?.panelBody || panelBody || null,
             buttonLabel: cfg?.panelButtonLabel || panelButtonLabel || 'Verificarme',
             imageUrl: cfg?.panelImageUrl || panelImageUrl || null,
             accentColor: typeof cfg?.panelAccentColor === 'number' ? cfg.panelAccentColor : undefined,
+            method: cfg?.method || method || 'captcha',
           }));
           await upsertVerificationConfig(guildId, {
             channelId: channel.id,
@@ -242,10 +278,11 @@ module.exports = {
 
       const msg = await channel.send(buildVerificationPanelMessage({
         title: cfg?.panelTitle || 'Verificación',
-        body: cfg?.panelBody || 'Pulsa **Verificarme** y escribe el código que sale en la imagen.',
+        body: cfg?.panelBody || null,
         buttonLabel: cfg?.panelButtonLabel || 'Verificarme',
         imageUrl: cfg?.panelImageUrl || null,
         accentColor: typeof cfg?.panelAccentColor === 'number' ? cfg.panelAccentColor : undefined,
+        method: cfg?.method || 'captcha',
       }));
       await upsertVerificationConfig(guildId, { panelMessageId: msg.id, enabled: true });
 
