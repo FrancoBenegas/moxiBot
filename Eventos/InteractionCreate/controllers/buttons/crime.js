@@ -11,6 +11,7 @@ const { getCrimeActivity } = require('../../../../Util/crimeActivities');
 const { parseCrimeCustomId, buildCrimeMessageOptions } = require('../../../../Util/crimeView');
 const { crimeActivityTitle, crimeOptionLabel, crimeDoorLabel, crimeRiskLabel, crimeWireLabel } = require('../../../../Util/crimeI18n');
 const { shouldShowCooldownNotice } = require('../../../../Util/cooldownNotice');
+const { isPremiumActive } = require('../../../../Util/premium');
 
 const CRIME_WINDOW_MS = 60 * 1000;
 const CRIME_MAX_HITS = 3;
@@ -101,7 +102,19 @@ module.exports = async function crimeButtons(interaction, Moxi, logger) {
         await interaction.deferUpdate().catch(() => null);
     }
 
-    const cd = claimRateLimit({ userId, key: 'crime', windowMs: CRIME_WINDOW_MS, maxHits: CRIME_MAX_HITS });
+    let maxHits = CRIME_MAX_HITS;
+    try {
+        const premium = await isPremiumActive(userId);
+        if (premium) {
+            const bonusRaw = Number(process.env.CRIME_PREMIUM_MAXHITS_BONUS ?? 2);
+            const bonus = Number.isFinite(bonusRaw) ? Math.max(0, Math.trunc(bonusRaw)) : 2;
+            maxHits = maxHits + bonus;
+        }
+    } catch (_) {
+        // best-effort
+    }
+
+    const cd = claimRateLimit({ userId, key: 'crime', windowMs: CRIME_WINDOW_MS, maxHits });
     if (!cd.ok && cd.reason === 'cooldown') {
         if (!shouldShowCooldownNotice({ userId, key: 'crime' })) {
             return true;

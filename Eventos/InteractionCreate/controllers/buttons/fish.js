@@ -10,6 +10,7 @@ const { addManyToInventory } = require('../../../../Util/inventoryOps');
 const { rollFishMaterials } = require('../../../../Util/fishLoot');
 const { pickFishActivity } = require('../../../../Util/fishActivities');
 const { scaleRange, randInt, chance } = require('../../../../Util/activityUtils');
+const { isPremiumActive } = require('../../../../Util/premium');
 const {
     parseFishCustomId,
     buildFishZonesContainer,
@@ -178,7 +179,20 @@ module.exports = async function fishButtons(interaction) {
         const maxAmount = Math.max(minAmount, safeInt(zone?.reward?.max, 60));
         const activity = pickFishActivity();
         const scaled = scaleRange(minAmount, maxAmount, activity?.multiplier || 1);
-        const cd = claimRateLimit({ userId, key: 'fish', windowMs: 30 * 1000, maxHits: 4 });
+
+        let maxHits = 4;
+        try {
+            const premium = await isPremiumActive(userId);
+            if (premium) {
+                const bonusRaw = Number(process.env.FISH_PREMIUM_MAXHITS_BONUS ?? 2);
+                const bonus = Number.isFinite(bonusRaw) ? Math.max(0, Math.trunc(bonusRaw)) : 2;
+                maxHits = maxHits + bonus;
+            }
+        } catch (_) {
+            // best-effort
+        }
+
+        const cd = claimRateLimit({ userId, key: 'fish', windowMs: 30 * 1000, maxHits });
 
         if (!cd.ok && cd.reason === 'cooldown') {
             if (!shouldShowCooldownNotice({ userId, key: 'fish' })) {

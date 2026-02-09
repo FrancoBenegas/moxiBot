@@ -12,7 +12,7 @@ const { Bot } = require('../../../../Config');
 const { EMOJIS } = require('../../../../Util/emojis');
 const { getVerificationConfig } = require('../../../../Models/VerifySchema');
 const { renderCaptchaPng } = require('../../../../Util/verification/captcha');
-const { createChallenge, tryVerify } = require('../../../../Util/verification/store');
+const { createChallenge, createAdvancedChallenge, getChallenge, tryVerify, tryVerifyAdvanced } = require('../../../../Util/verification/store');
 
 async function sendVerificationLog({ client, guild, cfg, userId }) {
   try {
@@ -175,6 +175,10 @@ function normalizeCaptchaInput(value) {
     .replace(/\s+/g, '');
 }
 
+function normalizeMathInput(value) {
+  return String(value || '').trim();
+}
+
 function debugModalExtraction(logger, interaction, { nonce, extractedRaw, extractedNormalized }) {
   try {
     if (!process.env.VERIFY_DEBUG && !process.env.DEBUG) return;
@@ -224,7 +228,7 @@ function buildEphemeral({ title, body }) {
   };
 }
 
-function buildCaptchaPayload({ nonce }) {
+function buildCaptchaPayload({ nonce, extraText = '' }) {
   const enterBtn = new ButtonBuilder();
   enterBtn.setCustomId(`verify:enter:${nonce}`);
   enterBtn.setLabel('Introducir código');
@@ -244,7 +248,10 @@ function buildCaptchaPayload({ nonce }) {
         new MediaGalleryItemBuilder().setURL('attachment://captcha.png')
       )
     )
-    .addTextDisplayComponents(c => c.setContent('Nuevo captcha generado. Mira la imagen adjunta y pulsa **Introducir código**.'))
+    .addTextDisplayComponents(c => c.setContent(
+      'Nuevo captcha generado. Mira la imagen adjunta y pulsa **Introducir código**.' +
+      (extraText ? `\n\n${extraText}` : '')
+    ))
     .addActionRowComponents(row =>
       row.addComponents(
         enterBtn,
@@ -270,8 +277,12 @@ module.exports = async function verificationModal(interaction, Moxi, logger) {
   if (!guildId || !userId) return true;
 
   const nonce = id.split(':')[2];
+  const challenge = getChallenge(nonce);
   const inputRaw = getModalTextValue(interaction, 'captcha_code');
   const input = normalizeCaptchaInput(inputRaw);
+
+  const mathRaw = getModalTextValue(interaction, 'math_answer');
+  const mathInput = normalizeMathInput(mathRaw);
 
   if (process.env.VERIFY_DEBUG || process.env.DEBUG) {
     try {
@@ -309,7 +320,18 @@ module.exports = async function verificationModal(interaction, Moxi, logger) {
     return true;
   }
 
-  const res = tryVerify(nonce, { guildId, userId, input });
+  const isAdvanced = String(challenge?.type || '') === 'advanced' || String(cfg?.method || '') === 'advanced';
+  if (isAdvanced && !mathInput) {
+    await interaction.reply(buildEphemeral({
+      title: 'Verificación',
+      body: `${EMOJIS.cross} Falta el reto extra. Vuelve a abrir el modal e inténtalo otra vez.`,
+    }));
+    return true;
+  }
+
+  const res = isAdvanced
+    ? tryVerifyAdvanced(nonce, { guildId, userId, captchaInput: input, mathInput })
+    : tryVerify(nonce, { guildId, userId, input });
   if (!res.ok) {
     if (res.reason === 'invalid') {
       debugModalExtraction(logger, interaction, { nonce, extractedRaw: inputRaw, extractedNormalized: input });
@@ -325,12 +347,19 @@ module.exports = async function verificationModal(interaction, Moxi, logger) {
     const length = Number(cfg.captchaLength) || 6;
     const maxAttempts = Number(cfg.maxAttempts) || 3;
 
-    const challenge = createChallenge({ guildId, userId, length, ttlMs, maxAttempts });
-    const png = await renderCaptchaPng(challenge.code);
+    const newChallenge = (String(cfg?.method || '') === 'advanced')
+      ? createAdvancedChallenge({ guildId, userId, length, ttlMs, maxAttempts })
+      : createChallenge({ guildId, userId, length, ttlMs, maxAttempts, type: 'captcha' });
+
+    const png = await renderCaptchaPng(newChallenge.code);
     const buf = Buffer.isBuffer(png) ? png : Buffer.from(png);
 
+    const extraText = (newChallenge.type === 'advanced' && newChallenge.question)
+      ? `Reto extra: resuelve **${newChallenge.question}** y escríbelo en el modal.`
+      : '';
+
     await interaction.reply({
-      ...buildCaptchaPayload({ nonce: challenge.nonce }),
+      ...buildCaptchaPayload({ nonce: newChallenge.nonce, extraText }),
       files: [{ attachment: buf, name: 'captcha.png' }],
     });
     return true;
@@ -348,7 +377,7 @@ module.exports = async function verificationModal(interaction, Moxi, logger) {
   }
 
   try {
-    await member.roles.add(cfg.verifiedRoleId, 'Verificación captcha');
+    await member.roles.add(cfg.verifiedRoleId, isAdvanced ? 'Verificación avanzada' : 'Verificación captcha');
   } catch (err) {
     await interaction.reply(buildEphemeral({
       title: 'Verificación',
