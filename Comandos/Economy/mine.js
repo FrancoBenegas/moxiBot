@@ -13,6 +13,7 @@ const { pickMineActivity } = require('../../Util/mineActivities');
 const { scaleRange, randInt, chance } = require('../../Util/activityUtils');
 const { buildMinePlayMessageOptions } = require('../../Util/minePlay');
 const { shouldShowCooldownNotice } = require('../../Util/cooldownNotice');
+const { isPremiumActive } = require('../../Util/premium');
 const { economyCategory } = require('../../Util/commandCategories');
 
 const MINE_FAIL_CHANCE = 0.18;
@@ -118,7 +119,19 @@ module.exports = {
                 const activity = pickMineActivity(autoZone);
                 const baseRange = isExplosive ? { min: 60, max: 140 } : { min: 30, max: 75 };
                 const scaled = scaleRange(baseRange.min, baseRange.max, activity?.multiplier || 1);
-                const cd = claimRateLimit({ userId, key: 'mine', windowMs: 35 * 1000, maxHits: 3 });
+                    let maxHits = 3;
+                    try {
+                        const premium = await isPremiumActive(userId);
+                        if (premium) {
+                            const bonusRaw = Number(process.env.MINE_PREMIUM_MAXHITS_BONUS ?? 2);
+                            const bonus = Number.isFinite(bonusRaw) ? Math.max(0, Math.trunc(bonusRaw)) : 2;
+                            maxHits = maxHits + bonus;
+                        }
+                    } catch (_) {
+                        // best-effort
+                    }
+
+                    const cd = claimRateLimit({ userId, key: 'mine', windowMs: 35 * 1000, maxHits });
 
                 if (!cd.ok && cd.reason === 'cooldown') {
                     if (!shouldShowCooldownNotice({ userId, key: 'mine' })) {
