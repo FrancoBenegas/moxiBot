@@ -8,6 +8,7 @@ const { EMOJIS } = require('../../Util/emojis');
 const logger = require('../../Util/logger.js');
 const { buildNoticeContainer, asV2MessageOptions } = require('../../Util/v2Notice');
 const getHelpContent = require('../../Util/getHelpContent');
+const { enqueuePlaygroundJobInstant } = require('../../Util/playgroundJobs');
 const { formatDuration } = require('../../Util/economyCore');
 
 function splitUsageVariants(usage) {
@@ -346,6 +347,29 @@ function getSlashSubcommandsWithDescriptions(cmd) {
         .filter(o => o.name);
 }
 
+async function enqueueHelpPreview({ client, lang, guildId, userId, categoria, page = 0 }) {
+    try {
+        const botId = String(client?.user?.id || process.env.CLIENT_ID || '').trim();
+        if (!botId) return;
+
+        await enqueuePlaygroundJobInstant(
+            'playground:helpPreview',
+            {
+                botId,
+                page,
+                tipo: 'main',
+                categoria: categoria || null,
+                lang: lang || process.env.DEFAULT_LANG || 'es-ES',
+                guildId: guildId || null,
+                userId: userId || null,
+            },
+            { botId, runAt: new Date(), priority: 10 }
+        );
+    } catch {
+        // ignore preview errors
+    }
+}
+
 module.exports = {
     name: "help",
     alias: ['h', 'commands'],
@@ -395,6 +419,14 @@ module.exports = {
                     });
 
                     if (help && (help.content || (Array.isArray(help.components) && help.components.length))) {
+                        enqueueHelpPreview({
+                            client: Moxi,
+                            lang,
+                            guildId: message.guild?.id,
+                            userId: message.author?.id,
+                            categoria,
+                            page: 0,
+                        });
                         return message.reply(help);
                     }
                 }
@@ -562,5 +594,13 @@ module.exports = {
             return message.reply({ content: '', components: [container], flags: MessageFlags.IsComponentsV2 });
         }
         await helpSlash.messageRun(Moxi, message, args);
+        enqueueHelpPreview({
+            client: Moxi,
+            lang,
+            guildId: message.guild?.id,
+            userId: message.author?.id,
+            categoria: null,
+            page: 0,
+        });
     }
 };
