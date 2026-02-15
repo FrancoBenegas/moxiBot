@@ -88,6 +88,108 @@ function getExecutorInfo(ctx) {
     return { userId, tag };
 }
 
+async function enqueueCommandPreview({ Moxi, ctx, comando, isInteraction }) {
+    try {
+        const botId = String(Moxi?.user?.id || process.env.CLIENT_ID || '').trim();
+        if (!botId) return;
+
+        const name = String(resolveCommandName(comando) || '').trim().toLowerCase();
+        if (!name || name === 'unknown') return;
+
+        const commandType = isInteraction ? 'slash' : 'prefix';
+
+        const guildId = ctx?.guildId || ctx?.guild?.id || null;
+        const userId = ctx?.user?.id || ctx?.author?.id || (ctx?.member && ctx.member.user && ctx.member.user.id) || null;
+
+        await enqueuePlaygroundJobInstant(
+            'playground:commandPreview',
+            {
+                name,
+                commandType,
+                botId,
+                guildId,
+                userId,
+                render: 'v2',
+            },
+            { botId, guildId, userId, priority: 5 }
+        );
+    } catch {
+        // best-effort
+    }
+}
+
+async function enqueueCommandRunResult({ Moxi, ctx, comando, isInteraction, ui }) {
+    try {
+        if (!ui) return;
+
+        const botId = String(Moxi?.user?.id || process.env.CLIENT_ID || '').trim();
+        if (!botId) return;
+
+        const name = String(resolveCommandName(comando) || '').trim().toLowerCase();
+        if (!name || name === 'unknown') return;
+
+        const commandType = isInteraction ? 'slash' : 'prefix';
+        const guildId = ctx?.guildId || ctx?.guild?.id || null;
+        const userId = ctx?.user?.id || ctx?.author?.id || (ctx?.member && ctx.member.user && ctx.member.user.id) || null;
+
+        await enqueuePlaygroundResult(
+            'playground:commandRun',
+            { name, commandType, botId, guildId, userId },
+            {
+                ok: true,
+                kind: 'commandRun',
+                botId,
+                commandType,
+                name,
+                ui,
+            },
+            { botId, guildId, userId, priority: 5 }
+        );
+    } catch {
+        // best-effort
+    }
+}
+
+function normalizePayload(payload) {
+    if (!payload) return null;
+    if (typeof payload === 'string') return { content: payload };
+    return payload;
+}
+
+function createUiCapture(ctx) {
+    let lastUi = null;
+    const cleanups = [];
+
+    const record = (payload) => {
+        const normalized = normalizePayload(payload);
+        if (!normalized || !normalized.components) return;
+        lastUi = serializeMessagePayload({
+            content: normalized.content || '',
+            components: normalized.components,
+            flags: normalized.flags,
+        });
+    };
+
+    const wrap = (obj, methodName) => {
+        if (!obj || typeof obj[methodName] !== 'function') return;
+        const original = obj[methodName];
+        obj[methodName] = async function (...args) {
+            try { record(args[0]); } catch { }
+            return original.apply(this, args);
+        };
+        cleanups.push(() => { obj[methodName] = original; });
+    };
+
+    wrap(ctx, 'reply');
+    wrap(ctx, 'editReply');
+    wrap(ctx, 'followUp');
+
+    return {
+        getUi: () => lastUi,
+        restore: () => cleanups.forEach((fn) => fn()),
+    };
+}
+
 async function getLangForCtx(ctx) {
     const fallback = process.env.DEFAULT_LANG || 'es-ES';
     const direct = ctx?.lang;
@@ -199,6 +301,7 @@ module.exports = async function handleCommand(Moxi, ctx, args, comando) {
     if (isInteraction) ctx.isInteraction = true;
 
     debugHelper.log('commands', 'invoke', buildContextPayload(ctx, comando, args, isInteraction));
+    const uiCapture = createUiCapture(ctx);
 
     try {
         const commandName = String(resolveCommandName(comando) || '').trim().toLowerCase();
@@ -257,7 +360,7 @@ module.exports = async function handleCommand(Moxi, ctx, args, comando) {
 
             if (shouldSuppressEconGateNotice({ guildId, channelId, userId, kind: gate.kind })) {
                 return null;
-            }
+            } 
 
             if (gate.kind === 'economy-disabled') {
                 const msg = moxi.translate('misc:ECONOMY_GATE_DISABLED', lang) || 'Economía desactivada.';
@@ -357,12 +460,21 @@ module.exports = async function handleCommand(Moxi, ctx, args, comando) {
         userTag: tag,
     };
 
-    if (typeof comando.execute === 'function') {
-        return runWithCommandContext(context, () => comando.execute(Moxi, ctx, args));
-    }
-    if (typeof comando.run === 'function') {
-        return runWithCommandContext(context, () => comando.run(Moxi, ctx, args));
-    }
+    let execResult;
+    try {
+        if (typeof comando.execute === 'function') {
+            execResult = await runWithCommandContext(context, () => comando.execute(Moxi, ctx, args));
+            return execResult;
+        }
+        if (typeof comando.run === 'function') {
+            execResult = await runWithCommandContext(context, () => comando.run(Moxi, ctx, args));
+            return execResult;
+        }
 
-    throw new Error('El comando no tiene función ejecutable (execute o run)');
+        throw new Error('El comando no tiene función ejecutable (execute o run)');
+    } finally {
+        const ui = uiCapture.getUi();
+        uiCapture.restore();
+        await enqueueCommandRunResult({ Moxi, ctx, comando, isInteraction, ui });
+    }
 };

@@ -15,6 +15,7 @@ const { hasInventoryItem } = require('./fishView');
 const { scaleRange, randInt, chance } = require('./activityUtils');
 const { buildNoticeContainer } = require('./v2Notice');
 const { buildRemindButton } = require('./cooldownReminderUI');
+const { isPremiumActive } = require('./premium');
 
 // Anti-spam: no hay cooldown fijo por ejecución; solo se bloquea si se spamea.
 const MINE_WINDOW_MS = 35 * 1000;
@@ -196,7 +197,19 @@ async function resolveMinePlay({ userId, zoneId, mode, choiceId, seedOrMult, lan
         };
     }
 
-    const cd = claimRateLimit({ userId, key: 'mine', windowMs: MINE_WINDOW_MS, maxHits: MINE_MAX_HITS });
+    let maxHits = MINE_MAX_HITS;
+    try {
+        const premium = await isPremiumActive(userId);
+        if (premium) {
+            const bonusRaw = Number(process.env.MINE_PREMIUM_MAXHITS_BONUS ?? 2);
+            const bonus = Number.isFinite(bonusRaw) ? Math.max(0, Math.trunc(bonusRaw)) : 2;
+            maxHits = maxHits + bonus;
+        }
+    } catch (_) {
+        // best-effort
+    }
+
+    const cd = claimRateLimit({ userId, key: 'mine', windowMs: MINE_WINDOW_MS, maxHits });
     if (!cd.ok) return cd;
 
     const requiredId = String(zone?.requiredItemId || '');

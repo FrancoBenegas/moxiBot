@@ -43,9 +43,13 @@ async function main() {
     if (purgeBotId) {
         try {
             // eslint-disable-next-line global-require
-            const CommandRegistry = require('../Models/CommandRegistrySchema');
+            const CommandRegistry = require('../Models/CommandsSchema');
+            // eslint-disable-next-line global-require
+            const Subcommands = require('../Models/SubcommandsSchema');
             const { deletedCount } = await CommandRegistry.deleteMany({ botId: String(purgeBotId).trim() });
+            const { deletedCount: subDeletedCount } = await Subcommands.deleteMany({ botId: String(purgeBotId).trim() });
             logger.info(`[commandRegistry] purgeBotId=${purgeBotId} deleted=${deletedCount}`);
+            logger.info(`[commandRegistry] purgeBotId=${purgeBotId} subDeleted=${subDeletedCount}`);
         } catch (e) {
             logger.warn(`[commandRegistry] purgeBotId failed: ${e?.message || e}`);
         }

@@ -99,6 +99,34 @@ function getWorkCooldownMs() {
     return DEFAULT_WORK_COOLDOWN_MS;
 }
 
+function resolvePremiumWorkCooldownMs(baseMs) {
+    const base = Math.max(1, safeInt(baseMs, DEFAULT_WORK_COOLDOWN_MS));
+
+    const rawOverride = Number(process.env.WORK_COOLDOWN_PREMIUM_MS);
+    if (Number.isFinite(rawOverride) && rawOverride > 0) {
+        return Math.max(1, Math.trunc(rawOverride));
+    }
+
+    const rawMult = Number(process.env.WORK_COOLDOWN_PREMIUM_MULTIPLIER);
+    if (Number.isFinite(rawMult) && rawMult > 0 && rawMult <= 1) {
+        return Math.max(1, Math.trunc(base * rawMult));
+    }
+
+    return base;
+}
+
+async function getWorkCooldownMsForUser(userId) {
+    const base = getWorkCooldownMs();
+    try {
+        const { isPremiumActive } = require('./premium');
+        const premium = await isPremiumActive(userId);
+        if (!premium) return base;
+        return resolvePremiumWorkCooldownMs(base);
+    } catch {
+        return base;
+    }
+}
+
 function listJobs() {
     return JOBS.slice();
 }
@@ -255,7 +283,7 @@ async function doShift({ userId }) {
         return { ok: false, reason: 'bad-job', message: 'Tu trabajo actual ya no existe. Usa `work apply <trabajo>` de nuevo.' };
     }
 
-    const cooldownMs = getWorkCooldownMs();
+    const cooldownMs = await getWorkCooldownMsForUser(userId);
     const now = new Date();
     const cutoff = new Date(Date.now() - cooldownMs);
     const fixedSalary = Number.isFinite(Number(job.salary)) ? Math.max(0, Math.trunc(job.salary)) : null;
@@ -303,7 +331,7 @@ async function doShift({ userId }) {
 async function getWorkStats({ userId }) {
     const eco = await getOrCreateEconomy(userId);
     const job = eco?.workJobId ? (JOBS.find(j => j.id === eco.workJobId) || null) : null;
-    const cooldownMs = getWorkCooldownMs();
+    const cooldownMs = await getWorkCooldownMsForUser(userId);
     const remaining = msUntilNext(eco?.lastWork, cooldownMs);
     return {
         userId,
@@ -374,6 +402,8 @@ module.exports = {
     resolveJob,
     getJobDisplayName,
     getWorkCooldownMs,
+    resolvePremiumWorkCooldownMs,
+    getWorkCooldownMsForUser,
     applyJob,
     leaveJob,
     doShift,

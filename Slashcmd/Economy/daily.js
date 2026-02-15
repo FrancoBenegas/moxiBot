@@ -5,6 +5,7 @@ const { EMOJIS } = require('../../Util/emojis');
 const { buildNoticeContainer, asV2MessageOptions } = require('../../Util/v2Notice');
 const { shouldShowCooldownNotice } = require('../../Util/cooldownNotice');
 const { claimCooldownReward, formatDuration } = require('../../Util/economyCore');
+const { isPremiumActive } = require('../../Util/premium');
 const { getSlashCommandDescription } = require('../../Util/slashHelpI18n');
 
 const { description, localizations } = getSlashCommandDescription('daily');
@@ -29,12 +30,23 @@ module.exports = {
         const minAmount = Number.isFinite(Number(process.env.DAILY_MIN)) ? Math.max(0, Math.trunc(Number(process.env.DAILY_MIN))) : 200;
         const maxAmount = Number.isFinite(Number(process.env.DAILY_MAX)) ? Math.max(minAmount, Math.trunc(Number(process.env.DAILY_MAX))) : 400;
 
+        const premium = await isPremiumActive(interaction.user.id);
+        const premiumMultiplierRaw = Number(process.env.DAILY_PREMIUM_MULTIPLIER);
+        const premiumMultiplier = Number.isFinite(premiumMultiplierRaw) ? Math.max(1, premiumMultiplierRaw) : 1.15;
+        const premiumBonusRaw = Number(process.env.DAILY_PREMIUM_BONUS);
+        const premiumBonus = Number.isFinite(premiumBonusRaw) ? Math.max(0, Math.trunc(premiumBonusRaw)) : 0;
+
+        const effectiveMinAmount = premium ? Math.max(0, Math.trunc(minAmount * premiumMultiplier) + premiumBonus) : minAmount;
+        const effectiveMaxAmount = premium
+            ? Math.max(effectiveMinAmount, Math.trunc(maxAmount * premiumMultiplier) + premiumBonus)
+            : maxAmount;
+
         const res = await claimCooldownReward({
             userId: interaction.user.id,
             field: 'lastDaily',
             cooldownMs,
-            minAmount,
-            maxAmount,
+            minAmount: effectiveMinAmount,
+            maxAmount: effectiveMaxAmount,
         });
 
         if (!res.ok) {

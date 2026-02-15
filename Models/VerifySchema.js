@@ -27,6 +27,17 @@ function normalizeUrl(value) {
   return str;
 }
 
+function normalizeMethod(value) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const str = String(value).trim().toLowerCase();
+  if (!str) return null;
+  if (['button', 'boton', 'btn'].includes(str)) return 'button';
+  if (['captcha', 'image', 'imagen'].includes(str)) return 'captcha';
+  if (['advanced', 'avanzado', 'pro'].includes(str)) return 'advanced';
+  return null;
+}
+
 function normalizeColor(value) {
   if (value === undefined) return undefined;
   if (value === null) return null;
@@ -48,6 +59,16 @@ const VerifySchema = new Schema({
   verifiedRoleId: { type: String, default: null },
   unverifiedRoleId: { type: String, default: null },
   panelMessageId: { type: String, default: null },
+
+  // Tipo de verificación
+  // - button: solo pulsar botón => rol
+  // - captcha: captcha con imagen + modal (actual)
+  // - advanced: captcha + reto extra (modal) + requisitos opcionales
+  method: { type: String, default: 'captcha' },
+
+  // Requisitos (opcionales) para permitir verificar
+  minAccountAgeDays: { type: Number, default: 0 },
+  minJoinAgeMinutes: { type: Number, default: 0 },
 
   captchaLength: { type: Number, default: 6 },
   captchaTtlMs: { type: Number, default: 2 * 60 * 1000 },
@@ -100,6 +121,17 @@ async function upsertVerificationConfig(guildId, patch) {
   if ('panelButtonLabel' in safePatch) safePatch.panelButtonLabel = normalizeText(safePatch.panelButtonLabel);
   if ('panelImageUrl' in safePatch) safePatch.panelImageUrl = normalizeUrl(safePatch.panelImageUrl);
   if ('panelAccentColor' in safePatch) safePatch.panelAccentColor = normalizeColor(safePatch.panelAccentColor);
+
+  if ('method' in safePatch) safePatch.method = normalizeMethod(safePatch.method);
+
+  if ('minAccountAgeDays' in safePatch) {
+    const n = Number(safePatch.minAccountAgeDays);
+    safePatch.minAccountAgeDays = Number.isFinite(n) ? Math.max(0, n) : 0;
+  }
+  if ('minJoinAgeMinutes' in safePatch) {
+    const n = Number(safePatch.minJoinAgeMinutes);
+    safePatch.minJoinAgeMinutes = Number.isFinite(n) ? Math.max(0, n) : 0;
+  }
 
   const update = {
     $setOnInsert: { guildId: String(guildId), createdAt: now },

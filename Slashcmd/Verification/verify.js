@@ -20,6 +20,19 @@ module.exports = {
         .addChannelOption(o => o.setName('canal_log').setDescription('Log channel for verification events (default: panel channel)').setRequired(false))
         .addRoleOption(o => o.setName('rol_verificado').setDescription('Role to assign after verifying').setRequired(true))
         .addRoleOption(o => o.setName('rol_no_verificado').setDescription('Role to give on join (removed after verifying)').setRequired(false))
+        .addStringOption(o =>
+          o
+            .setName('method')
+            .setDescription('Verification type: button | captcha | advanced')
+            .addChoices(
+              { name: 'Button (1 click)', value: 'button' },
+              { name: 'Captcha (image)', value: 'captcha' },
+              { name: 'Advanced (captcha + challenge)', value: 'advanced' }
+            )
+            .setRequired(false)
+        )
+        .addIntegerOption(o => o.setName('min_account_days').setDescription('Minimum account age (days) to verify').setRequired(false).setMinValue(0))
+        .addIntegerOption(o => o.setName('min_join_minutes').setDescription('Minimum minutes since joining to verify').setRequired(false).setMinValue(0))
         .addBooleanOption(o => o.setName('enviar_panel').setDescription('Send the panel now').setRequired(false))
         .addStringOption(o => o.setName('panel_titulo').setDescription('Panel title (use \\n for new lines)').setRequired(false))
         .addStringOption(o => o.setName('panel_texto').setDescription('Panel text (use \\n for new lines)').setRequired(false))
