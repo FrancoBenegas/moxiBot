@@ -23,17 +23,45 @@ module.exports = {
     },
     cooldown: 10,
     async execute(Moxi, message, args) {
+        const strictEnvPrefix = ['1', 'true', 'yes', 'on'].includes(String(process.env.STRICT_ENV_PREFIX || '0').trim().toLowerCase());
+        const envPrefix = (typeof process.env.PREFIX === 'string' && process.env.PREFIX.trim())
+            ? process.env.PREFIX.trim()
+            : ((Array.isArray(Bot?.Prefix) && Bot.Prefix[0]) ? Bot.Prefix[0] : '.');
+
         debugHelper.log('prefix', 'execute start', {
             guildId: message.guild?.id || 'dm',
             userId: message.author?.id,
             argsCount: (args || []).length,
             preview: (args || []).slice(0, 2),
         });
+
+        if (strictEnvPrefix) {
+            const { ContainerBuilder, MessageFlags } = require('discord.js');
+            const lang = await moxi.guildLang(message.guild?.id, process.env.DEFAULT_LANG || 'es-ES');
+            const container = new ContainerBuilder()
+                .setAccentColor(Bot.AccentColor)
+                .addTextDisplayComponents(c => c.setContent('# Prefijo bloqueado por configuración'))
+                .addSeparatorComponents(s => s.setDivider(true))
+                .addTextDisplayComponents(c => c.setContent(`El bot está en modo de prefijo estricto (env).\nPrefijo activo: \`${envPrefix}\``))
+                .addTextDisplayComponents(c => c.setContent('Para cambiarlo, edita `PREFIX` en el `.env` y reinicia el bot.'))
+                .addSeparatorComponents(s => s.setDivider(true))
+                .addTextDisplayComponents(c => c.setContent(`${EMOJIS.copyright} ${Moxi.user.username} • ${new Date().getFullYear()}`));
+            return message.reply({ content: '', components: [container], flags: MessageFlags.IsComponentsV2 });
+        }
+
         if (!args[0]) {
             const { ContainerBuilder, MessageFlags } = require('discord.js');
             const lang = await moxi.guildLang(message.guild?.id, process.env.DEFAULT_LANG || 'es-ES');
             const globalPrefix = (Array.isArray(Bot?.Prefix) && Bot.Prefix[0]) ? Bot.Prefix[0] : (process.env.PREFIX || '.');
             const currentPrefix = await moxi.guildPrefix(message.guild?.id, globalPrefix);
+            const isEnvSource = String(currentPrefix || '') === String(envPrefix || '');
+            const prefixSourceText = /^es(-|$)/i.test(String(lang || ''))
+                ? (isEnvSource
+                    ? 'Origen del prefijo: **ENV (.env)**'
+                    : 'Origen del prefijo: **Personalizado por servidor**')
+                : (isEnvSource
+                    ? 'Prefix source: **ENV (.env)**'
+                    : 'Prefix source: **Server custom setting**');
 
             const mentionPrefix = Moxi?.user?.id ? `<@${Moxi.user.id}>` : '';
             const alsoPrefixes = [
@@ -47,6 +75,7 @@ module.exports = {
                 .addTextDisplayComponents(c => c.setContent(`# ${moxi.translate('prefix-panels:CURRENT_PREFIX_TITLE', lang)}`))
                 .addSeparatorComponents(s => s.setDivider(true))
                 .addTextDisplayComponents(c => c.setContent(moxi.translate('prefix-panels:CURRENT_PREFIX_DESC', lang, { prefix: currentPrefix })))
+                .addTextDisplayComponents(c => c.setContent(prefixSourceText))
                 .addTextDisplayComponents(c => c.setContent(moxi.translate('prefix-panels:ALSO_CAN_USE', lang, { prefixes: alsoPrefixes })))
                 .addSeparatorComponents(s => s.setDivider(true))
                 .addTextDisplayComponents(c => c.setContent(`${EMOJIS.copyright} ${Moxi.user.username} • ${new Date().getFullYear()}`));

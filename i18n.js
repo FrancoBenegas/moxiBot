@@ -360,6 +360,14 @@ async function getGuildLanguageCached(guildId, fallbackLang = 'es-ES') {
 }
 
 async function getGuildPrefixCached(guildId, fallbackPrefix = '.') {
+  const strictEnvPrefix = ['1', 'true', 'yes', 'on'].includes(String(process.env.STRICT_ENV_PREFIX || '0').trim().toLowerCase());
+  const envPrefix = (typeof process.env.PREFIX === 'string' && process.env.PREFIX.trim())
+    ? process.env.PREFIX.trim()
+    : '';
+  if (strictEnvPrefix) {
+    return envPrefix || fallbackPrefix;
+  }
+
   const gid = guildId ? String(guildId) : '';
   if (!gid) return fallbackPrefix;
   try {

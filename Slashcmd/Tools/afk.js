@@ -43,6 +43,7 @@ module.exports = {
             guildId: interaction.guildId,
             message: sanitizedMessage,
             scope,
+            botId: Moxi?.user?.id,
         });
 
         const scopeKey = scope === 'global' ? 'AFK_SCOPE_GLOBAL' : 'AFK_SCOPE_GUILD';

@@ -6,6 +6,8 @@ const Config = require('../Config');
 const { shouldBlockByTimeGate, buildBlockedMessage } = require('./timeGate');
 const { runWithCommandContext } = require('./commandContext');
 const { getGuildSettingsCached } = require('./guildSettings');
+const { isUserLocallyBlacklisted, isUserGloballyBlacklisted } = require('./blacklistStorage');
+const { isDiscordOnlyOwner } = require('./ownerPermissions');
 
 const ECON_GATE_NOTICE_TTL_MS = Number.parseInt(process.env.ECON_GATE_NOTICE_TTL_MS || '', 10) || 12_000;
 const ECON_GATE_AUTO_DELETE_MS = Number.parseInt(process.env.ECON_GATE_AUTO_DELETE_MS || '', 10) || 10_000;
@@ -197,6 +199,46 @@ module.exports = async function handleCommand(Moxi, ctx, args, comando) {
     if (isInteraction) ctx.isInteraction = true;
 
     debugHelper.log('commands', 'invoke', buildContextPayload(ctx, comando, args, isInteraction));
+
+    try {
+        const commandName = String(resolveCommandName(comando) || '').trim().toLowerCase();
+        const blacklistBypassCommands = new Set(['blacklist', 'gblacklist']);
+
+        if (!blacklistBypassCommands.has(commandName)) {
+            const guildId = ctx?.guildId || ctx?.guild?.id || null;
+            const userId = ctx?.user?.id || ctx?.author?.id || (ctx?.member && ctx.member.user && ctx.member.user.id) || null;
+
+            if (userId) {
+                const isOwner = await isDiscordOnlyOwner({ client: Moxi, userId }).catch(() => false);
+
+                if (!isOwner) {
+                    const blockedGlobal = await isUserGloballyBlacklisted({ userId });
+                    const blockedLocal = guildId
+                        ? await isUserLocallyBlacklisted({ guildId, userId })
+                        : false;
+
+                    if (blockedGlobal || blockedLocal) {
+                        const lang = await getLangForCtx(ctx);
+                        const t = (key, fallback) => {
+                            const out = moxi.translate(key, lang);
+                            return (out && out !== key) ? out : fallback;
+                        };
+
+                        const content = blockedGlobal
+                            ? t('misc:BLACKLIST_GLOBAL_BLOCKED', 'Estás en blacklist global y no puedes usar comandos.')
+                            : t('misc:BLACKLIST_LOCAL_BLOCKED', 'Estás en blacklist de este servidor y no puedes usar comandos.');
+
+                        return await replyBlocked(Moxi, ctx, {
+                            content,
+                            isInteraction,
+                        });
+                    }
+                }
+            }
+        }
+    } catch {
+        // best-effort
+    }
 
     // --- ECONOMY GATE (canal dedicado / toggle) ---
     try {

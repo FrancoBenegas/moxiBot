@@ -6,6 +6,48 @@ const { ensureMongoConnection } = require('../../Util/mongoConnect');
 const { restoreTimers } = require('../../Util/timerStorage');
 const { syncCommandRegistry } = require('../../Util/commandRegistry');
 
+function isPrimaryShard(client) {
+    try {
+        if (!client?.shard) return true;
+        const ids = Array.isArray(client.shard.ids) ? client.shard.ids : [];
+        if (!ids.length) return true;
+        return ids.includes(0);
+    } catch {
+        return true;
+    }
+}
+
+function messageLooksLikeStartup(msg) {
+    try {
+        if (!msg) return false;
+        const raw = JSON.stringify(msg.components || []);
+        return /moxi encendido/i.test(raw);
+    } catch {
+        return false;
+    }
+}
+
+async function shouldSendStartupAnnouncement(channel, client, windowMs = 120000) {
+    try {
+        if (!channel || !channel.isTextBased?.()) return false;
+        if (!client?.user?.id) return false;
+
+        const now = Date.now();
+        const recent = await channel.messages.fetch({ limit: 10 }).catch(() => null);
+        if (!recent) return true;
+
+        for (const msg of recent.values()) {
+            if (!msg || !msg.author) continue;
+            if (String(msg.author.id) !== String(client.user.id)) continue;
+            if ((now - Number(msg.createdTimestamp || 0)) > windowMs) continue;
+            if (messageLooksLikeStartup(msg)) return false;
+        }
+        return true;
+    } catch {
+        return true;
+    }
+}
+
 module.exports = async (Moxi) => {
     // En algunas condiciones (reconexión/resume) el evento puede dispararse más de una vez.
     // Este handler hace init de módulos que registran listeners internos; si se repite, aparecen warnings.
@@ -162,9 +204,13 @@ module.exports = async (Moxi) => {
     const { getStartupComponentV2 } = require("../../Components/V2/startupEmbedComponent");
     const { MessageFlags } = require("discord.js");
     const channelId = process.env.ERROR_CHANNEL_ID || '1459913736050704485';
+    if (!isPrimaryShard(Moxi)) return;
+
     Moxi.channels.fetch(channelId)
-        .then((channel) => {
+        .then(async (channel) => {
             if (channel && channel.isTextBased()) {
+                const shouldSend = await shouldSendStartupAnnouncement(channel, Moxi);
+                if (!shouldSend) return;
                 const component = getStartupComponentV2(Moxi);
                 channel.send({ content: '', components: [component], flags: MessageFlags.IsComponentsV2 }).catch(() => { });
             }

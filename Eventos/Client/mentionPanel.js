@@ -4,7 +4,8 @@ const { Bot } = require('../../Config');
 
 async function panelV2({ client: Moxi, message, prefix }) {
     const moxi = require('../../i18n');
-    const lang = await moxi.guildLang(message.guild?.id, process.env.DEFAULT_LANG || 'es-ES');    let panel;
+    const lang = await moxi.guildLang(message.guild?.id, process.env.DEFAULT_LANG || 'es-ES');
+    let panel;
     try {
         panel = require(`../../Languages/${lang}/mentionPanel.json`);
     } catch {
@@ -12,11 +13,23 @@ async function panelV2({ client: Moxi, message, prefix }) {
     }
     const langName = moxi.translate('LANGUAGE_NAME', lang) || lang;
     const mention = `<@${Moxi.user.id}>`;
+    const envPrefix = (typeof process.env.PREFIX === 'string' && process.env.PREFIX.trim())
+        ? process.env.PREFIX.trim()
+        : ((Array.isArray(Bot?.Prefix) && Bot.Prefix[0]) ? Bot.Prefix[0] : '.');
+
+    const isEnvPrefix = String(prefix || '') === String(envPrefix || '');
+    const fallbackEnv = 'Prefix source: **ENV (.env)**';
+    const fallbackCustom = 'Prefix source: **Server custom setting**';
+    const rawPrefixSource = isEnvPrefix ? panel.prefix_source_env : panel.prefix_source_custom;
+    const prefixSource = (typeof rawPrefixSource === 'string' && rawPrefixSource.trim())
+        ? rawPrefixSource
+        : (isEnvPrefix ? fallbackEnv : fallbackCustom);
+
     const replacements = {
         mention,
         lang,
         langName,
-        prefix
+        prefix,
     };
     function t(str) {
         return str.replace(/\{\{(\w+)\}\}/g, (_, k) => replacements[k] || '');
@@ -32,6 +45,9 @@ async function panelV2({ client: Moxi, message, prefix }) {
         .addSeparatorComponents(s => s.setDivider(true))
         .addTextDisplayComponents(c =>
             c.setContent(t(panel.prefix_label))
+        )
+        .addTextDisplayComponents(c =>
+            c.setContent(prefixSource)
         )
         .addTextDisplayComponents(c =>
             c.setContent(t(panel.forgot_prefix))
