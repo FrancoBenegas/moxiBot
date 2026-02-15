@@ -14,6 +14,7 @@ async function purgeRecentMessages(channel, amount, { keepPinned = true } = {}) 
 
   const candidates = [];
   for(let i = 0, msg = fetched.at(i); i < amount; i++, msg = fetched.at(i)) {
+    if (!msg) break;
     if(!keepPinned || !msg.pinned) candidates.push(msg);
   }
 
@@ -95,17 +96,9 @@ module.exports = {
         return interaction.editReply({ content: 'No puedo borrar mensajes: me falta **Leer el historial de mensajes** en este canal.' });
       }
 
-      const fetched = await channel.messages.fetch({ limit }).catch(() => null);
-      const cutoff = Date.now() - (14 * 24 * 60 * 60 * 1000);
-
-      const eligible = fetched
-        ? fetched.filter((m) => !m.pinned && (m.createdTimestamp || 0) > cutoff)
-        : null;
-
-      const deleted = eligible ? await channel.bulkDelete(eligible, true) : await channel.bulkDelete(limit, true);
-      const deletedCount = deleted?.size ?? 0;
-      const fetchedCount = fetched?.size ?? limit;
-      const skippedOldOrPinned = eligible ? Math.max(0, fetchedCount - eligible.size) : 0;
+      const result = await purgeRecentMessages(channel, limit, { keepPinned: true });
+      const deletedCount = result.deletedCount;
+      const skippedOldOrPinned = Math.max(0, result.attempted - result.deletedCount);
 
       const container = new ContainerBuilder()
         .setAccentColor(0x00bfff)
