@@ -13,6 +13,7 @@ const {
     hasInventoryItem,
 } = require('../../Util/fishView');
 const { buildZonesMessageOptions, getZonesForKind } = require('../../Util/zonesView');
+const { isPremiumActive } = require('../../Util/premium');
 
 const { economyCategory } = require('../../Util/commandCategories');
 
@@ -130,7 +131,20 @@ module.exports = {
                 const maxAmount = Math.max(minAmount, safeInt(autoZone?.reward?.max, 60));
                 const activity = pickFishActivity();
                 const scaled = scaleRange(minAmount, maxAmount, activity?.multiplier || 1);
-                const cd = claimRateLimit({ userId, key: 'fish', windowMs: 30 * 1000, maxHits: 4 });
+
+                let maxHits = 4;
+                try {
+                    const isPremium = await isPremiumActive(userId);
+                    if (isPremium) {
+                        const bonusRaw = Number(process.env.FISH_PREMIUM_MAXHITS_BONUS ?? 2);
+                        const bonus = Number.isFinite(bonusRaw) ? Math.max(0, Math.trunc(bonusRaw)) : 2;
+                        maxHits = maxHits + bonus;
+                    }
+                } catch (_) {
+                    // best-effort
+                }
+
+                const cd = claimRateLimit({ userId, key: 'fish', windowMs: 30 * 1000, maxHits });
 
                 if (!cd.ok && cd.reason === 'cooldown') {
                     if (!shouldShowCooldownNotice({ userId, key: 'fish' })) {

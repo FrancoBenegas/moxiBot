@@ -2,6 +2,7 @@ const { awardBalance, formatDuration, getOrCreateEconomy } = require('./economyC
 const { claimRateLimit } = require('./actionRateLimit');
 const { randInt, chance, pickRandom } = require('./activityUtils');
 const { pickRandomCrimeActivity } = require('./crimeActivities');
+const { isPremiumActive } = require('./premium');
 
 // Anti-spam: sin cooldown fijo; se bloquea solo si se insiste.
 const CRIME_WINDOW_MS = 60 * 1000;
@@ -82,7 +83,19 @@ async function doCrime({ userId } = {}) {
     const uid = String(userId || '').trim();
     if (!uid) return { ok: false, message: 'Falta userId.' };
 
-    const cd = claimRateLimit({ userId: uid, key: 'crime', windowMs: CRIME_WINDOW_MS, maxHits: CRIME_MAX_HITS });
+    let maxHits = CRIME_MAX_HITS;
+    try {
+        const premium = await isPremiumActive(uid);
+        if (premium) {
+            const bonusRaw = Number(process.env.CRIME_PREMIUM_MAXHITS_BONUS ?? 2);
+            const bonus = Number.isFinite(bonusRaw) ? Math.max(0, Math.trunc(bonusRaw)) : 2;
+            maxHits = maxHits + bonus;
+        }
+    } catch (_) {
+        // best-effort
+    }
+
+    const cd = claimRateLimit({ userId: uid, key: 'crime', windowMs: CRIME_WINDOW_MS, maxHits });
     if (!cd.ok && cd.reason === 'cooldown') {
         return { ok: false, reason: 'cooldown', nextInMs: cd.nextInMs, message: `Vuelve en **${formatDuration(cd.nextInMs)}**.` };
     }

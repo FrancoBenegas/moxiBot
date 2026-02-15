@@ -8,6 +8,8 @@ const {
     resolveJob,
     getJobDisplayName,
     getWorkCooldownMs,
+    resolvePremiumWorkCooldownMs,
+    getWorkCooldownMsForUser,
     applyJob,
     leaveJob,
     doShift,
@@ -64,6 +66,10 @@ module.exports = {
     usage: 'work list | work apply <id|nombre> | work leave | work shift | work stats | work top',
     description: 'commands:CMD_WORK_DESC',
     cooldown: Math.floor(getWorkCooldownMs() / 1000),
+    cooldownTiers: {
+        normal: Math.floor(getWorkCooldownMs() / 1000),
+        premium: Math.floor(resolvePremiumWorkCooldownMs(getWorkCooldownMs()) / 1000),
+    },
     permissions: {
         Bot: ['Ver canal', 'Enviar mensajes', 'Insertar enlaces'],
         User: [],
@@ -102,7 +108,7 @@ module.exports = {
                     );
                 }
                 if (res.reason === 'no-job') {
-                    const cd = formatDuration(getWorkCooldownMs());
+                    const cd = formatDuration(await getWorkCooldownMsForUser(message.author.id));
                     return message.reply(
                         asV2MessageOptions(
                             buildNoticeContainer({
@@ -143,7 +149,7 @@ module.exports = {
         }
 
         if (sub === 'help') {
-            const cd = formatDuration(getWorkCooldownMs());
+            const cd = formatDuration(await getWorkCooldownMsForUser(message.author.id));
             return message.reply(
                 asV2MessageOptions(
                     buildNoticeContainer({
@@ -239,7 +245,7 @@ module.exports = {
                 }
 
                 if (res.reason === 'no-job') {
-                    const cd = formatDuration(getWorkCooldownMs());
+                    const cd = formatDuration(await getWorkCooldownMsForUser(message.author.id));
                     return message.reply(
                         asV2MessageOptions(
                             buildNoticeContainer({
@@ -281,7 +287,7 @@ module.exports = {
 
         if (sub === 'stats') {
             const st = await getWorkStats({ userId: message.author.id });
-            const cd = formatDuration(getWorkCooldownMs());
+            const cd = formatDuration(await getWorkCooldownMsForUser(message.author.id));
             const jobLine = st.job ? `**${getJobDisplayName(st.job, lang)}** ${st.job.emoji || ''}` : '—';
             const last = st.lastWork ? `<t:${Math.floor(st.lastWork.getTime() / 1000)}:R>` : '—';
             const next = st.nextInMs > 0 ? `en **${st.nextInText}**` : 'ahora';

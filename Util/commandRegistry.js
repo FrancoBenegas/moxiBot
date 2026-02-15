@@ -1,7 +1,8 @@
 const logger = require('./logger');
 const { EMOJIS } = require('./emojis');
 const { ensureMongoConnection } = require('./mongoConnect');
-const CommandRegistry = require('../Models/CommandRegistrySchema');
+const CommandRegistry = require('../Models/CommandsSchema');
+const Subcommands = require('../Models/SubcommandsSchema');
 const moxi = require('../i18n');
 const { applySlashI18nToCommandJson } = require('./slashHelpI18n');
 
@@ -137,6 +138,9 @@ function buildPrefixDoc(cmd, botId) {
         aliases: Array.from(new Set((aliases || []).map((a) => normalizeString(a).toLowerCase()).filter(Boolean))),
         cooldown,
         permissions: Array.from(new Set((permissions || []).map((p) => normalizeString(p)).filter(Boolean))),
+        commandPath: name ? `/${name}` : '',
+        commandPaths: name ? [`/${name}`] : [],
+        subcommands: [],
         sourceFile: normalizeString(cmd?.__sourceFile),
         lastSeenAt: new Date(),
     };
@@ -153,6 +157,71 @@ function trySlashToJson(slashCmd) {
     }
 }
 
+function normalizeSlashOptionType(type) {
+    // Discord API: 1=SUB_COMMAND, 2=SUB_COMMAND_GROUP
+    if (type === 1 || type === 2) return type;
+    if (typeof type === 'string') {
+        const t = type.toUpperCase();
+        if (t === 'SUB_COMMAND' || t === 'SUBCOMMAND') return 1;
+        if (t === 'SUB_COMMAND_GROUP' || t === 'SUBCOMMAND_GROUP') return 2;
+    }
+    return null;
+}
+
+function extractSlashSubcommands(commandJson, rootName) {
+    const result = { commandPath: '', commandPaths: [], subcommands: [] };
+    const root = normalizeString(rootName || commandJson?.name).toLowerCase();
+    if (!root) return result;
+
+    const rootPath = `/${root}`;
+    result.commandPath = rootPath;
+    result.commandPaths = [rootPath];
+
+    const options = Array.isArray(commandJson?.options) ? commandJson.options : [];
+    if (!options.length) return result;
+
+    for (const opt of options) {
+        const t = normalizeSlashOptionType(opt?.type);
+        if (t === 1) {
+            const sub = normalizeString(opt?.name).toLowerCase();
+            if (!sub) continue;
+            const path = `${rootPath} ${sub}`;
+            result.subcommands.push({
+                path,
+                group: '',
+                name: sub,
+                description: normalizeString(opt?.description),
+            });
+            result.commandPaths.push(path);
+            continue;
+        }
+
+        if (t === 2) {
+            const group = normalizeString(opt?.name).toLowerCase();
+            const groupOptions = Array.isArray(opt?.options) ? opt.options : [];
+            if (!group || !groupOptions.length) continue;
+            for (const subOpt of groupOptions) {
+                const subType = normalizeSlashOptionType(subOpt?.type);
+                if (subType !== 1) continue;
+                const sub = normalizeString(subOpt?.name).toLowerCase();
+                if (!sub) continue;
+                const path = `${rootPath} ${group} ${sub}`;
+                result.subcommands.push({
+                    path,
+                    group,
+                    name: sub,
+                    description: normalizeString(subOpt?.description),
+                });
+                result.commandPaths.push(path);
+            }
+        }
+    }
+
+    // De-dupe manteniendo orden
+    result.commandPaths = Array.from(new Set(result.commandPaths.filter(Boolean)));
+    return result;
+}
+
 function buildSlashDoc(slashCmd, botId) {
     const lang = getRegistryLang();
     const json = applySlashI18nToCommandJson(trySlashToJson(slashCmd) || {});
@@ -164,7 +233,9 @@ function buildSlashDoc(slashCmd, botId) {
 
     // Guardamos el payload completo (sin funciones) para “describir bien” el comando.
     // Incluye options, default_member_permissions, dm_permission, nsfw, etc.
-    return {
+    const structure = extractSlashSubcommands(json, name);
+
+    const rootDoc = {
         botId,
         type: 'slash',
         name,
@@ -173,10 +244,46 @@ function buildSlashDoc(slashCmd, botId) {
         usage: '',
         aliases: [],
         permissions: [],
+        commandPath: structure.commandPath,
+        commandPaths: structure.commandPaths,
+        subcommands: structure.subcommands,
         slash: json,
         sourceFile: normalizeString(slashCmd?.__sourceFile),
         lastSeenAt: new Date(),
     };
+
+    return rootDoc;
+}
+
+function buildSlashSubcommandDocs(slashCmd, botId) {
+    const lang = getRegistryLang();
+    const json = applySlashI18nToCommandJson(trySlashToJson(slashCmd) || {});
+    const rootName = normalizeString(json?.name || slashCmd?.name).toLowerCase();
+    if (!rootName) return [];
+
+    const category = safeGetCategory(slashCmd?.Category, slashCmd?.__sourceFile, 'Slashcmd', lang);
+    const structure = extractSlashSubcommands(json, rootName);
+    const sourceFile = normalizeString(slashCmd?.__sourceFile);
+
+    return (structure.subcommands || []).map((sc) => {
+        const group = normalizeString(sc?.group).toLowerCase();
+        const sub = normalizeString(sc?.name).toLowerCase();
+        const path = normalizeString(sc?.path);
+        if (!sub || !path) return null;
+
+        return {
+            botId,
+            type: 'slash',
+            rootName,
+            subcommandGroup: group,
+            subcommandName: sub,
+            commandPath: path,
+            category,
+            description: normalizeString(sc?.description),
+            sourceFile,
+            lastSeenAt: new Date(),
+        };
+    }).filter(Boolean);
 }
 
 async function syncCommandRegistry(Moxi, opts = {}) {
@@ -202,6 +309,7 @@ async function syncCommandRegistry(Moxi, opts = {}) {
     const slash = Array.from(Moxi?.slashcommands?.values?.() || []);
 
     const docs = [];
+    const subDocs = [];
     const syncStamp = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     for (const c of prefix) {
         const doc = buildPrefixDoc(c, botId);
@@ -210,9 +318,14 @@ async function syncCommandRegistry(Moxi, opts = {}) {
     for (const s of slash) {
         const doc = buildSlashDoc(s, botId);
         if (doc.name) docs.push({ ...doc, syncStamp });
+
+        const builtSubs = buildSlashSubcommandDocs(s, botId);
+        for (const sd of builtSubs) {
+            if (sd && sd.commandPath) subDocs.push({ ...sd, syncStamp });
+        }
     }
 
-    if (!docs.length) {
+    if (!docs.length && !subDocs.length) {
         logger.warn('[commandRegistry] No se detectaron comandos para sincronizar');
         return { ok: true, upserted: 0 };
     }
@@ -225,9 +338,25 @@ async function syncCommandRegistry(Moxi, opts = {}) {
         },
     }));
 
+    const subOps = subDocs.map((sd) => ({
+        updateOne: {
+            filter: {
+                botId: sd.botId,
+                type: sd.type,
+                rootName: sd.rootName,
+                subcommandGroup: sd.subcommandGroup || '',
+                subcommandName: sd.subcommandName,
+            },
+            update: { $set: sd },
+            upsert: true,
+        },
+    }));
+
     let res;
+    let subRes;
     try {
-        res = await CommandRegistry.bulkWrite(ops, { ordered: false });
+        if (ops.length) res = await CommandRegistry.bulkWrite(ops, { ordered: false });
+        if (subOps.length) subRes = await Subcommands.bulkWrite(subOps, { ordered: false });
     } catch (err) {
         const code = err?.code;
         const codeName = err?.codeName;
@@ -249,7 +378,12 @@ async function syncCommandRegistry(Moxi, opts = {}) {
     const modified = res?.modifiedCount ?? 0;
     const matched = res?.matchedCount ?? 0;
 
+    const subUpserted = subRes?.upsertedCount ?? 0;
+    const subModified = subRes?.modifiedCount ?? 0;
+    const subMatched = subRes?.matchedCount ?? 0;
+
     let deleted = 0;
+    let subDeleted = 0;
     if (deleteMissing) {
         try {
             const delRes = await CommandRegistry.deleteMany({ botId, syncStamp: { $ne: syncStamp } });
@@ -259,16 +393,39 @@ async function syncCommandRegistry(Moxi, opts = {}) {
             logger.warn('[commandRegistry] No se pudieron borrar comandos antiguos (best-effort)');
             logger.warn(err?.message || err);
         }
+
+        try {
+            const subDelRes = await Subcommands.deleteMany({ botId, syncStamp: { $ne: syncStamp } });
+            subDeleted = subDelRes?.deletedCount ?? 0;
+        } catch (err) {
+            logger.warn('[commandRegistry] No se pudieron borrar subcomandos antiguos (best-effort)');
+            logger.warn(err?.message || err);
+        }
     }
 
     logger.info(
         `${EMOJIS.burger || '📦'} CommandRegistry sync: ` +
         `${docs.length} comandos (prefix=${prefix.length}, slash=${slash.length}), ` +
         `upserted=${upserted}, modified=${modified}, matched=${matched}` +
-        (deleteMissing ? `, deleted=${deleted}` : '')
+        (deleteMissing ? `, deleted=${deleted}` : '') +
+        ` | subcommands=${subDocs.length} (upserted=${subUpserted}, modified=${subModified}, matched=${subMatched}` +
+        (deleteMissing ? `, deleted=${subDeleted}` : '') +
+        `)`
     );
 
-    return { ok: true, total: docs.length, upserted, modified, matched, deleted };
+    return {
+        ok: true,
+        total: docs.length,
+        upserted,
+        modified,
+        matched,
+        deleted,
+        subcommandsTotal: subDocs.length,
+        subUpserted,
+        subModified,
+        subMatched,
+        subDeleted,
+    };
 }
 
 module.exports = {

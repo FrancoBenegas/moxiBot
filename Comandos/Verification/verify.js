@@ -31,7 +31,13 @@ function buildPanel({ title, body }) {
 
 function buildVerificationPanelMessage(cfg) {
   const title = (cfg?.panelTitle || `${EMOJIS.lock || ''} Verificación`).toString();
-  const body = (cfg?.panelBody || 'Pulsa **Verificarme** y escribe el código que sale en la imagen.').toString();
+  const method = String(cfg?.method || 'captcha').toLowerCase();
+  const defaultBody = method === 'button'
+    ? 'Pulsa **Verificarme** para verificarte (1 click).'
+    : (method === 'advanced'
+      ? 'Pulsa **Verificarme** y completa el captcha + el reto extra.'
+      : 'Pulsa **Verificarme** y escribe el código que sale en la imagen.');
+  const body = (cfg?.panelBody || defaultBody).toString();
   const buttonLabel = (cfg?.panelButtonLabel || 'Verificarme').toString();
   const accentColor = (typeof cfg?.panelAccentColor === 'number' && Number.isFinite(cfg.panelAccentColor))
     ? cfg.panelAccentColor
@@ -147,6 +153,8 @@ module.exports = {
           body:
             `Usos:\n` +
             `• \.verify setup #canal @Verificado [@SinVerificar] [#canal_log]\n` +
+            `• \.verify mode <boton|captcha|avanzado>\n` +
+            `• \.verify requirements <minCuentaDias> <minUnidoMin>\n` +
             `• \.verify panel\n` +
             `• \.verify status\n` +
             `• \.verify off\n\n` +
@@ -173,16 +181,67 @@ module.exports = {
         const logChannelText = (cfg?.verifyLogChannelId || cfg?.channelId) ? `<#${cfg?.verifyLogChannelId || cfg?.channelId}>` : '-';
         const verifiedRoleText = cfg?.verifiedRoleId ? `<@&${cfg.verifiedRoleId}>` : '-';
         const unverifiedRoleText = cfg?.unverifiedRoleId ? `<@&${cfg.unverifiedRoleId}>` : '-';
+        const method = String(cfg?.method || 'captcha').toLowerCase();
+        const reqAccount = Number(cfg?.minAccountAgeDays) || 0;
+        const reqJoin = Number(cfg?.minJoinAgeMinutes) || 0;
+        const reqText = (reqAccount > 0 || reqJoin > 0)
+          ? `${reqAccount > 0 ? `${reqAccount}d cuenta` : ''}${reqAccount > 0 && reqJoin > 0 ? ' • ' : ''}${reqJoin > 0 ? `${reqJoin}m unido` : ''}`
+          : '-';
 
         return message.reply(buildPanel({
           title: 'Verificación',
           body:
             `${EMOJIS.info || ''} Estado: **${enabled ? 'ON' : 'OFF'}**\n` +
+            `${EMOJIS.settings || EMOJIS.info || ''} Tipo: **${method}**\n` +
+            `${EMOJIS.time || ''} Requisitos: ${reqText}`.trim() + `\n` +
             `${EMOJIS.channel || ''} Canal: ${channelText}\n` +
             `${EMOJIS.channel || ''} Canal log: ${logChannelText}\n` +
             `${EMOJIS.tick} Rol verificado: ${verifiedRoleText}\n` +
             `${EMOJIS.lock || ''} Rol no verificado: ${unverifiedRoleText}`,
         }));
+      }
+
+      if (sub === 'mode') {
+        const raw = String(args?.[1] || '').toLowerCase();
+        const method = (raw === 'boton' || raw === 'button' || raw === 'btn')
+          ? 'button'
+          : (raw === 'avanzado' || raw === 'advanced' || raw === 'pro')
+            ? 'advanced'
+            : (raw === 'captcha' || raw === 'imagen' || raw === 'image')
+              ? 'captcha'
+              : '';
+
+        if (!method) {
+          return message.reply(buildPanel({
+            title: 'Verificación',
+            body: `${EMOJIS.cross} Uso: \.verify mode <boton|captcha|avanzado>`,
+          }));
+        }
+
+        await upsertVerificationConfig(guildId, { method });
+        const reply = await message.reply(buildPanel({
+          title: 'Verificación',
+          body: `${EMOJIS.tick} Tipo de verificación actualizado a **${method}**.`,
+        }));
+        scheduleDelete(reply, 10_000);
+        deleteMessageBestEffort(message);
+        return reply;
+      }
+
+      if (sub === 'requirements' || sub === 'req') {
+        const a = Number(args?.[1]);
+        const b = Number(args?.[2]);
+        const minAccountAgeDays = Number.isFinite(a) ? Math.max(0, a) : 0;
+        const minJoinAgeMinutes = Number.isFinite(b) ? Math.max(0, b) : 0;
+
+        await upsertVerificationConfig(guildId, { minAccountAgeDays, minJoinAgeMinutes });
+        const reply = await message.reply(buildPanel({
+          title: 'Verificación',
+          body: `${EMOJIS.tick} Requisitos actualizados: cuenta **${minAccountAgeDays}d** • unido **${minJoinAgeMinutes}m**.`,
+        }));
+        scheduleDelete(reply, 10_000);
+        deleteMessageBestEffort(message);
+        return reply;
       }
 
       if (sub === 'panel') {
@@ -259,6 +318,7 @@ module.exports = {
           verifyLogChannelId: logChannel?.id || channel.id,
           verifiedRoleId: verifiedRole.id,
           unverifiedRoleId: unverifiedRole?.id ?? null,
+          method: 'captcha',
           captchaLength: 6,
           captchaTtlMs: 2 * 60 * 1000,
           maxAttempts: 3,
