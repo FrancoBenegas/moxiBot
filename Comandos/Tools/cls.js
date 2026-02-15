@@ -12,7 +12,8 @@ async function purgeRecentMessages(channel, amount, { keepPinned = true } = {}) 
 
   const candidates = [];
   for (let i = 0, msg = fetched.at(i); i < amount; i++, msg = fetched.at(i)) {
-    if (!keepPinned || msg.pinned) {
+    if (!msg) break;
+    if (!keepPinned || !msg.pinned) {
       candidates.push(msg);
     }
   }
@@ -77,24 +78,9 @@ module.exports = {
       }
 
       const limit = Math.min(100, Math.max(1, amount));
-      const fetched = await message.channel.messages.fetch({ limit }).catch(() => null);
-      if (!fetched) {
-        // Si el bot no tiene ReadMessageHistory, el fetch puede fallar; bulkDelete por número también depende de fetch interno.
-        if (botPerms && !botPerms.has('ReadMessageHistory')) {
-          return message.reply('No puedo borrar: me falta el permiso **Leer el historial de mensajes** en este canal.');
-        }
-      }
-      const cutoff = Date.now() - (14 * 24 * 60 * 60 * 1000);
-
-      const eligible = fetched
-        ? fetched.filter((m) => !m.pinned && (m.createdTimestamp || 0) > cutoff)
-        : null;
-
-      // bulkDelete no puede borrar mensajes de +14 días; por eso puede devolver 0 aunque se pida X.
-      const deleted = eligible ? await message.channel.bulkDelete(eligible, true) : await message.channel.bulkDelete(limit, true);
-      const deletedCount = deleted?.size ?? 0;
-      const fetchedCount = fetched?.size ?? limit;
-      const skippedOldOrPinned = eligible ? Math.max(0, fetchedCount - eligible.size) : 0;
+      const result = await purgeRecentMessages(message.channel, limit, { keepPinned: true });
+      const deletedCount = result.deletedCount;
+      const skippedOldOrPinned = Math.max(0, result.attempted - result.deletedCount);
 
       // Componentes V2 para confirmación visual
       const container = new ContainerBuilder()
