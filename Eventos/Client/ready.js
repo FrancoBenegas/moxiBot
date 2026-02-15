@@ -162,10 +162,12 @@ module.exports = async (Moxi) => {
     const { getStartupComponentV2 } = require("../../Components/V2/startupEmbedComponent");
     const { MessageFlags } = require("discord.js");
     const channelId = process.env.ERROR_CHANNEL_ID || '1459913736050704485';
-    Moxi.channels.fetch(channelId).then(channel => {
-        if (channel && channel.isTextBased()) {
-            const component = getStartupComponentV2(Moxi);
-            channel.send({ content: '', components: [component], flags: MessageFlags.IsComponentsV2 }).catch(() => { });
-        }
-    });
+    Moxi.channels.fetch(channelId)
+        .then((channel) => {
+            if (channel && channel.isTextBased()) {
+                const component = getStartupComponentV2(Moxi);
+                channel.send({ content: '', components: [component], flags: MessageFlags.IsComponentsV2 }).catch(() => { });
+            }
+        })
+        .catch(() => null);
 };
