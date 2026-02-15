@@ -174,9 +174,19 @@ function buildHelpIndex(Moxi) {
     }
     if (typeof catKey !== 'string') catKey = String(catKey || '');
     catKey = normalizeCategoryKey(catKey);
-    if(catKey) {
-      if (!categoriasBase[catKey]) categoriasBase[catKey] = [];
-      categoriasBase[catKey].push(cmd);
+
+    const fromHelpCategories = Array.isArray(cmd?.helpCategories)
+      ? cmd.helpCategories.map((c) => normalizeCategoryKey(String(c || '').trim())).filter(Boolean)
+      : [];
+
+    const categoryKeys = Array.from(new Set([
+      ...fromHelpCategories,
+      ...(catKey ? [catKey] : []),
+    ]));
+
+    for (const key of categoryKeys) {
+      if (!categoriasBase[key]) categoriasBase[key] = [];
+      categoriasBase[key].push(cmd);
     }
   }
 

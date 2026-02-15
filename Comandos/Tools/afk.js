@@ -44,6 +44,7 @@ module.exports = {
             guildId: message.guild?.id,
             message: sanitizedMessage,
             scope,
+            botId: Moxi?.user?.id,
         });
 
         const lines = [

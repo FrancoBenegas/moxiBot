@@ -303,10 +303,9 @@ Moxi.on("messageCreate", async (message) => {
   const globalPrefixes = (Array.isArray(Config?.Bot?.Prefix) && Config.Bot.Prefix.length)
     ? Config.Bot.Prefix
     : [process.env.PREFIX || '.'];
-
-  const mentionPrefixes = Moxi?.user?.id
-    ? [`<@${Moxi.user.id}>`, `<@!${Moxi.user.id}>`]
-    : [];
+  const envPrefix = (typeof process.env.PREFIX === 'string' && process.env.PREFIX.trim())
+    ? process.env.PREFIX.trim()
+    : globalPrefixes[0];
 
   let prefix = globalPrefixes[0];
   let settings = null;
@@ -318,11 +317,11 @@ Moxi.on("messageCreate", async (message) => {
     const langForTranslate = dbLang ? String(dbLang) : (process.env.DEFAULT_LANG || 'es-ES');
     message.lang = langForTranslate;
     message.translate = (key, vars = {}) => moxi.translate(key, langForTranslate, vars);
-    // Prefijo principal centralizado (sin depender de cómo venga settings.Prefix)
-    prefix = await moxi.guildPrefix(message.guild.id, globalPrefixes[0]);
+    // Prefijo efectivo: env por defecto, o personalizado por servidor si se cambió.
+    prefix = await moxi.guildPrefix(message.guild.id, envPrefix);
   } catch {
-    // fallback a globalPrefix
-    prefix = globalPrefixes[0];
+    // fallback al prefijo de entorno
+    prefix = envPrefix;
     const langForTranslate = process.env.DEFAULT_LANG || 'es-ES';
     message.lang = langForTranslate;
     message.translate = (key, vars = {}) => moxi.translate(key, langForTranslate, vars);
@@ -331,12 +330,8 @@ Moxi.on("messageCreate", async (message) => {
   const raw = settings?.Prefix;
   debugHelper.log('prefix', `guildId=${message.guild.id} global=${JSON.stringify(globalPrefixes)} settings.Prefix=${JSON.stringify(raw)} resolved=${prefix}`);
 
-  // Prefijos activos:
-  // - Si hay prefijo en DB, usar ese; si no, los globales
-  // - Siempre permitir la mención del bot
-  // - Siempre permitir 'moxi' y 'mx' (case-insensitive) como prefijo palabra
-  // Nota: añadimos '.' como prefijo "universal" para comandos estilo .bag
-  const prefixesToUse = uniqStrings([...(settings?.Prefix ? [prefix] : globalPrefixes), '.', ...mentionPrefixes, 'moxi', 'mx']);
+  // Responder solo al prefijo efectivo (env o personalizado).
+  const prefixesToUse = uniqStrings([prefix]);
   const matched = matchPrefix(message.content, prefixesToUse);
 
   // IMPORTANTE: no queremos que ciertos comandos (p.ej. say) quiten el estado AFK del usuario.
@@ -360,7 +355,6 @@ Moxi.on("messageCreate", async (message) => {
   // Responder a la mención del bot (solo si el mensaje es SOLO la mención)
   if (message.mentions.has(Moxi.user) && message.content.trim().replace(/<@!?\d+>/g, '').length === 0) {
     // prefix ya resuelto desde settings/cache arriba
-    // 'moxi' sigue activo como prefijo alternativo, pero no lo mostramos en el panel.
     const panelResult = await mentionPanel({ client: Moxi, message, prefix });
     // Si el resultado es nulo, undefined o no tiene contenido ni embeds, no enviar nada
     if (!panelResult) return;
@@ -451,7 +445,7 @@ Moxi.on("messageCreate", async (message) => {
         // Ejecutar comandos de prefijo sin prefijo (solo en canal IA)
         // Por seguridad: por defecto solo owners, a menos que se habilite explícitamente.
         try {
-          const canRunNoPrefix = cfg.commandsWithoutPrefix !== false;
+          const canRunNoPrefix = false;
           const allowNonOwners = cfg.commandsAllowNonOwners === true;
           const requireDiscordPerms = cfg.commandsRequireDiscordPerms !== false;
 
@@ -568,68 +562,6 @@ Moxi.on("messageCreate", async (message) => {
   const lang = await moxi.guildLang(message.guild?.id, process.env.DEFAULT_LANG || 'es-ES');
   let cmd = resolvePrefixCommandByToken({ token: command, lang });
 
-  // Si el usuario usa el prefijo palabra "moxi/mx" pero escribe una frase tipo
-  // "moxi ejecuta ...", el comando real no es "ejecuta".
-  // En ese caso, intentamos el router de "comandos sin prefijo" con el resto del texto.
-  if (!cmd) {
-    const usedPrefixWord = matched?.matched && /^[A-Za-z0-9_]+$/.test(String(matched.matched))
-      ? String(matched.matched).trim().toLowerCase()
-      : '';
-    if (usedPrefixWord === 'moxi' || usedPrefixWord === 'mx') {
-      const cfgRes = await getAiConfig(message.guild?.id, message.channel?.id);
-      const cfg = cfgRes?.config;
-      if (cfg?.enabled && cfg.commandsWithoutPrefix !== false) {
-        const guildOwnerId = message.guild?.ownerId || message.guild?.owner?.id || null;
-        let isOwner = null;
-        try {
-          isOwner = await isOwnerWithClient({ client: Moxi, userId: message.author?.id, guildOwnerId });
-        } catch {
-          isOwner = false;
-        }
-
-        const allowNonOwners = cfg.commandsAllowNonOwners === true;
-        const requireDiscordPerms = cfg.commandsRequireDiscordPerms !== false;
-        const allowed = allowNonOwners ? true : !!isOwner;
-
-        if (allowed) {
-          const candidate = parseNoPrefixCommandCandidate(matched.rest) || deriveModerationCandidateFromNaturalLanguage(matched.rest);
-          if (candidate?.command) {
-            cmd = resolvePrefixCommandByToken({ token: candidate.command, lang });
-            if (!cmd && Array.isArray(candidate.fallbackCommands)) {
-              for (const fb of candidate.fallbackCommands) {
-                cmd = resolvePrefixCommandByToken({ token: fb, lang });
-                if (cmd) break;
-              }
-            }
-            if (cmd) {
-              if (!isOwner && allowNonOwners && requireDiscordPerms) {
-                const required = requiresModerationPerm(cmd.name || candidate.command);
-                if (required) {
-                  const memberPerms = message.member?.permissions;
-                  if (!memberPerms || !memberPerms.has(required, true)) {
-                    return;
-                  }
-                }
-              }
-
-              try {
-                const uid = message.author?.id;
-                if (uid && !message.author?.bot) {
-                  trackBotUserUsage({ userId: uid, guildId: message.guild?.id, source: 'ai-command', name: cmd.name || candidate.command });
-                }
-              } catch {
-                // best-effort
-              }
-
-              const handleCommand = require('../../Util/commandHandler');
-              await handleCommand(Moxi, message, candidate.args || [], cmd);
-              return;
-            }
-          }
-        }
-      }
-    }
-  }
   if (cmd) {
     try {
       const uid = message.author?.id;
@@ -677,7 +609,7 @@ async function handleBugThreadStatus(message) {
 
 async function handleAfkCleanup(message) {
   if (!message || !message.author) return;
-  const wasAfk = await afkStorage.clearAfk(message.author.id);
+  const wasAfk = await afkStorage.clearAfk(message.author.id, { botId: Moxi?.user?.id });
   if (!wasAfk) return;
   const container = buildAfkContainer({
     title: message.translate('AFK_CLEARED_TITLE'),
@@ -700,7 +632,7 @@ async function handleAfkMentions(message) {
   if (!mentions.length) return;
   const entries = [];
   for (const user of mentions) {
-    const entry = await afkStorage.getAfkEntry(user.id, message.guild.id);
+    const entry = await afkStorage.getAfkEntry(user.id, message.guild.id, { botId: Moxi?.user?.id });
 
     if (entry) entries.push({ user, entry });
   }
