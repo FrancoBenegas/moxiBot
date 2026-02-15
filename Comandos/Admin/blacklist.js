@@ -68,7 +68,7 @@ module.exports = {
             const isOwner = await isDiscordOnlyOwner({ client: Moxi, userId: message.author?.id }).catch(() => false);
             if (!isAdmin && !isOwner) {
                 return message.reply(panel({
-                    title: t('misc:BLACKLIST_LOCAL_TITLE', 'Blacklist local'),
+                    title: t('misc:BLACKLIST_LOCAL_TITLE', 'Blacklist'),
                     body: `${EMOJIS.cross} ${t('misc:BLACKLIST_NO_PERM', 'Necesitas permisos de administrador u owner para usar este comando.')}`,
                 }));
             }
@@ -79,7 +79,7 @@ module.exports = {
             const targetId = parseTargetId(message, args[1]);
             if (!targetId) {
                 return message.reply(panel({
-                    title: t('misc:BLACKLIST_LOCAL_TITLE', 'Blacklist local'),
+                    title: t('misc:BLACKLIST_LOCAL_TITLE', 'Blacklist'),
                     body: `${EMOJIS.cross} ${t('misc:BLACKLIST_USAGE', 'Uso')}: ${this.usage}`,
                 }));
             }
@@ -93,7 +93,7 @@ module.exports = {
             });
 
             return message.reply(panel({
-                title: t('misc:BLACKLIST_LOCAL_TITLE', 'Blacklist local'),
+                title: t('misc:BLACKLIST_LOCAL_TITLE', 'Blacklist'),
                 body: `${EMOJIS.tick} ${t('misc:BLACKLIST_LOCAL_ADDED', 'Usuario agregado a la blacklist local.')}
 Usuario: <@${targetId}>\nID: ${targetId}${reason ? `\n${t('misc:BLACKLIST_REASON', 'Motivo')}: ${reason}` : ''}`,
             }));
@@ -103,7 +103,7 @@ Usuario: <@${targetId}>\nID: ${targetId}${reason ? `\n${t('misc:BLACKLIST_REASON
             const targetId = parseTargetId(message, args[1]);
             if (!targetId) {
                 return message.reply(panel({
-                    title: t('misc:BLACKLIST_LOCAL_TITLE', 'Blacklist local'),
+                    title: t('misc:BLACKLIST_LOCAL_TITLE', 'Blacklist'),
                     body: `${EMOJIS.cross} ${t('misc:BLACKLIST_USAGE', 'Uso')}: ${this.usage}`,
                 }));
             }
@@ -111,7 +111,7 @@ Usuario: <@${targetId}>\nID: ${targetId}${reason ? `\n${t('misc:BLACKLIST_REASON
             const removed = await removeLocalBlacklist({ guildId: message.guild.id, userId: targetId });
 
             return message.reply(panel({
-                title: t('misc:BLACKLIST_LOCAL_TITLE', 'Blacklist local'),
+                title: t('misc:BLACKLIST_LOCAL_TITLE', 'Blacklist'),
                 body: removed
                     ? `${EMOJIS.tick} ${t('misc:BLACKLIST_LOCAL_REMOVED', 'Usuario removido de la blacklist local.')}\nUsuario: <@${targetId}>\nID: ${targetId}`
                     : `${EMOJIS.info || 'ℹ️'} ${t('misc:BLACKLIST_NOT_FOUND', 'Ese usuario no estaba en la blacklist.')}\nUsuario: <@${targetId}>\nID: ${targetId}`,
@@ -122,7 +122,7 @@ Usuario: <@${targetId}>\nID: ${targetId}${reason ? `\n${t('misc:BLACKLIST_REASON
             const targetId = parseTargetId(message, args[1]);
             if (!targetId) {
                 return message.reply(panel({
-                    title: t('misc:BLACKLIST_LOCAL_TITLE', 'Blacklist local'),
+                    title: t('misc:BLACKLIST_LOCAL_TITLE', 'Blacklist'),
                     body: `${EMOJIS.cross} ${t('misc:BLACKLIST_USAGE', 'Uso')}: ${this.usage}`,
                 }));
             }
@@ -130,7 +130,7 @@ Usuario: <@${targetId}>\nID: ${targetId}${reason ? `\n${t('misc:BLACKLIST_REASON
             const isBlocked = await isUserLocallyBlacklisted({ guildId: message.guild.id, userId: targetId });
 
             return message.reply(panel({
-                title: t('misc:BLACKLIST_LOCAL_TITLE', 'Blacklist local'),
+                title: t('misc:BLACKLIST_LOCAL_TITLE', 'Blacklist'),
                 body: `${isBlocked ? (EMOJIS.cross || '⛔') : (EMOJIS.tick || '✅')} ${isBlocked
                     ? t('misc:BLACKLIST_LOCAL_CHECK_YES', 'El usuario está en blacklist local.')
                     : t('misc:BLACKLIST_LOCAL_CHECK_NO', 'El usuario no está en blacklist local.')}\nUsuario: <@${targetId}>\nID: ${targetId}`,
@@ -140,7 +140,7 @@ Usuario: <@${targetId}>\nID: ${targetId}${reason ? `\n${t('misc:BLACKLIST_REASON
             const list = await listLocalBlacklist({ guildId: message.guild.id, limit: 20 });
             if (!list.length) {
                 return message.reply(panel({
-                    title: t('misc:BLACKLIST_LOCAL_TITLE', 'Blacklist local'),
+                    title: t('misc:BLACKLIST_LOCAL_TITLE', 'Blacklist'),
                     body: `${EMOJIS.info || 'ℹ️'} ${t('misc:BLACKLIST_EMPTY', 'No hay usuarios en la blacklist.')}`,
                 }));
             }
@@ -153,7 +153,7 @@ Usuario: <@${targetId}>\nID: ${targetId}${reason ? `\n${t('misc:BLACKLIST_REASON
             });
 
             return message.reply(panel({
-                title: t('misc:BLACKLIST_LOCAL_TITLE', 'Blacklist local'),
+                title: t('misc:BLACKLIST_LOCAL_TITLE', 'Blacklist'),
                 body: lines.join('\n'),
             }));
         } catch (error) {
@@ -163,7 +163,7 @@ Usuario: <@${targetId}>\nID: ${targetId}${reason ? `\n${t('misc:BLACKLIST_REASON
                 return isUntranslated(key, out) ? fallback : out;
             };
             return message.reply(panel({
-                title: t('misc:BLACKLIST_LOCAL_TITLE', 'Blacklist local'),
+                title: t('misc:BLACKLIST_LOCAL_TITLE', 'Blacklist'),
                 body: `${EMOJIS.cross} ${t('misc:BLACKLIST_ERROR', 'No pude ejecutar blacklist. Revisa consola para más detalles.')}`,
             }));
         }
