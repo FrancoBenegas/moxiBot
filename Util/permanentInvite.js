@@ -77,12 +77,12 @@ function pickDefaultInviteChannel(guild) {
     return candidates.first() || null;
 }
 
-async function getOrCreatePermanentInvite({ guild, channel, reason, requestedByUserId, requestedByTag }) {
+async function getOrCreatePermanentInvite({ guild, channel, reason, requestedByUserId, requestedByTag, forceCreateInChannel = false }) {
     if (!guild) throw new Error('Missing guild');
 
     // 1) Si hay invite persistida, validarla y reutilizarla (sin crear nuevas).
     const stored = await readStoredInviteConfig(guild.id).catch(() => null);
-    if (stored?.code) {
+    if (!forceCreateInChannel && stored?.code) {
         const valid = await validateStoredInvite({ guild, code: stored.code });
         if (valid) {
             return {
@@ -109,32 +109,80 @@ async function getOrCreatePermanentInvite({ guild, channel, reason, requestedByU
         if (invites) {
             const botId = guild.client?.user?.id;
 
-            // Preferir una invitación permanente creada por el bot.
-            const existingBotPermanent = invites.find((inv) => {
-                const permanent = inv.maxAge === 0 && inv.maxUses === 0 && inv.temporary === false;
-                const byBot = botId ? inv.inviterId === botId : false;
-                return permanent && byBot;
-            });
-            if (existingBotPermanent) {
-                await writeStoredInviteConfig(guild.id, {
-                    code: existingBotPermanent.code,
-                    channelId: existingBotPermanent.channelId,
-                    requestedByUserId: stored?.requestedByUserId || requestedByUserId || null,
-                    requestedByTag: stored?.requestedByTag || requestedByTag || null,
-                }).catch(() => null);
-                return { invite: existingBotPermanent, created: false, stored: await readStoredInviteConfig(guild.id).catch(() => null), channelId: existingBotPermanent.channelId };
+            if (forceCreateInChannel && targetChannel?.id) {
+                const permanentInTargetByBot = invites.find((inv) => {
+                    const permanent = inv.maxAge === 0 && inv.maxUses === 0 && inv.temporary === false;
+                    const sameChannel = inv.channelId === targetChannel.id;
+                    const byBot = botId ? inv.inviterId === botId : false;
+                    return permanent && sameChannel && byBot;
+                });
+
+                if (permanentInTargetByBot) {
+                    await writeStoredInviteConfig(guild.id, {
+                        code: permanentInTargetByBot.code,
+                        channelId: permanentInTargetByBot.channelId,
+                        requestedByUserId: requestedByUserId || stored?.requestedByUserId || null,
+                        requestedByTag: requestedByTag || stored?.requestedByTag || null,
+                    }).catch(() => null);
+                    return {
+                        invite: permanentInTargetByBot,
+                        created: false,
+                        stored: await readStoredInviteConfig(guild.id).catch(() => null),
+                        channelId: permanentInTargetByBot.channelId,
+                    };
+                }
+
+                const anyPermanentInTarget = invites.find((inv) => {
+                    const permanent = inv.maxAge === 0 && inv.maxUses === 0 && inv.temporary === false;
+                    const sameChannel = inv.channelId === targetChannel.id;
+                    return permanent && sameChannel;
+                });
+
+                if (anyPermanentInTarget) {
+                    await writeStoredInviteConfig(guild.id, {
+                        code: anyPermanentInTarget.code,
+                        channelId: anyPermanentInTarget.channelId,
+                        requestedByUserId: requestedByUserId || stored?.requestedByUserId || null,
+                        requestedByTag: requestedByTag || stored?.requestedByTag || null,
+                    }).catch(() => null);
+                    return {
+                        invite: anyPermanentInTarget,
+                        created: false,
+                        stored: await readStoredInviteConfig(guild.id).catch(() => null),
+                        channelId: anyPermanentInTarget.channelId,
+                    };
+                }
             }
 
-            // Si hay una permanente (aunque no sea del bot), reusarla.
-            const anyPermanent = invites.find((inv) => inv.maxAge === 0 && inv.maxUses === 0 && inv.temporary === false);
-            if (anyPermanent) {
-                await writeStoredInviteConfig(guild.id, {
-                    code: anyPermanent.code,
-                    channelId: anyPermanent.channelId,
-                    requestedByUserId: stored?.requestedByUserId || requestedByUserId || null,
-                    requestedByTag: stored?.requestedByTag || requestedByTag || null,
-                }).catch(() => null);
-                return { invite: anyPermanent, created: false, stored: await readStoredInviteConfig(guild.id).catch(() => null), channelId: anyPermanent.channelId };
+            if (!forceCreateInChannel) {
+
+                // Preferir una invitación permanente creada por el bot.
+                const existingBotPermanent = invites.find((inv) => {
+                    const permanent = inv.maxAge === 0 && inv.maxUses === 0 && inv.temporary === false;
+                    const byBot = botId ? inv.inviterId === botId : false;
+                    return permanent && byBot;
+                });
+                if (existingBotPermanent) {
+                    await writeStoredInviteConfig(guild.id, {
+                        code: existingBotPermanent.code,
+                        channelId: existingBotPermanent.channelId,
+                        requestedByUserId: stored?.requestedByUserId || requestedByUserId || null,
+                        requestedByTag: stored?.requestedByTag || requestedByTag || null,
+                    }).catch(() => null);
+                    return { invite: existingBotPermanent, created: false, stored: await readStoredInviteConfig(guild.id).catch(() => null), channelId: existingBotPermanent.channelId };
+                }
+
+                // Si hay una permanente (aunque no sea del bot), reusarla.
+                const anyPermanent = invites.find((inv) => inv.maxAge === 0 && inv.maxUses === 0 && inv.temporary === false);
+                if (anyPermanent) {
+                    await writeStoredInviteConfig(guild.id, {
+                        code: anyPermanent.code,
+                        channelId: anyPermanent.channelId,
+                        requestedByUserId: stored?.requestedByUserId || requestedByUserId || null,
+                        requestedByTag: stored?.requestedByTag || requestedByTag || null,
+                    }).catch(() => null);
+                    return { invite: anyPermanent, created: false, stored: await readStoredInviteConfig(guild.id).catch(() => null), channelId: anyPermanent.channelId };
+                }
             }
         }
     }

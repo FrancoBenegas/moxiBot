@@ -13,16 +13,30 @@ module.exports = {
         lang = lang || 'es-ES';
         return moxi.translate('commands:CATEGORY_HERRAMIENTAS', lang);
     },
-    usage: 'portal',
+    usage: 'portal [#canal|canal_id]',
     description: (lang = 'es-ES') =>
     (moxi.translate('PORTAL_CMD_DESC', lang) !== 'PORTAL_CMD_DESC'
         ? moxi.translate('PORTAL_CMD_DESC', lang)
         : 'Muestra el portal del servidor (invitación oficial)'),
 
-    async execute(Moxi, message) {
+    async execute(Moxi, message, args) {
         if (!message.guild) return;
 
         const guild = message.guild;
+        const argList = Array.isArray(args) ? args : [];
+
+        const requestedChannelId = argList
+            .map((part) => String(part || '').trim())
+            .map((part) => {
+                const mention = part.match(/^<#(\d+)>$/);
+                if (mention?.[1]) return mention[1];
+                if (/^\d{10,}$/.test(part)) return part;
+                return null;
+            })
+            .find(Boolean);
+
+        const requestedChannel = requestedChannelId ? guild.channels?.cache?.get(requestedChannelId) || null : null;
+        const forceCreateInChannel = !!requestedChannel;
 
         const lang = await moxi.guildLang(guild?.id, process.env.DEFAULT_LANG || 'es-ES');
         const year = new Date().getFullYear();
@@ -39,11 +53,13 @@ module.exports = {
         let inviteUrl = null;
         let statusText = '';
         let requestedBy = null;
+        let inviteChannelId = null;
 
-        if (stored?.code) {
+        if (stored?.code && !forceCreateInChannel) {
             inviteUrl = `https://discord.gg/${stored.code}`;
             statusText = t('PORTAL_STATUS_REUSED', 'Reutilizando invitación oficial');
             requestedBy = stored.requestedByUserId ? `<@${stored.requestedByUserId}>` : (stored.requestedByTag || null);
+            inviteChannelId = stored.channelId || null;
         } else {
             const allowed =
                 message.member?.permissions?.has(PermissionFlagsBits.ManageGuild) ||
@@ -65,7 +81,13 @@ module.exports = {
                 });
             }
 
-            const channel = pickDefaultInviteChannel(guild);
+            let channel = requestedChannel;
+            if (channel && !channel.guild) {
+                channel = null;
+            }
+            if (!channel) {
+                channel = pickDefaultInviteChannel(guild);
+            }
             if (!channel) {
                 const container = new ContainerBuilder()
                     .setAccentColor(Bot.AccentColor)
@@ -88,6 +110,7 @@ module.exports = {
                 reason: `Portal invite init by ${message.author?.id || 'unknown'}`,
                 requestedByUserId: message.author?.id || null,
                 requestedByTag: message.author?.tag || message.author?.username || null,
+                forceCreateInChannel,
             });
 
             const invite = result?.invite;
@@ -97,6 +120,7 @@ module.exports = {
                 : t('PORTAL_STATUS_REUSED', 'Reutilizando invitación oficial');
             stored = result?.stored || stored;
             requestedBy = stored?.requestedByUserId ? `<@${stored.requestedByUserId}>` : (stored?.requestedByTag || null);
+            inviteChannelId = result?.channelId || stored?.channelId || null;
         }
 
         if (!inviteUrl) {
@@ -121,6 +145,7 @@ module.exports = {
                 c.setContent(
                     `${t('PORTAL_GUILD', 'Servidor')}: **${guild.name}**\n` +
                     `${t('PORTAL_INVITE', 'Invitación oficial')}: ${inviteUrl}\n` +
+                    `${t('PORTAL_CHANNEL', 'Canal')}: ${inviteChannelId ? `<#${inviteChannelId}>` : t('PORTAL_CHANNEL_UNKNOWN', 'No disponible')}\n` +
                     `${t('PORTAL_STATUS', 'Estado')}: ${statusText}` +
                     (requestedBy ? `\n${t('PORTAL_REQUESTED_BY', 'Asignada por')}: ${requestedBy}` : '')
                 )

@@ -586,5 +586,12 @@
   "INVITE_CMD_DESC": "Crea una invitación permanente del servidor.",
   "SERVERS_CMD_DESC": "Muestra los servidores donde está el bot (solo owners).",
   "HELP_CATEGORY_CATEGORY_UTILIDAD": "Utilidad",
-  "HELP_CATEGORY_CATEGORY_UTILIDAD_DESC": "Comandos de utilidad general."
+  "HELP_CATEGORY_CATEGORY_UTILIDAD_DESC": "Comandos de utilidad general.",
+  "PORTAL_CHANNEL": "PORTAL_CHANNEL",
+  "INVITE_REUSED": "INVITE_REUSED",
+  "INVITE_OK_TITLE": "INVITE_OK_TITLE",
+  "INVITE_OK_CHANNEL": "INVITE_OK_CHANNEL",
+  "INVITE_OK_LINK": "INVITE_OK_LINK",
+  "INVITE_OK_STATUS": "INVITE_OK_STATUS",
+  "INVITE_OK_REQUESTED_BY": "INVITE_OK_REQUESTED_BY"
 }
