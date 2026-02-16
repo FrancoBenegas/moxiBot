@@ -18,6 +18,12 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('portal')
         .setDescription('Muestra el portal del servidor (enlace oficial de invitación)')
+        .addChannelOption((opt) =>
+            opt
+                .setName('canal')
+                .setDescription('Canal donde se creará la invitación oficial (opcional)')
+                .setRequired(false)
+        )
         .addBooleanOptions((opt) =>
             opt
                 .setName('publico')
@@ -46,6 +52,8 @@ module.exports = {
         };
 
         const publicReply = interaction.options.getBoolean('publico') === true;
+        const requestedChannel = interaction.options.getChannel('canal');
+        const forceCreateInChannel = !!requestedChannel;
 
         // Puedes abrir el portal aunque no tengas permisos; pero si NO existe invite y hay que crearla,
         // entonces requerimos permisos al usuario y al bot.
@@ -59,11 +67,13 @@ module.exports = {
         let inviteUrl = null;
         let statusText = '';
         let requestedBy = null;
+        let inviteChannelId = null;
 
-        if (stored?.code) {
+        if (stored?.code && !forceCreateInChannel) {
             inviteUrl = `https://discord.gg/${stored.code}`;
             statusText = t('PORTAL_STATUS_REUSED', 'Reutilizando invitación oficial');
             requestedBy = stored.requestedByUserId ? `<@${stored.requestedByUserId}>` : (stored.requestedByTag || null);
+            inviteChannelId = stored.channelId || null;
         } else {
             // Si no hay guardada, podemos crear UNA (esto inicializa el sistema).
             const allowed =
@@ -85,7 +95,13 @@ module.exports = {
                 });
             }
 
-            const channel = pickDefaultInviteChannel(guild);
+            let channel = requestedChannel;
+            if (channel && !channel.guild) {
+                channel = null;
+            }
+            if (!channel) {
+                channel = pickDefaultInviteChannel(guild);
+            }
             if (!channel) {
                 const container = new ContainerBuilder()
                     .setAccentColor(Bot.AccentColor)
@@ -107,6 +123,7 @@ module.exports = {
                 reason: `Portal invite init by ${interaction.user?.id || 'unknown'}`,
                 requestedByUserId: interaction.user?.id || null,
                 requestedByTag: interaction.user?.tag || interaction.user?.username || null,
+                forceCreateInChannel,
             });
 
             const invite = result?.invite;
@@ -116,6 +133,7 @@ module.exports = {
                 : t('PORTAL_STATUS_REUSED', 'Reutilizando invitación oficial');
             stored = result?.stored || stored;
             requestedBy = stored?.requestedByUserId ? `<@${stored.requestedByUserId}>` : (stored?.requestedByTag || null);
+            inviteChannelId = result?.channelId || stored?.channelId || null;
         }
 
         if (!inviteUrl) {
@@ -139,6 +157,7 @@ module.exports = {
                 c.setContent(
                     `${t('PORTAL_GUILD', 'Servidor')}: **${guild.name}**\n` +
                     `${t('PORTAL_INVITE', 'Invitación oficial')}: ${inviteUrl}\n` +
+                    `${t('PORTAL_CHANNEL', 'Canal')}: ${inviteChannelId ? `<#${inviteChannelId}>` : t('PORTAL_CHANNEL_UNKNOWN', 'No disponible')}\n` +
                     `${t('PORTAL_STATUS', 'Estado')}: ${statusText}` +
                     (requestedBy ? `\n${t('PORTAL_REQUESTED_BY', 'Asignada por')}: ${requestedBy}` : '')
                 )
