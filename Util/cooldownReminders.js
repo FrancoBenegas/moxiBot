@@ -1,4 +1,5 @@
 const { ensureMongoConnection } = require('./mongoConnect');
+const { normalizeDiscordId, normalizeDbText } = require('./idGuards');
 const { ActionRowBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const { ButtonBuilder } = require('./compatButtonBuilder');
 const { Bot } = require('../Config');
@@ -136,6 +137,13 @@ function scheduleWithChunking({ delayMs, onFire }) {
 }
 
 async function scheduleCooldownReminder({ client, guildId, channelId, userId, type, fireAt }) {
+    guildId = normalizeDiscordId(guildId) || 'global';
+    channelId = normalizeDiscordId(channelId);
+    userId = normalizeDiscordId(userId);
+    type = normalizeDbText(type, { maxLen: 32, fallback: '' }).toLowerCase();
+
+    if (!userId || !type) return { ok: false, reason: 'invalid-input' };
+
     const now = Date.now();
     const safeFireAt = Number.isFinite(Number(fireAt)) ? Number(fireAt) : (now + 5_000);
     const delayMs = Math.max(0, safeFireAt - now);
@@ -202,6 +210,11 @@ async function scheduleCooldownReminder({ client, guildId, channelId, userId, ty
 }
 
 async function cancelCooldownReminder({ guildId, userId, type }) {
+    guildId = normalizeDiscordId(guildId) || 'global';
+    userId = normalizeDiscordId(userId);
+    type = normalizeDbText(type, { maxLen: 32, fallback: '' }).toLowerCase();
+    if (!userId || !type) return { ok: false, reason: 'invalid-input' };
+
     const key = reminderKey({ guildId, userId, type });
     clearScheduled(key);
     inMemoryReminders.delete(key);

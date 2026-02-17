@@ -1,5 +1,25 @@
 const { ensureMongoConnection } = require('./mongoConnect');
 const StarboardModel = require('../Models/StarboardSchema');
+const { normalizeDiscordId } = require('./idGuards');
+
+function isSafeUpdateKey(key) {
+    const normalized = String(key || '').trim();
+    if (!normalized) return false;
+    if (normalized.startsWith('$')) return false;
+    if (normalized.includes('.')) return false;
+    if (normalized === '__proto__' || normalized === 'constructor' || normalized === 'prototype') return false;
+    return true;
+}
+
+function sanitizeUpdates(updates) {
+    if (!updates || typeof updates !== 'object') return null;
+    const output = {};
+    for (const [key, value] of Object.entries(updates)) {
+        if (!isSafeUpdateKey(key)) continue;
+        output[key] = value;
+    }
+    return Object.keys(output).length ? output : null;
+}
 
 async function ensureConnection() {
     const connection = await ensureMongoConnection();
@@ -7,17 +27,20 @@ async function ensureConnection() {
 }
 
 async function getStarboardSettings(guildId) {
-    if (!guildId) return null;
+    const gid = normalizeDiscordId(guildId);
+    if (!gid) return null;
     await ensureConnection();
-    return StarboardModel.findOne({ guildID: guildId }).lean() || null;
+    return StarboardModel.findOne({ guildID: gid }).lean() || null;
 }
 
 async function updateStarboardSettings(guildId, updates) {
-    if (!guildId || !updates || typeof updates !== 'object') return null;
+    const gid = normalizeDiscordId(guildId);
+    const safeUpdates = sanitizeUpdates(updates);
+    if (!gid || !safeUpdates) return null;
     await ensureConnection();
     const result = await StarboardModel.findOneAndUpdate(
-        { guildID: guildId },
-        { $set: { ...updates, updatedAt: new Date() }, $setOnInsert: { guildID: guildId, createdAt: new Date() } },
+        { guildID: gid },
+        { $set: { ...safeUpdates, updatedAt: new Date() }, $setOnInsert: { guildID: gid, createdAt: new Date() } },
         { upsert: true, new: true, setDefaultsOnInsert: true }
     ).lean();
     return result;

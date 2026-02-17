@@ -1,4 +1,5 @@
 const { ensureMongoConnection, mongoose } = require('../Util/mongoConnect');
+const { normalizeDiscordId, normalizeDbText } = require('../Util/idGuards');
 const GuildSchema = require('./GuildSchema');
 const Welcome = require('./WelcomeSchema');
 const Clvls = require('./ClvlsSchema');
@@ -13,7 +14,13 @@ try {
 
 const collectionName = 'prefixes';
 
+function safeGuildId(guildId) {
+  return normalizeDiscordId(guildId);
+}
+
 async function setGuildEconomyEnabled(guildId, enabled) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
   const connection = await ensureMongoConnection();
   const db = connection.db;
   const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
@@ -27,10 +34,12 @@ async function setGuildEconomyEnabled(guildId, enabled) {
 }
 
 async function setGuildEconomyChannel(guildId, channelId) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
   const connection = await ensureMongoConnection();
   const db = connection.db;
   const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
-  const cleanId = channelId ? String(channelId).trim() : '';
+  const cleanId = normalizeDiscordId(channelId);
 
   // Si se limpia el canal, también desactivamos el modo exclusivo.
   const update = cleanId
@@ -49,6 +58,8 @@ async function setGuildEconomyChannel(guildId, channelId) {
 }
 
 async function setGuildEconomyExclusive(guildId, exclusive) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
   const connection = await ensureMongoConnection();
   const db = connection.db;
   const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
@@ -62,11 +73,13 @@ async function setGuildEconomyExclusive(guildId, exclusive) {
 }
 
 async function setGuildPrefix(guildId, prefix) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
   const connection = await ensureMongoConnection();
   const db = connection.db;
   const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
   const update = {
-    $set: { Prefix: [prefix] },
+    $set: { Prefix: [normalizeDbText(prefix, { maxLen: 20, fallback: '.' })] },
     $setOnInsert: { guildID: guildId, id: guildId },
   };
   const options = { upsert: true };
@@ -75,7 +88,9 @@ async function setGuildPrefix(guildId, prefix) {
 }
 
 async function setGuildLanguage(guildId, lang, ownerId) {
-  const langCode = String(lang).trim();
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const langCode = normalizeDbText(lang, { maxLen: 16, fallback: 'es-ES' });
   if (LanguagesModel && typeof LanguagesModel.updateOne === 'function') {
     try {
       let useMongoose = false;
@@ -125,6 +140,8 @@ async function setGuildLanguage(guildId, lang, ownerId) {
 }
 
 async function getGuildSettings(guildId) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return {};
   const connection = await ensureMongoConnection();
   const db = connection.db;
   const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };

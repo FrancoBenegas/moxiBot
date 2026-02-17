@@ -98,8 +98,27 @@ Por seguridad, esto está pensado para **owners** por defecto.
 
 Variables (opcional):
 
-- `AI_COMMANDS_WITHOUT_PREFIX=1` (por defecto `1`): habilita/deshabilita esta función.
+- `AI_COMMANDS_WITHOUT_PREFIX=0` (por defecto `0`): habilita/deshabilita esta función.
 - `AI_COMMANDS_ALLOW_NON_OWNERS=0` (por defecto `0`): si lo pones en `1`, cualquier usuario podrá disparar comandos sin prefijo en canales IA (no recomendado).
+
+## Privacidad y cumplimiento Discord
+
+- Comando prefijo: `privacy`
+- Comando slash: `/privacy`
+
+Ambos comandos muestran qué datos mínimos usa el bot y cómo pedir borrado.
+
+Variables recomendadas:
+
+- `PRIVACY_POLICY_URL=https://tu-dominio/politica-de-privacidad`
+- `DATA_DELETE_CONTACT=correo_o_forma_de_contacto`
+
+## Comando `sayu` (seguridad)
+
+`/sayu` queda deshabilitado por defecto para reducir riesgo de suplantación/uso engañoso.
+
+- Para habilitarlo explícitamente: `ENABLE_SAYU=1`
+- Además, exige permiso `Manage Messages`.
 
 ## Clima/tiempo en tiempo real
 

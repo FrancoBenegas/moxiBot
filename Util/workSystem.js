@@ -1,5 +1,6 @@
 const { ensureMongoConnection } = require('./mongoConnect');
 const { safeInt, formatDuration, msUntilNext } = require('./economyCore');
+const { normalizeDiscordId, normalizeDbText } = require('./idGuards');
 const moxi = require('../i18n');
 
 const DEFAULT_WORK_COOLDOWN_MS = 15 * 60 * 1000; // 15m
@@ -179,6 +180,8 @@ function resolveJob(query, lang = null) {
 }
 
 async function getOrCreateEconomy(userId) {
+    userId = normalizeDiscordId(userId);
+    if (!userId) throw new Error('userId inválido.');
     if (!process.env.MONGODB) {
         throw new Error('MongoDB no está configurado (MONGODB vacío).');
     }
@@ -200,9 +203,14 @@ async function getOrCreateEconomy(userId) {
 }
 
 async function applyJob({ userId, jobId }) {
+    userId = normalizeDiscordId(userId);
+    jobId = normalizeDbText(jobId, { maxLen: 64, fallback: '' });
+
     if (!process.env.MONGODB) {
         return { ok: false, reason: 'no-db', message: 'MongoDB no está configurado (MONGODB vacío).' };
     }
+    if (!userId) return { ok: false, reason: 'missing-user', message: 'userId inválido.' };
+    if (!jobId) return { ok: false, reason: 'missing-job', message: 'Trabajo inválido.' };
 
     await ensureMongoConnection();
     const { Economy } = require('../Models/EconomySchema');
@@ -230,9 +238,11 @@ async function applyJob({ userId, jobId }) {
 }
 
 async function leaveJob({ userId }) {
+    userId = normalizeDiscordId(userId);
     if (!process.env.MONGODB) {
         return { ok: false, reason: 'no-db', message: 'MongoDB no está configurado (MONGODB vacío).' };
     }
+    if (!userId) return { ok: false, reason: 'missing-user', message: 'userId inválido.' };
 
     await ensureMongoConnection();
     const { Economy } = require('../Models/EconomySchema');
@@ -254,9 +264,11 @@ function rollAmount(minAmount, maxAmount) {
 }
 
 async function doShift({ userId }) {
+    userId = normalizeDiscordId(userId);
     if (!process.env.MONGODB) {
         return { ok: false, reason: 'no-db', message: 'MongoDB no está configurado (MONGODB vacío).' };
     }
+    if (!userId) return { ok: false, reason: 'missing-user', message: 'userId inválido.' };
 
     await ensureMongoConnection();
     const { Economy } = require('../Models/EconomySchema');
@@ -329,6 +341,8 @@ async function doShift({ userId }) {
 }
 
 async function getWorkStats({ userId }) {
+    userId = normalizeDiscordId(userId);
+    if (!userId) return { userId: '', balance: 0, job: null, startedAt: null, lastWork: null, nextInMs: 0, nextInText: '0s', totalEarned: 0, shifts: 0 };
     const eco = await getOrCreateEconomy(userId);
     const job = eco?.workJobId ? (JOBS.find(j => j.id === eco.workJobId) || null) : null;
     const cooldownMs = await getWorkCooldownMsForUser(userId);
@@ -370,7 +384,7 @@ async function getTopByJob({ jobId, limit = 10 } = {}) {
         return { ok: false, reason: 'no-db', message: 'MongoDB no está configurado (MONGODB vacío).' };
     }
 
-    const id = String(jobId || '').trim();
+    const id = normalizeDbText(jobId, { maxLen: 64, fallback: '' });
     if (!id) {
         return { ok: false, reason: 'missing-job', message: 'Falta jobId.' };
     }

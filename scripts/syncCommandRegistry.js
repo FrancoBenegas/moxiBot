@@ -4,6 +4,7 @@ const logger = require('../Util/logger');
 const { ensureMongoConnection, mongoose } = require('../Util/mongoConnect');
 const loadCommands = require('../Handlers/commands');
 const { syncCommandRegistry } = require('../Util/commandRegistry');
+const { normalizeDiscordId } = require('../Util/idGuards');
 
 function getArgValue(flag) {
     const argv = process.argv || [];
@@ -22,11 +23,11 @@ async function main() {
 
     const argBotId = getArgValue('--botId') || getArgValue('--bot-id');
     const botIdFromEnv = process.env.CLIENT_ID || process.env.BOT_ID || process.env.APPLICATION_ID;
-    const botId = String(argBotId || botIdFromEnv || '').trim();
+    const botId = normalizeDiscordId(argBotId || botIdFromEnv) || 'local-script';
 
     // Si sync usa un botId distinto al del bot real, parecerá que “se agregan” comandos
     // (en realidad son entradas separadas por botId). Por eso priorizamos CLIENT_ID.
-    if (!botId) {
+    if (botId === 'local-script') {
         console.warn(
             '[WARN] Falta CLIENT_ID/BOT_ID. El sync usará botId="local-script" y verás registros duplicados por botId. ' +
             'Solución: añade CLIENT_ID al .env o ejecuta: node scripts/syncCommandRegistry.js --botId <CLIENT_ID>'
@@ -34,7 +35,7 @@ async function main() {
     }
 
     // Dummy client suficientemente parecido para cargar módulos
-    const Moxi = { commands: null, slashcommands: null, user: { id: botId || 'local-script' } };
+    const Moxi = { commands: null, slashcommands: null, user: { id: botId } };
 
     await loadCommands(Moxi);
     await ensureMongoConnection();
@@ -42,14 +43,19 @@ async function main() {
     const purgeBotId = getArgValue('--purgeBotId') || getArgValue('--purge-botId') || getArgValue('--purge-botid');
     if (purgeBotId) {
         try {
+            const safePurgeBotId = normalizeDiscordId(purgeBotId);
+            if (!safePurgeBotId) {
+                logger.warn('[commandRegistry] purgeBotId inválido. Debe ser un snowflake de Discord.');
+            } else {
             // eslint-disable-next-line global-require
             const CommandRegistry = require('../Models/CommandsSchema');
             // eslint-disable-next-line global-require
             const Subcommands = require('../Models/SubcommandsSchema');
-            const { deletedCount } = await CommandRegistry.deleteMany({ botId: String(purgeBotId).trim() });
-            const { deletedCount: subDeletedCount } = await Subcommands.deleteMany({ botId: String(purgeBotId).trim() });
-            logger.info(`[commandRegistry] purgeBotId=${purgeBotId} deleted=${deletedCount}`);
-            logger.info(`[commandRegistry] purgeBotId=${purgeBotId} subDeleted=${subDeletedCount}`);
+            const { deletedCount } = await CommandRegistry.deleteMany({ botId: safePurgeBotId });
+            const { deletedCount: subDeletedCount } = await Subcommands.deleteMany({ botId: safePurgeBotId });
+            logger.info(`[commandRegistry] purgeBotId=${safePurgeBotId} deleted=${deletedCount}`);
+            logger.info(`[commandRegistry] purgeBotId=${safePurgeBotId} subDeleted=${subDeletedCount}`);
+            }
         } catch (e) {
             logger.warn(`[commandRegistry] purgeBotId failed: ${e?.message || e}`);
         }

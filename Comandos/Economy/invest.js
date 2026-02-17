@@ -2,6 +2,7 @@ const moxi = require('../../i18n');
 const { EMOJIS } = require('../../Util/emojis');
 const { buildNoticeContainer, asV2MessageOptions } = require('../../Util/v2Notice');
 const { getOrCreateEconomy, awardBalance, safeInt } = require('../../Util/economyCore');
+const { normalizeDiscordId } = require('../../Util/idGuards');
 
 const { economyCategory } = require('../../Util/commandCategories');
 
@@ -25,7 +26,9 @@ module.exports = {
     },
 
     async execute(Moxi, message, args) {
-        const guildId = message.guildId || message.guild?.id;
+        const guildId = normalizeDiscordId(message.guildId || message.guild?.id);
+        const userId = normalizeDiscordId(message.author?.id);
+        if (!userId) return;
         const lang = await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES');
         const t = (k, vars = {}) => moxi.translate(`economy/invest:${k}`, lang, vars);
 
@@ -44,7 +47,7 @@ module.exports = {
 
         let eco;
         try {
-            eco = await getOrCreateEconomy(message.author.id);
+            eco = await getOrCreateEconomy(userId);
         } catch (e) {
             return message.reply(
                 asV2MessageOptions(
@@ -80,7 +83,7 @@ module.exports = {
             await ensureMongoConnection();
 
             const updated = await Economy.findOneAndUpdate(
-                { userId: message.author.id, balance: { $gte: amount } },
+                { userId, balance: { $gte: amount } },
                 { $inc: { balance: -amount } },
                 { new: true }
             );
@@ -101,7 +104,7 @@ module.exports = {
 
         // Ganancia: +15% .. +85% (solo se gana el profit, no se “duplica” el stake)
         const profit = Math.max(1, Math.trunc(amount * (0.15 + Math.random() * 0.70)));
-        const res = await awardBalance({ userId: message.author.id, amount: profit });
+        const res = await awardBalance({ userId, amount: profit });
 
         if (!res.ok) {
             return message.reply(

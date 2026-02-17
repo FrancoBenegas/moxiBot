@@ -1,10 +1,11 @@
 const path = require('node:path');
 
 const { User } = require(path.join(__dirname, '..', '..', 'Models'));
+const { normalizeDiscordId, normalizeDbText } = require(path.join(__dirname, '..', '..', 'Util', 'idGuards'));
 
 async function getUser(guildID, userID, username) {
-    const gid = String(guildID || '').trim();
-    const uid = String(userID || '').trim();
+    const gid = normalizeDiscordId(guildID);
+    const uid = normalizeDiscordId(userID);
     if (!gid || !uid) return null;
 
     let doc = await User.findOne({ guildID: gid, userID: uid }).catch(() => null);
@@ -12,13 +13,14 @@ async function getUser(guildID, userID, username) {
         doc = await User.create({
             guildID: gid,
             userID: uid,
-            username: username ? String(username) : undefined,
+            username: username ? normalizeDbText(username, { maxLen: 64, fallback: '' }) : undefined,
         }).catch(() => null);
     }
     if (!doc) return null;
 
-    if (username && doc.username !== username) {
-        doc.username = String(username);
+    const safeUsername = username ? normalizeDbText(username, { maxLen: 64, fallback: '' }) : '';
+    if (safeUsername && doc.username !== safeUsername) {
+        doc.username = safeUsername;
         await doc.save().catch(() => null);
     }
 
@@ -26,7 +28,10 @@ async function getUser(guildID, userID, username) {
 }
 
 async function getUserLevelInfo(guildID, userID) {
-    const doc = await User.findOne({ guildID: String(guildID), userID: String(userID) }).lean().catch(() => null);
+    const gid = normalizeDiscordId(guildID);
+    const uid = normalizeDiscordId(userID);
+    if (!gid || !uid) return null;
+    const doc = await User.findOne({ guildID: gid, userID: uid }).lean().catch(() => null);
     if (!doc) return null;
     return {
         level: doc.level || 1,
@@ -49,8 +54,8 @@ async function setLevel(guildID, userID, level, username) {
 }
 
 async function resetUser(guildID, userID) {
-    const gid = String(guildID || '').trim();
-    const uid = String(userID || '').trim();
+    const gid = normalizeDiscordId(guildID);
+    const uid = normalizeDiscordId(userID);
     if (!gid || !uid) return null;
 
     const doc = await User.findOne({ guildID: gid, userID: uid }).catch(() => null);
@@ -81,7 +86,7 @@ async function resetUser(guildID, userID) {
 }
 
 async function seasonalReset(guildID) {
-    const gid = String(guildID || '').trim();
+    const gid = normalizeDiscordId(guildID);
     if (!gid) return null;
 
     const res = await User.updateMany(
@@ -116,7 +121,10 @@ async function seasonalReset(guildID) {
 }
 
 async function prestige(guildID, userID) {
-    const doc = await User.findOne({ guildID: String(guildID), userID: String(userID) }).catch(() => null);
+    const gid = normalizeDiscordId(guildID);
+    const uid = normalizeDiscordId(userID);
+    if (!gid || !uid) return null;
+    const doc = await User.findOne({ guildID: gid, userID: uid }).catch(() => null);
     if (!doc) return null;
 
     doc.prestige = (doc.prestige || 0) + 1;
@@ -130,7 +138,7 @@ async function prestige(guildID, userID) {
 }
 
 async function getLeaderboard(guildID, limit = 10, sortBy = 'level') {
-    const gid = String(guildID || '').trim();
+    const gid = normalizeDiscordId(guildID);
     if (!gid) return [];
 
     const lim = Math.max(1, Math.min(100, Number(limit) || 10));
@@ -151,8 +159,8 @@ async function getLeaderboard(guildID, limit = 10, sortBy = 'level') {
 }
 
 async function getUserRank(guildID, userID, sortBy = 'level') {
-    const gid = String(guildID || '').trim();
-    const uid = String(userID || '').trim();
+    const gid = normalizeDiscordId(guildID);
+    const uid = normalizeDiscordId(userID);
     if (!gid || !uid) return null;
 
     const doc = await User.findOne({ guildID: gid, userID: uid }).lean().catch(() => null);
@@ -179,8 +187,8 @@ async function getUserRank(guildID, userID, sortBy = 'level') {
 }
 
 async function getUserStats(guildID, userID) {
-    const gid = String(guildID || '').trim();
-    const uid = String(userID || '').trim();
+    const gid = normalizeDiscordId(guildID);
+    const uid = normalizeDiscordId(userID);
     if (!gid || !uid) return null;
 
     const doc = await User.findOne({ guildID: gid, userID: uid }).lean().catch(() => null);

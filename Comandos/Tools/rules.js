@@ -3,6 +3,7 @@ const { ContainerBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const { ButtonBuilder } = require('../../Util/compatButtonBuilder');
 const fs = require('fs');
 const path = require('path');
+const { normalizeDiscordId } = require('../../Util/idGuards');
 
 // Traducción de título y botón (fuera de la función)
 const TITLES = {
@@ -95,13 +96,19 @@ module.exports = {
       // Guardar en MongoDB el canal y mensaje de reglas
       try {
         const GuildMessage = require('../../Models/GuildMessageSchema');
+        const guildId = normalizeDiscordId(message.guild?.id);
+        const channelId = normalizeDiscordId(message.channel?.id);
+        const messageId = normalizeDiscordId(sent?.id);
+        if (!guildId || !channelId || !messageId) {
+          throw new Error('RULES_IDS_INVALID');
+        }
         await GuildMessage.findOneAndUpdate(
-          { guildId: message.guild.id, type: 'rules' },
+          { guildId, type: 'rules' },
           {
-            guildId: message.guild.id,
+            guildId,
             type: 'rules',
-            channelId: message.channel.id,
-            messageId: sent.id,
+            channelId,
+            messageId,
             lastLanguage: lang,
           },
           { upsert: true, new: true }

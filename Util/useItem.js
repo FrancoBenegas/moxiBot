@@ -1,4 +1,5 @@
 const { Economy } = require('../Models/EconomySchema');
+const { normalizeDiscordId } = require('./idGuards');
 
 function normalizeText(s) {
     return String(s || '')
@@ -114,19 +115,26 @@ function resolveItemFromInput({ shopId, query, lang } = {}) {
 }
 
 async function ensureEconomyUser(userId) {
+    const uid = normalizeDiscordId(userId);
+    if (!uid) {
+        const err = new Error('USER_ID_INVALID');
+        err.code = 'BAD_INPUT';
+        throw err;
+    }
     if (typeof process.env.MONGODB === 'string' && process.env.MONGODB.trim()) {
         // eslint-disable-next-line global-require
         const { ensureMongoConnection } = require('./mongoConnect');
         await ensureMongoConnection();
     }
 
-    let eco = await Economy.findOne({ userId });
-    if (!eco) eco = await Economy.create({ userId, balance: 0, bank: 0, sakuras: 0 });
+    let eco = await Economy.findOne({ userId: uid });
+    if (!eco) eco = await Economy.create({ userId: uid, balance: 0, bank: 0, sakuras: 0 });
     return eco;
 }
 
 async function consumeInventoryItem({ userId, itemId, amount = 1 } = {}) {
-    if (!userId || !itemId) {
+    const uid = normalizeDiscordId(userId);
+    if (!uid || !itemId) {
         const err = new Error('Missing userId or itemId');
         err.code = 'BAD_INPUT';
         throw err;
@@ -134,7 +142,7 @@ async function consumeInventoryItem({ userId, itemId, amount = 1 } = {}) {
 
     const qty = Number.isFinite(amount) ? Math.max(1, Math.trunc(amount)) : 1;
 
-    const eco = await ensureEconomyUser(userId);
+    const eco = await ensureEconomyUser(uid);
     const inv = Array.isArray(eco.inventory) ? eco.inventory : [];
     const row = inv.find((x) => x && x.itemId === itemId);
 

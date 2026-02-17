@@ -7,6 +7,7 @@ const { buildShopData } = require('../../Util/shopView');
 const { resolveItemFromInput } = require('../../Util/useItem');
 const { BANK_UPGRADE_ITEM_ID, getBankUpgradeTotalCost, getBankInfo, formatInt } = require('../../Util/bankSystem');
 const { getSlashCommandDescription } = require('../../Util/slashHelpI18n');
+const { normalizeDiscordId } = require('../../Util/idGuards');
 
 const { description, localizations } = getSlashCommandDescription('buy');
 
@@ -45,7 +46,7 @@ module.exports = {
     async run(Moxi, interaction) {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        const guildId = interaction.guildId || interaction.guild?.id;
+        const guildId = normalizeDiscordId(interaction.guildId || interaction.guild?.id);
         const lang = await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES');
         const t = (k, vars = {}) => moxi.translate(`economy/buy:${k}`, lang, vars);
 
@@ -96,7 +97,18 @@ module.exports = {
 
         const { Economy } = require('../../Models/EconomySchema');
 
-        const userId = interaction.user.id;
+        const userId = normalizeDiscordId(interaction.user.id);
+        if (!userId) {
+            return await interaction.editReply(
+                asV2MessageOptions(
+                    buildNoticeContainer({
+                        emoji: EMOJIS.cross,
+                        title: t('SHOP_TITLE'),
+                        text: t('NOT_FOUND_GENERIC'),
+                    })
+                )
+            );
+        }
         let eco = await Economy.findOne({ userId });
         if (!eco) {
             eco = await Economy.create({ userId, balance: 0, bank: 0, sakuras: 0 });

@@ -2,6 +2,7 @@ const moxi = require('../../i18n');
 const { buildNoticeContainer, asV2MessageOptions } = require('../../Util/v2Notice');
 const { EMOJIS } = require('../../Util/emojis');
 const { resolveItemFromInput } = require('../../Util/useItem');
+const { normalizeDiscordId } = require('../../Util/idGuards');
 
 const { economyCategory } = require('../../Util/commandCategories');
 
@@ -30,7 +31,9 @@ module.exports = {
     },
 
     async execute(Moxi, message, args) {
-        const guildId = message.guildId || message.guild?.id;
+        const guildId = normalizeDiscordId(message.guildId || message.guild?.id);
+        const userId = normalizeDiscordId(message.author?.id);
+        if (!userId) return;
         const lang = message.lang || await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES');
         const prefix = await moxi.guildPrefix(guildId, process.env.PREFIX || '.');
         const t = (k, vars = {}) => moxi.translate(`economy/sell:${k}`, lang, vars);
@@ -83,7 +86,6 @@ module.exports = {
             // eslint-disable-next-line global-require
             const { buildShopData } = require('../../Util/shopView');
 
-            const userId = message.author.id;
             let eco = await Economy.findOne({ userId });
             if (!eco) eco = await Economy.create({ userId, balance: 0, bank: 0, sakuras: 0 });
 

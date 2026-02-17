@@ -5,6 +5,7 @@ const { ensureMongoConnection } = require('../../../../Util/mongoConnect');
 const { resolveRecipe, craftRecipe, getRecipeDisplayName, getMissingInputs } = require('../../../../Util/craftSystem');
 const { getItemById } = require('../../../../Util/inventoryCatalog');
 const moxi = require('../../../../i18n');
+const { normalizeDiscordId } = require('../../../../Util/idGuards');
 
 function safeInt(n, fallback = 0) {
     const x = Number(n);
@@ -25,7 +26,8 @@ module.exports = async function craftSelectMenu(interaction, Moxi, logger) {
 
     // craft:sel:<userId>:<page>
     const parts = id.split(':');
-    const userId = parts[2];
+    const userId = normalizeDiscordId(parts[2]);
+    if (!userId) return true;
 
     if (interaction.user?.id !== userId) {
         await interaction.reply({ content: 'Solo quien abrió el craft puede usar este menú.', flags: MessageFlags.Ephemeral });
@@ -47,7 +49,7 @@ module.exports = async function craftSelectMenu(interaction, Moxi, logger) {
     const { Economy } = require('../../../../Models/EconomySchema');
     const eco = await Economy.findOne({ userId: interaction.user.id });
 
-    const guildId = interaction.guildId || interaction.guild?.id;
+    const guildId = normalizeDiscordId(interaction.guildId || interaction.guild?.id);
     const fallbackLang = interaction.guildLocale || interaction.locale || process.env.DEFAULT_LANG || 'es-ES';
     const lang = await moxi.guildLang(guildId, fallbackLang);
 
@@ -57,7 +59,7 @@ module.exports = async function craftSelectMenu(interaction, Moxi, logger) {
         return true;
     }
 
-    const result = await craftRecipe({ userId: interaction.user.id, recipe });
+    const result = await craftRecipe({ userId, recipe });
     if (!result.ok) {
         if (result.reason === 'missing') {
             const missing = getMissingInputs(eco, recipe);

@@ -6,6 +6,7 @@ const path = require('path');
 const moxi = require('../../i18n');
 const { Bot } = require('../../Config');
 const { EMOJIS } = require('../../Util/emojis');
+const { normalizeDiscordId } = require('../../Util/idGuards');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -59,13 +60,19 @@ module.exports = {
     // Guardar en MongoDB el canal y mensaje de reglas
     try {
       const GuildMessage = require('../../Models/GuildMessageSchema');
+      const guildId = normalizeDiscordId(interaction.guild?.id);
+      const channelId = normalizeDiscordId(interaction.channel?.id);
+      const messageId = normalizeDiscordId(sentMessage?.id);
+      if (!guildId || !channelId || !messageId) {
+        throw new Error('RULES_IDS_INVALID');
+      }
       await GuildMessage.findOneAndUpdate(
-        { guildId: interaction.guild.id, type: 'rules' },
+        { guildId, type: 'rules' },
         {
-          guildId: interaction.guild.id,
+          guildId,
           type: 'rules',
-          channelId: interaction.channel.id,
-          messageId: sentMessage.id,
+          channelId,
+          messageId,
           lastLanguage: lang,
         },
         { upsert: true, new: true }

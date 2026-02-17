@@ -9,6 +9,7 @@ const { Bot } = require('../../Config');
 const { EMOJIS } = require('../../Util/emojis');
 const Suggestions = require('../../Models/SuggestionsSchema');
 const { isStaff, normalizeSuggestionId, buildSuggestionCard } = require('../../Util/suggestions');
+const { normalizeDiscordId, normalizeDbText } = require('../../Util/idGuards');
 
 function authorNameFromTag(tag) {
     if (!tag) return null;
@@ -33,16 +34,26 @@ function makeSuggestionId() {
 }
 
 async function getConfig(guildId) {
-    return Suggestions.findOne({ guildID: guildId, type: 'config' }).lean().catch(() => null);
+    const gid = normalizeDiscordId(guildId);
+    if (!gid) return null;
+    return Suggestions.findOne({ guildID: gid, type: 'config' }).lean().catch(() => null);
 }
 
 async function upsertConfig(guildId, guildName, patch) {
+    const gid = normalizeDiscordId(guildId);
+    if (!gid) return;
     const now = new Date();
+    const safePatch = {
+        ...patch,
+        enabled: patch?.enabled === undefined ? undefined : !!patch.enabled,
+        channelID: normalizeDiscordId(patch?.channelID) || null,
+        staffChannelID: normalizeDiscordId(patch?.staffChannelID) || null,
+    };
     await Suggestions.updateOne(
-        { guildID: guildId, type: 'config' },
+        { guildID: gid, type: 'config' },
         {
-            $setOnInsert: { guildID: guildId, type: 'config', createdAt: now },
-            $set: { ...patch, guildName: guildName || null, updatedAt: now },
+            $setOnInsert: { guildID: gid, type: 'config', createdAt: now },
+            $set: { ...safePatch, guildName: normalizeDbText(guildName, { maxLen: 120, fallback: '' }) || null, updatedAt: now },
         },
         { upsert: true }
     );
@@ -62,7 +73,8 @@ module.exports = {
     async execute(Moxi, message, args) {
         if (!message.guild) return;
 
-        const guildId = message.guild.id;
+        const guildId = normalizeDiscordId(message.guild.id);
+        if (!guildId) return;
         const sub = String(args[0] || '').trim().toLowerCase();
 
         // --- Admin actions ---
@@ -150,9 +162,9 @@ module.exports = {
             }
 
             doc.status = action;
-            doc.staffID = message.author.id;
-            doc.staffTag = message.author.tag;
-            doc.reason = reason;
+            doc.staffID = normalizeDiscordId(message.author.id) || null;
+            doc.staffTag = normalizeDbText(message.author.tag, { maxLen: 80, fallback: '' }) || null;
+            doc.reason = normalizeDbText(reason, { maxLen: 500, fallback: '' }) || null;
             doc.updatedAt = new Date();
             await doc.save().catch(() => null);
 
@@ -238,9 +250,9 @@ module.exports = {
                     guildID: guildId,
                     guildName: message.guild.name,
                     suggestionId,
-                    authorID: message.author.id,
-                    authorTag: message.author.tag,
-                    content,
+                    authorID: normalizeDiscordId(message.author.id),
+                    authorTag: normalizeDbText(message.author.tag, { maxLen: 80, fallback: '' }),
+                    content: normalizeDbText(content, { maxLen: 1500, fallback: '' }),
                     status: 'pending',
                     createdAt: new Date(),
                     updatedAt: new Date(),

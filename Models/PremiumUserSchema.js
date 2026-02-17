@@ -1,5 +1,6 @@
 const { Schema, model, models } = require('mongoose');
 const { ensureMongoConnection } = require('../Util/mongoConnect');
+const { normalizeDiscordId } = require('../Util/idGuards');
 
 const COLLECTION_PRIMARY = process.env.PREMIUM_USERS_COLLECTION
   ? String(process.env.PREMIUM_USERS_COLLECTION).trim()
@@ -8,8 +9,7 @@ const COLLECTION_PRIMARY = process.env.PREMIUM_USERS_COLLECTION
 function normalizeId(value) {
   if (value === undefined) return undefined;
   if (value === null) return null;
-  const str = String(value).trim();
-  return str || null;
+  return normalizeDiscordId(value) || null;
 }
 
 function normalizeText(value) {

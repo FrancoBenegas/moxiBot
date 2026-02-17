@@ -7,6 +7,7 @@ const GuildData = require('../../Models/GuildSchema');
 const { Bot } = require('../../Config');
 const moxi = require('../../i18n');
 const debugHelper = require('../../Util/debugHelper');
+const { normalizeDiscordId } = require('../../Util/idGuards');
 
 const translate = (key, language, vars = {}) => moxi.translate(`misc:${key}`, language, vars);
 
@@ -43,10 +44,13 @@ module.exports = {
         try {
             const language = message.guild?.settings?.Language || 'es-ES';
             const t = (key, vars = {}) => translate(key, language, vars);
-            const guildID = message.guildId;
+            const guildID = normalizeDiscordId(message.guildId);
             const requesterId = message.author?.id;
             const target = message.mentions.users.first() || await Moxi.users.fetch(args[0]).catch(() => null) || message.author;
-            const userID = target.id;
+            const userID = normalizeDiscordId(target.id);
+            if (!guildID || !userID) {
+                throw new Error('RANK_IDS_INVALID');
+            }
             debugHelper.log('rank', 'command start', { guildID, requesterId, targetId: userID });
 
             // Fuente de verdad: RankSchema (colección separada). Fallback legacy: guilds embebido.
@@ -128,10 +132,13 @@ module.exports = {
             await interaction.deferReply();
             const language = interaction.guild?.settings?.Language || 'es-ES';
             const t = (key, vars = {}) => translate(key, language, vars);
-            const guildID = interaction.guildId;
+            const guildID = normalizeDiscordId(interaction.guildId);
             const requesterId = interaction.user?.id;
             const target = interaction.options.getUser('usuario') || interaction.user;
-            const userID = target.id;
+            const userID = normalizeDiscordId(target.id);
+            if (!guildID || !userID) {
+                throw new Error('RANK_IDS_INVALID');
+            }
             debugHelper.log('rank', 'interaction start', { guildID, requesterId, targetId: userID });
 
             // Fuente de verdad: RankSchema (colección separada). Fallback legacy: guilds embebido.

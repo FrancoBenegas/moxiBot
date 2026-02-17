@@ -1,34 +1,45 @@
 const { PermissionFlagsBits } = require('discord.js');
 const { ensureMongoConnection } = require('./mongoConnect');
+const { normalizeDiscordId, normalizeDbText } = require('./idGuards');
 
 const COLLECTION = 'permanent_invites';
 
 async function readStoredInviteConfig(guildId) {
-    if (!guildId) return null;
+    const gid = normalizeDiscordId(guildId);
+    if (!gid) return null;
     if (!process.env.MONGODB || !String(process.env.MONGODB).trim()) return null;
     const connection = await ensureMongoConnection();
     const db = connection.db;
-    return db.collection(COLLECTION).findOne({ guildId: String(guildId) });
+    return db.collection(COLLECTION).findOne({ guildId: gid });
 }
 
 async function writeStoredInviteConfig(guildId, patch) {
-    if (!guildId) return false;
+    const gid = normalizeDiscordId(guildId);
+    if (!gid) return false;
     if (!process.env.MONGODB || !String(process.env.MONGODB).trim()) return false;
     const connection = await ensureMongoConnection();
     const db = connection.db;
+    const safePatch = {
+        ...patch,
+        code: normalizeDbText(patch?.code, { maxLen: 64, fallback: '' }),
+        channelId: normalizeDiscordId(patch?.channelId) || null,
+        requestedByUserId: normalizeDiscordId(patch?.requestedByUserId) || null,
+        requestedByTag: normalizeDbText(patch?.requestedByTag, { maxLen: 80, fallback: '' }) || null,
+    };
     const update = {
-        $set: { ...patch, guildId: String(guildId), updatedAt: new Date() },
+        $set: { ...safePatch, guildId: gid, updatedAt: new Date() },
         $setOnInsert: { createdAt: new Date() },
     };
-    const res = await db.collection(COLLECTION).updateOne({ guildId: String(guildId) }, update, { upsert: true });
+    const res = await db.collection(COLLECTION).updateOne({ guildId: gid }, update, { upsert: true });
     return !!(res.matchedCount || res.upsertedCount || res.modifiedCount);
 }
 
 async function validateStoredInvite({ guild, code }) {
-    if (!guild || !code) return null;
+    const inviteCode = normalizeDbText(code, { maxLen: 64, fallback: '' });
+    if (!guild || !inviteCode) return null;
     const client = guild.client;
     if (!client || typeof client.fetchInvite !== 'function') return null;
-    const inv = await client.fetchInvite(code).catch(() => null);
+    const inv = await client.fetchInvite(inviteCode).catch(() => null);
     if (!inv) return null;
 
     const sameGuild = (inv.guild && inv.guild.id) ? inv.guild.id === guild.id : true;

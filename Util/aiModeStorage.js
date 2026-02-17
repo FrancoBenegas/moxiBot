@@ -1,4 +1,5 @@
 const { ensureMongoConnection } = require('./mongoConnect');
+const { normalizeDiscordId } = require('./idGuards');
 
 const COLLECTION = 'ai_channels';
 
@@ -56,7 +57,7 @@ function getDefaultConfig() {
     return {
         ownersOnly: boolFromEnv('AI_OWNERS_ONLY', true),
         // Ejecutar comandos prefix sin prefijo en canales IA (solo owners por defecto)
-        commandsWithoutPrefix: boolFromEnv('AI_COMMANDS_WITHOUT_PREFIX', true),
+        commandsWithoutPrefix: boolFromEnv('AI_COMMANDS_WITHOUT_PREFIX', false),
         commandsAllowNonOwners: boolFromEnv('AI_COMMANDS_ALLOW_NON_OWNERS', false),
         // Si un no-owner dispara un comando de moderación, exigir permisos Discord adecuados.
         commandsRequireDiscordPerms: boolFromEnv('AI_COMMANDS_REQUIRE_DISCORD_PERMS', true),
@@ -90,7 +91,10 @@ function mergeConfig(doc) {
 }
 
 function cacheKey(guildId, channelId) {
-    return `${String(guildId || '')}:${String(channelId || '')}`;
+    const gid = normalizeDiscordId(guildId);
+    const cid = normalizeDiscordId(channelId);
+    if (!gid || !cid) return '';
+    return `${gid}:${cid}`;
 }
 
 async function ensureIndexes() {
@@ -107,8 +111,8 @@ async function ensureIndexes() {
 }
 
 async function getAiConfig(guildId, channelId) {
-    const gid = String(guildId || '').trim();
-    const cid = String(channelId || '').trim();
+    const gid = normalizeDiscordId(guildId);
+    const cid = normalizeDiscordId(channelId);
     if (!gid || !cid) return { ok: false, reason: 'missing-ids' };
 
     const key = cacheKey(gid, cid);
@@ -133,8 +137,8 @@ async function getAiConfig(guildId, channelId) {
 }
 
 async function updateAiConfig(guildId, channelId, patch = {}, meta = {}) {
-    const gid = String(guildId || '').trim();
-    const cid = String(channelId || '').trim();
+    const gid = normalizeDiscordId(guildId);
+    const cid = normalizeDiscordId(channelId);
     if (!gid || !cid) return { ok: false, reason: 'missing-ids' };
 
     await ensureIndexes();
@@ -148,7 +152,10 @@ async function updateAiConfig(guildId, channelId, patch = {}, meta = {}) {
     };
     const $unset = {};
 
-    if (meta?.userId) $set.updatedBy = String(meta.userId);
+    if (meta?.userId) {
+        const updatedBy = normalizeDiscordId(meta.userId);
+        if (updatedBy) $set.updatedBy = updatedBy;
+    }
 
     if (patch.enabled !== undefined) $set.enabled = !!patch.enabled;
     if (patch.ownersOnly !== undefined) $set.ownersOnly = !!patch.ownersOnly;
@@ -223,13 +230,13 @@ async function updateAiConfig(guildId, channelId, patch = {}, meta = {}) {
         { upsert: true }
     );
 
-    cache.delete(cacheKey(gid, cid));
+    if (key) cache.delete(key);
     return getAiConfig(gid, cid);
 }
 
 async function isAiEnabled(guildId, channelId) {
-    const gid = String(guildId || '').trim();
-    const cid = String(channelId || '').trim();
+    const gid = normalizeDiscordId(guildId);
+    const cid = normalizeDiscordId(channelId);
     if (!gid || !cid) return false;
 
     const res = await getAiConfig(gid, cid);
@@ -238,8 +245,8 @@ async function isAiEnabled(guildId, channelId) {
 }
 
 async function setAiEnabled(guildId, channelId, enabled, meta = {}) {
-    const gid = String(guildId || '').trim();
-    const cid = String(channelId || '').trim();
+    const gid = normalizeDiscordId(guildId);
+    const cid = normalizeDiscordId(channelId);
     if (!gid || !cid) return { ok: false, reason: 'missing-ids' };
 
     const on = !!enabled;
@@ -255,7 +262,10 @@ async function setAiEnabled(guildId, channelId, enabled, meta = {}) {
         enabled: on,
         updatedAt: now,
     };
-    if (meta?.userId) $set.updatedBy = String(meta.userId);
+    if (meta?.userId) {
+        const updatedBy = normalizeDiscordId(meta.userId);
+        if (updatedBy) $set.updatedBy = updatedBy;
+    }
 
     await db.collection(COLLECTION).updateOne(
         { guildId: gid, channelId: cid },
@@ -266,7 +276,8 @@ async function setAiEnabled(guildId, channelId, enabled, meta = {}) {
         { upsert: true }
     );
 
-    cache.delete(cacheKey(gid, cid));
+    const key = cacheKey(gid, cid);
+    if (key) cache.delete(key);
     return { ok: true, enabled: on };
 }
 

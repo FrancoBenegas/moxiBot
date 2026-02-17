@@ -3,6 +3,7 @@ const { claimRateLimit } = require('./actionRateLimit');
 const { randInt, chance, pickRandom } = require('./activityUtils');
 const { pickRandomCrimeActivity } = require('./crimeActivities');
 const { isPremiumActive } = require('./premium');
+const { normalizeDiscordId } = require('./idGuards');
 
 // Anti-spam: sin cooldown fijo; se bloquea solo si se insiste.
 const CRIME_WINDOW_MS = 60 * 1000;
@@ -80,7 +81,7 @@ function pickCrimeOutcome(activity) {
 }
 
 async function doCrime({ userId } = {}) {
-    const uid = String(userId || '').trim();
+    const uid = normalizeDiscordId(userId);
     if (!uid) return { ok: false, message: 'Falta userId.' };
 
     let maxHits = CRIME_MAX_HITS;

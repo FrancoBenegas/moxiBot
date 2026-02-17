@@ -1,5 +1,6 @@
 const { ensureMongoConnection } = require('./mongoConnect');
 const { getItemById, assertValidItemId } = require('./inventoryCatalog');
+const { normalizeDiscordId } = require('./idGuards');
 
 function normalizeText(input) {
     return String(input || '')
@@ -413,6 +414,10 @@ function getMissingInputs(economyDoc, recipe) {
 }
 
 async function ensureEconomyUser(userId) {
+    const uid = normalizeDiscordId(userId);
+    if (!uid) {
+        throw new Error('USER_ID_INVALID');
+    }
     if (!process.env.MONGODB) {
         throw new Error('MongoDB no está configurado (MONGODB vacío).');
     }
@@ -422,15 +427,15 @@ async function ensureEconomyUser(userId) {
 
     try {
         await Economy.updateOne(
-            { userId },
-            { $setOnInsert: { userId, balance: 0, bank: 0, bankLevel: 0, sakuras: 0, inventory: [] } },
+            { userId: uid },
+            { $setOnInsert: { userId: uid, balance: 0, bank: 0, bankLevel: 0, sakuras: 0, inventory: [] } },
             { upsert: true }
         );
     } catch (e) {
         if (e?.code !== 11000) throw e;
     }
 
-    return Economy.findOne({ userId });
+    return Economy.findOne({ userId: uid });
 }
 
 function addToInventory(eco, itemId, amount) {

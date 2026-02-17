@@ -54,6 +54,32 @@ module.exports = {
     },
 
     async execute(Moxi, message, args) {
+        const enabled = ['1', 'true', 'yes', 'on'].includes(String(process.env.ENABLE_SAYU || '').trim().toLowerCase());
+        if (!enabled) {
+            return message.reply(
+                asV2MessageOptions(
+                    buildNoticeContainer({
+                        emoji: EMOJIS.cross,
+                        title: 'Sayu',
+                        text: 'Este comando está deshabilitado por cumplimiento (ENABLE_SAYU=1 para habilitarlo).',
+                    })
+                )
+            );
+        }
+
+        const hasPerm = message.member?.permissions?.has(PermissionsBitField.Flags.ManageMessages, true);
+        if (!hasPerm) {
+            return message.reply(
+                asV2MessageOptions(
+                    buildNoticeContainer({
+                        emoji: EMOJIS.cross,
+                        title: 'Sayu',
+                        text: 'Necesitas permisos de Gestionar Mensajes para usar este comando.',
+                    })
+                )
+            );
+        }
+
         const text = (args || []).join(' ').trim();
         const replyToId = message?.reference?.messageId || null;
 
@@ -87,9 +113,10 @@ module.exports = {
         }
 
         try {
+            const actorName = message.member?.displayName || message.author?.username || 'Usuario';
             await webhook.send({
                 content: text,
-                username: message.member?.displayName || message.author?.username || 'Usuario',
+                username: `${actorName} • via Moxi`,
                 avatarURL: message.author?.displayAvatarURL?.({ size: 128 }),
                 allowedMentions: { parse: [], repliedUser: false },
                 ...(replyToId ? { reply: { messageReference: replyToId } } : {}),

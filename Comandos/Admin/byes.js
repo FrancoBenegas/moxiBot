@@ -21,6 +21,7 @@ const logger = require('../../Util/logger');
 const debugHelper = require('../../Util/debugHelper');
 const { setSectionButtonAccessory } = require('../../Util/v2SectionAccessory');
 const LANGUAGE_META = require('../../Languages/language-meta.json');
+const { normalizeDiscordId } = require('../../Util/idGuards');
 
 function toHexColor(value, fallback = '#00d9ff') {
     if (!value && value !== 0) return fallback;
@@ -101,11 +102,11 @@ module.exports = {
     },
     cooldown: 10,
     async execute(Moxi, message, args) {
-        const guildId = message.guild?.id;
+        const guildId = normalizeDiscordId(message.guild?.id);
         const lang = await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES');
         const sub = (args[0] || 'status').toLowerCase();
 
-        if (!message.guild) return;
+        if (!message.guild || !guildId) return;
         debugHelper.log('byes', 'command', { guildId, sub, authorId: message.author?.id, args });
 
 

@@ -4,6 +4,7 @@ const { EMOJIS } = require('./emojis');
 const CommandRegistry = require('../Models/CommandsSchema');
 const Subcommands = require('../Models/SubcommandsSchema');
 const getHelpContent = require('./getHelpContent');
+const { normalizeDiscordId, normalizeDbText } = require('./idGuards');
 
 function serializeComponent(value) {
     if (!value) return value;
@@ -130,15 +131,15 @@ async function processPlaygroundJob(job) {
 
     if (job.type === 'playground:helpPreview') {
         const p = job.payload || {};
-        const botId = stableString(p.botId || job.botId || process.env.CLIENT_ID || '');
+        const botId = normalizeDiscordId(p.botId || job.botId || process.env.CLIENT_ID || '');
         if (!botId) return { ok: false, error: 'Missing botId (CLIENT_ID)' };
 
         const page = Number.isFinite(Number(p.page)) ? Number(p.page) : 0;
         const tipo = String(p.tipo || 'main');
         const categoria = p.categoria || null;
         const lang = String(p.lang || process.env.DEFAULT_LANG || 'es-ES');
-        const userId = p.userId || null;
-        const guildId = p.guildId || null;
+        const userId = normalizeDiscordId(p.userId) || null;
+        const guildId = normalizeDiscordId(p.guildId) || null;
 
         const docs = await CommandRegistry.find({ botId }).lean();
         const fakeClient = mapRegistryToClient(docs);
@@ -164,9 +165,9 @@ async function processPlaygroundJob(job) {
 
     if (job.type === 'playground:commandPreview') {
         const p = job.payload || {};
-        const name = stableString(p.name).toLowerCase();
+        const name = normalizeDbText(stableString(p.name).toLowerCase(), { maxLen: 100, fallback: '' });
         const cmdType = (stableString(p.commandType || p.type || 'slash').toLowerCase() === 'prefix') ? 'prefix' : 'slash';
-        const botId = stableString(p.botId || job.botId || process.env.CLIENT_ID || '');
+        const botId = normalizeDiscordId(p.botId || job.botId || process.env.CLIENT_ID || '');
 
         if (!botId) return { ok: false, error: 'Missing botId (CLIENT_ID)' };
         if (!name) return { ok: false, error: 'Missing payload.name' };

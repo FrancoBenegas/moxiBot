@@ -1,13 +1,14 @@
 const { ensureMongoConnection } = require('./mongoConnect');
+const { normalizeDiscordId, normalizeDbText } = require('./idGuards');
 
 const COLLECTION = 'afks';
 const SCOPE_GLOBAL = 'global';
 const SCOPE_GUILD = 'guild';
 
 function resolveBotId(botId) {
-    const fromArg = String(botId || '').trim();
+    const fromArg = normalizeDiscordId(botId);
     if (fromArg) return fromArg;
-    const fromEnv = String(process.env.CLIENT_ID || '').trim();
+    const fromEnv = normalizeDiscordId(process.env.CLIENT_ID);
     if (fromEnv) return fromEnv;
     return 'default-bot';
 }
@@ -21,20 +22,25 @@ async function setAfk({ userId, guildId, message, scope = SCOPE_GUILD, botId = n
     const collection = await getCollection();
     const normalizedScope = scope === SCOPE_GLOBAL ? SCOPE_GLOBAL : SCOPE_GUILD;
     const resolvedBotId = resolveBotId(botId);
+    const safeUserId = normalizeDiscordId(userId);
+    const safeGuildId = normalizeDiscordId(guildId);
     const now = new Date();
-    const filter = { userId, scope: normalizedScope, botId: resolvedBotId };
-    if (normalizedScope === SCOPE_GUILD && !guildId) {
+    const filter = { userId: safeUserId, scope: normalizedScope, botId: resolvedBotId };
+    if (!safeUserId) {
+        throw new Error('Invalid userId');
+    }
+    if (normalizedScope === SCOPE_GUILD && !safeGuildId) {
         throw new Error('Guild scope requires a guildId');
     }
     if (normalizedScope === SCOPE_GUILD) {
-        filter.guildId = guildId;
+        filter.guildId = safeGuildId;
     }
     const doc = {
-        userId,
+        userId: safeUserId,
         botId: resolvedBotId,
         scope: normalizedScope,
-        guildId: normalizedScope === SCOPE_GUILD ? guildId : null,
-        message,
+        guildId: normalizedScope === SCOPE_GUILD ? safeGuildId : null,
+        message: normalizeDbText(message, { maxLen: 500 }),
         updatedAt: now,
     };
     const update = {
@@ -51,17 +57,22 @@ async function setAfk({ userId, guildId, message, scope = SCOPE_GUILD, botId = n
 async function getAfkEntry(userId, guildId, { botId = null } = {}) {
     const collection = await getCollection();
     const resolvedBotId = resolveBotId(botId);
-    if (guildId) {
-        const guildEntry = await collection.findOne({ userId, botId: resolvedBotId, scope: SCOPE_GUILD, guildId });
+    const safeUserId = normalizeDiscordId(userId);
+    const safeGuildId = normalizeDiscordId(guildId);
+    if (!safeUserId) return null;
+    if (safeGuildId) {
+        const guildEntry = await collection.findOne({ userId: safeUserId, botId: resolvedBotId, scope: SCOPE_GUILD, guildId: safeGuildId });
         if (guildEntry) return guildEntry;
     }
-    return collection.findOne({ userId, botId: resolvedBotId, scope: SCOPE_GLOBAL });
+    return collection.findOne({ userId: safeUserId, botId: resolvedBotId, scope: SCOPE_GLOBAL });
 }
 
 async function clearAfk(userId, { botId = null } = {}) {
     const collection = await getCollection();
     const resolvedBotId = resolveBotId(botId);
-    const result = await collection.deleteMany({ userId, botId: resolvedBotId });
+    const safeUserId = normalizeDiscordId(userId);
+    if (!safeUserId) return false;
+    const result = await collection.deleteMany({ userId: safeUserId, botId: resolvedBotId });
     return result.deletedCount > 0;
 }
 

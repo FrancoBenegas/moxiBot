@@ -5,6 +5,7 @@ const Config = require("../../Config");
 const { ensureMongoConnection } = require('../../Util/mongoConnect');
 const { restoreTimers } = require('../../Util/timerStorage');
 const { syncCommandRegistry } = require('../../Util/commandRegistry');
+const { normalizeDiscordId } = require('../../Util/idGuards');
 
 function isPrimaryShard(client) {
     try {
@@ -127,14 +128,16 @@ module.exports = async (Moxi) => {
             // Restaurar timers persistidos (best-effort) una vez Mongo está listo.
             restoreTimers(async (guildId, channelId, userId, minutos) => {
                 try {
-                    const channel = await Moxi.channels.fetch(channelId).catch(() => null);
+                    const safeChannelId = normalizeDiscordId(channelId);
+                    const safeUserId = normalizeDiscordId(userId);
+                    const channel = safeChannelId ? await Moxi.channels.fetch(safeChannelId).catch(() => null) : null;
                     if (!channel || typeof channel.send !== 'function') return;
 
                     const { ContainerBuilder, MessageFlags } = require('discord.js');
                     const done = new ContainerBuilder()
                         .setAccentColor(Config?.Bot?.AccentColor)
                         .addTextDisplayComponents(c => c.setContent(
-                            `⏰ <@${userId}> ¡Tu temporizador de ${minutos} ${minutos === 1 ? 'minuto' : 'minutos'} ha terminado!`
+                            `⏰ ${safeUserId ? `<@${safeUserId}>` : 'Usuario'} ¡Tu temporizador de ${minutos} ${minutos === 1 ? 'minuto' : 'minutos'} ha terminado!`
                         ));
 
                     await channel.send({
@@ -165,7 +168,7 @@ module.exports = async (Moxi) => {
     // Si SLASH_MENTIONS_WITH_ID está activo, precargamos IDs para que los placeholders
     // en traducciones puedan convertirse a menciones clicables (</cmd:ID>) desde el arranque.
     try {
-        const applicationId = process.env.CLIENT_ID;
+        const applicationId = normalizeDiscordId(process.env.CLIENT_ID);
         const { isUsingSlashCommandIds, loadSlashCommandIdsFromDb, warmSlashCommandIdsCache } = require('../../Util/slashCommandMentions');
         if (applicationId && isUsingSlashCommandIds()) {
             // 1) DB -> memoria (si persistencia está activa)
@@ -203,7 +206,7 @@ module.exports = async (Moxi) => {
     // Enviar componente V2 de arranque (estilo ping, sin botón)
     const { getStartupComponentV2 } = require("../../Components/V2/startupEmbedComponent");
     const { MessageFlags } = require("discord.js");
-    const channelId = process.env.ERROR_CHANNEL_ID || '1459913736050704485';
+    const channelId = normalizeDiscordId(process.env.ERROR_CHANNEL_ID) || '1459913736050704485';
     if (!isPrimaryShard(Moxi)) return;
 
     Moxi.channels.fetch(channelId)

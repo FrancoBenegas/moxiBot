@@ -1,12 +1,11 @@
 const { ensureMongoConnection } = require('./mongoConnect');
+const { normalizeDiscordId, normalizeDbText } = require('./idGuards');
 
 const COLLECTION = 'blacklists';
 let ensureIndexesPromise = null;
 
 function normalizeId(value) {
-    const raw = String(value || '').trim();
-    const match = raw.match(/\d{17,20}/);
-    return match ? match[0] : '';
+    return normalizeDiscordId(value);
 }
 
 async function ensureIndexes(db) {
@@ -51,7 +50,7 @@ async function upsertBlacklist({ scope, guildId = null, userId, reason = '', cre
 
     const update = {
         $set: {
-            reason: String(reason || '').trim().slice(0, 500),
+            reason: normalizeDbText(reason, { maxLen: 500, fallback: '' }),
             createdBy: cleanBy,
             updatedAt: now,
         },

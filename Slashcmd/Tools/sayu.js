@@ -1,4 +1,4 @@
-const { MessageFlags, PermissionsBitField } = require('discord.js');
+const { MessageFlags, PermissionFlagsBits, PermissionsBitField } = require('discord.js');
 const { SlashCommandBuilder } = require('../../Util/slashCommandBuilder');
 const moxi = require('../../i18n');
 const { EMOJIS } = require('../../Util/emojis');
@@ -40,7 +40,8 @@ module.exports = {
     Category: toolsCategory,
     data: new SlashCommandBuilder()
         .setName('sayu')
-        .setDescription('Envía un mensaje como si fuera el usuario (webhook / APP)')
+        .setDescription('Envía un mensaje por webhook con atribución visible')
+        .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
         .addStringOption((opt) =>
             opt
                 .setName('mensaje')
@@ -52,6 +53,34 @@ module.exports = {
     async run(Moxi, interaction) {
         const guildId = interaction.guildId || interaction.guild?.id;
         await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES');
+
+        const enabled = ['1', 'true', 'yes', 'on'].includes(String(process.env.ENABLE_SAYU || '').trim().toLowerCase());
+        if (!enabled) {
+            return interaction.reply({
+                ...asV2MessageOptions(
+                    buildNoticeContainer({
+                        emoji: EMOJIS.cross,
+                        title: 'Sayu',
+                        text: 'Este comando está deshabilitado por cumplimiento (ENABLE_SAYU=1 para habilitarlo).',
+                    })
+                ),
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+
+        const hasPerm = interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages);
+        if (!hasPerm) {
+            return interaction.reply({
+                ...asV2MessageOptions(
+                    buildNoticeContainer({
+                        emoji: EMOJIS.cross,
+                        title: 'Sayu',
+                        text: 'Necesitas permisos de Gestionar Mensajes para usar este comando.',
+                    })
+                ),
+                flags: MessageFlags.Ephemeral,
+            });
+        }
 
         const text = String(interaction.options.getString('mensaje', true)).trim();
         if (!text) {
@@ -85,10 +114,11 @@ module.exports = {
         }
 
         try {
+            const actorName = interaction.member?.displayName || interaction.user?.username || 'Usuario';
             await webhook.send({
                 content: text,
-                username: interaction.member?.displayName || interaction.user?.username || 'Usuario',
-                avatarURL: interaction.user?.displayAvatarURL?.({ size: 128 }),
+                username: `${actorName} • via Moxi`,
+                avatarURL: Moxi.user?.displayAvatarURL?.({ size: 128 }) || undefined,
                 allowedMentions: { parse: [] },
             });
         } catch {
