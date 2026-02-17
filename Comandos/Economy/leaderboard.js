@@ -1,6 +1,7 @@
 const moxi = require('../../i18n');
 const { buildNoticeContainer, asV2MessageOptions } = require('../../Util/v2Notice');
 const { EMOJIS } = require('../../Util/emojis');
+const { normalizeDiscordId } = require('../../Util/idGuards');
 
 const { economyCategory } = require('../../Util/commandCategories');
 
@@ -18,7 +19,7 @@ module.exports = {
     },
 
     async execute(Moxi, message) {
-        const guildId = message.guildId || message.guild?.id;
+        const guildId = normalizeDiscordId(message.guildId || message.guild?.id);
         const lang = message.lang || await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES');
         const t = (k, vars = {}) => moxi.translate(`economy/leaderboard:${k}`, lang, vars);
 
@@ -77,7 +78,7 @@ module.exports = {
             }
 
             const rows = Array.isArray(top) ? top : [];
-            const ids = rows.map((r) => String(r?.userId || '')).filter(Boolean);
+            const ids = rows.map((r) => normalizeDiscordId(r?.userId)).filter(Boolean);
 
             const botIds = new Set();
             if (message.guild && typeof message.guild.members?.fetch === 'function') {

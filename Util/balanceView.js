@@ -10,6 +10,7 @@ const { Bot } = require('../Config');
 const { EMOJIS } = require('./emojis');
 const { getBankInfo, formatInt: formatInt2 } = require('./bankSystem');
 const { toComponentEmoji } = require('./discordEmoji');
+const { normalizeDiscordId } = require('./idGuards');
 
 function formatInt(n) {
     const x = Number(n);
@@ -19,22 +20,24 @@ function formatInt(n) {
 
 function buildBalanceButtons({ lang = 'es-ES', viewerId, targetId } = {}) {
     const t = (k, vars = {}) => moxi.translate(`economy/balance:${k}`, lang, vars);
-    const canAct = String(viewerId) === String(targetId);
+    const viewer = normalizeDiscordId(viewerId);
+    const target = normalizeDiscordId(targetId);
+    const canAct = viewer && target && viewer === target;
 
     const deposit = new SecondaryButtonBuilder()
-        .setCustomId(`bal:deposit:${viewerId}:${targetId}`)
+        .setCustomId(`bal:deposit:${viewer || '0'}:${target || '0'}`)
         .setLabel(t('BTN_DEPOSIT'))
         .setEmoji(toComponentEmoji('📥'))
         .setDisabled(!canAct);
 
     const withdraw = new SecondaryButtonBuilder()
-        .setCustomId(`bal:withdraw:${viewerId}:${targetId}`)
+        .setCustomId(`bal:withdraw:${viewer || '0'}:${target || '0'}`)
         .setLabel(t('BTN_WITHDRAW'))
         .setEmoji(toComponentEmoji('📤'))
         .setDisabled(!canAct);
 
     const refresh = new SecondaryButtonBuilder()
-        .setCustomId(`bal:refresh:${viewerId}:${targetId}`)
+        .setCustomId(`bal:refresh:${viewer || '0'}:${target || '0'}`)
         .setEmoji(toComponentEmoji('🔁'));
 
     return [deposit, withdraw, refresh];
@@ -46,28 +49,30 @@ function parseBalanceCustomId(customId) {
     const parts = raw.split(':');
     // bal:action:viewerId:targetId
     const action = parts[1] || null;
-    const viewerId = parts[2] || null;
-    const targetId = parts[3] || null;
+    const viewerId = normalizeDiscordId(parts[2]) || null;
+    const targetId = normalizeDiscordId(parts[3]) || null;
     if (!action || !viewerId || !targetId) return null;
     return { action, viewerId, targetId };
 }
 
 async function getOrCreateEconomyRaw(userId) {
+    const uid = normalizeDiscordId(userId);
+    if (!uid) throw new Error('USER_ID_INVALID');
     if (!process.env.MONGODB) throw new Error('MongoDB no está configurado (MONGODB vacío).');
     await ensureMongoConnection();
     const { Economy } = require('../Models/EconomySchema');
 
     try {
         await Economy.updateOne(
-            { userId },
-            { $setOnInsert: { userId, balance: 0, bank: 0, bankLevel: 0, sakuras: 0, inventory: [] } },
+            { userId: uid },
+            { $setOnInsert: { userId: uid, balance: 0, bank: 0, bankLevel: 0, sakuras: 0, inventory: [] } },
             { upsert: true }
         );
     } catch (e) {
         if (e?.code !== 11000) throw e;
     }
 
-    return Economy.findOne({ userId });
+    return Economy.findOne({ userId: uid });
 }
 
 async function getGlobalBalanceRank(balance) {
@@ -83,7 +88,9 @@ async function buildBalanceMessage({ guildId, lang, viewerId, targetUser } = {})
     const language = lang || (await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES'));
     const tr = (k, vars = {}) => moxi.translate(`economy/balance:${k}`, language, vars);
 
-    const targetId = targetUser?.id;
+    const targetId = normalizeDiscordId(targetUser?.id);
+    const viewer = normalizeDiscordId(viewerId);
+    if (!targetId) throw new Error('TARGET_ID_INVALID');
     const eco = await getOrCreateEconomyRaw(targetId);
 
     const balance = eco?.balance ?? 0;
@@ -106,7 +113,7 @@ async function buildBalanceMessage({ guildId, lang, viewerId, targetUser } = {})
                 `${tr('GLOBAL_RANK')}: **#${formatInt(rank)}**`
             )
         )
-        .addActionRowComponents(row => row.addComponents(...buildBalanceButtons({ lang: language, viewerId, targetId })));
+        .addActionRowComponents(row => row.addComponents(...buildBalanceButtons({ lang: language, viewerId: viewer, targetId })));
 
     return {
         content: '',

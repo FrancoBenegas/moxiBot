@@ -443,10 +443,14 @@ Moxi.on("messageCreate", async (message) => {
         }
 
         // Ejecutar comandos de prefijo sin prefijo (solo en canal IA)
-        // Por seguridad: por defecto solo owners, a menos que se habilite explícitamente.
+        // Por seguridad queda deshabilitado por defecto y debe habilitarse explícitamente.
         try {
-          const canRunNoPrefix = false;
-          const allowNonOwners = cfg.commandsAllowNonOwners === true;
+          const envNoPrefix = ['1', 'true', 'yes', 'on'].includes(String(process.env.AI_COMMANDS_WITHOUT_PREFIX || '').trim().toLowerCase());
+          const canRunNoPrefix = cfg.commandsWithoutPrefix === true || envNoPrefix;
+
+          const envAllowNonOwners = ['1', 'true', 'yes', 'on'].includes(String(process.env.AI_COMMANDS_ALLOW_NON_OWNERS || '').trim().toLowerCase());
+          const allowNonOwners = cfg.commandsAllowNonOwners === true || envAllowNonOwners;
+
           const requireDiscordPerms = cfg.commandsRequireDiscordPerms !== false;
 
           if (canRunNoPrefix) {

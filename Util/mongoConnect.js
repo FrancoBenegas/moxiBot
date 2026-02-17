@@ -23,6 +23,7 @@ async function ensureMongoConnection(options = {}) {
 
     connectionPromise = (async () => {
         mongoose.set('strictQuery', false);
+        mongoose.set('sanitizeFilter', true);
         await mongoose.connect(uri, connectOptions);
 
         const dbName = mongoose.connection.name || 'default';

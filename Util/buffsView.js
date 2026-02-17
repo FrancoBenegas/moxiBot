@@ -5,6 +5,7 @@ const moxi = require('../i18n');
 const { Bot } = require('../Config');
 const { EMOJIS } = require('./emojis');
 const { ensureMongoConnection } = require('./mongoConnect');
+const { normalizeDiscordId } = require('./idGuards');
 
 function clampPct(n) {
     const x = Number(n);
@@ -23,27 +24,29 @@ function parseBuffsCustomId(customId) {
     const parts = raw.split(':');
     // buffs:action:userId
     const action = parts[1] || null;
-    const userId = parts[2] || null;
+    const userId = normalizeDiscordId(parts[2]) || null;
     if (!action || !userId) return null;
     return { action, userId };
 }
 
 async function getOrCreateEconomy(userId) {
+    const uid = normalizeDiscordId(userId);
+    if (!uid) return null;
     if (!process.env.MONGODB) return null;
     await ensureMongoConnection();
     const { Economy } = require('../Models/EconomySchema');
 
     try {
         await Economy.updateOne(
-            { userId },
-            { $setOnInsert: { userId, balance: 0, bank: 0, bankLevel: 0, sakuras: 0, inventory: [] } },
+            { userId: uid },
+            { $setOnInsert: { userId: uid, balance: 0, bank: 0, bankLevel: 0, sakuras: 0, inventory: [] } },
             { upsert: true }
         );
     } catch (e) {
         if (e?.code !== 11000) throw e;
     }
 
-    return Economy.findOne({ userId });
+    return Economy.findOne({ userId: uid });
 }
 
 function computeLootBonusesFromInventory(inv = []) {
@@ -84,7 +87,7 @@ function computeLootBonusesFromInventory(inv = []) {
 
 function buildBuffsContainer({ lang, userId, activeLines, bonusLines, disabled = false } = {}) {
     const language = lang || 'es-ES';
-    const safeUserId = String(userId || '').trim();
+    const safeUserId = normalizeDiscordId(userId) || '0';
 
     const title = 'Potenciadores Activos ✨';
     const subtitle = 'Bonos de Botín 🍀';
@@ -112,7 +115,26 @@ function buildBuffsContainer({ lang, userId, activeLines, bonusLines, disabled =
 
 async function buildBuffsMessage({ guildId, lang, userId, disabled = false } = {}) {
     const language = lang || (await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES'));
-    const safeUserId = String(userId || '').trim();
+    const safeUserId = normalizeDiscordId(userId) || '';
+    if (!safeUserId) {
+        return {
+            content: '',
+            components: [buildBuffsContainer({
+                lang: language,
+                userId: '0',
+                activeLines: ['No hay potenciadores activos ahora.'],
+                bonusLines: [
+                    `🍀 **Mejores ítems:** ${formatPct(0)}`,
+                    `⛏️ **Minería:** ${formatPct(0)}`,
+                    `🎣 **Pesca:** ${formatPct(0)}`,
+                    `🏠 **Servidor:** ${formatPct(0)}`,
+                ],
+                disabled: true,
+            })],
+            flags: MessageFlags.IsComponentsV2,
+            allowedMentions: { repliedUser: false },
+        };
+    }
 
     const eco = await getOrCreateEconomy(safeUserId).catch(() => null);
     const inv = eco?.inventory || [];

@@ -1,5 +1,10 @@
 const { REST, Routes } = require('discord.js');
 const logger = require('./logger');
+const { normalizeDiscordId, normalizeDbText } = require('./idGuards');
+
+function normalizeCommandName(value) {
+  return normalizeDbText(value, { maxLen: 100, fallback: '' });
+}
 
 function isPersistingSlashCommandIds() {
   const env = process.env.SLASH_COMMAND_IDS_PERSIST;
@@ -59,20 +64,30 @@ const USE_SLASH_COMMAND_IDS = isUsingSlashCommandIds();
 const CACHE = new Map();
 
 function cacheKey({ applicationId, guildId, name }) {
-  return `${applicationId}:${guildId || 'global'}:${name}`;
+  const appId = normalizeDiscordId(applicationId);
+  const gid = normalizeDiscordId(guildId) || null;
+  const commandName = normalizeCommandName(name);
+  if (!appId || !commandName) return '';
+  return `${appId}:${gid || 'global'}:${commandName}`;
 }
 
 function getCachedSlashCommandId({ name, applicationId, guildId = null } = {}) {
-  if (!name || !applicationId) return null;
-  const primaryKey = cacheKey({ applicationId, guildId, name });
-  const globalKey = cacheKey({ applicationId, guildId: null, name });
+  const appId = normalizeDiscordId(applicationId);
+  const gid = normalizeDiscordId(guildId) || null;
+  const commandName = normalizeCommandName(name);
+  if (!commandName || !appId) return null;
+  const primaryKey = cacheKey({ applicationId: appId, guildId: gid, name: commandName });
+  const globalKey = cacheKey({ applicationId: appId, guildId: null, name: commandName });
+  if (!primaryKey || !globalKey) return null;
   return CACHE.get(primaryKey) || CACHE.get(globalKey) || null;
 }
 
 function resolveSlashMentionPlaceholders(text, { applicationId, guildId = null } = {}) {
   if (typeof text !== 'string') return text;
   if (!text.includes('{{COMMAND') && !text.includes('{{command')) return text;
-  if (!applicationId) return text;
+  const appId = normalizeDiscordId(applicationId);
+  const gid = normalizeDiscordId(guildId) || null;
+  if (!appId) return text;
 
   if (!USE_SLASH_COMMAND_IDS) {
     // Solo convierte el placeholder a texto del comando: /name o /name sub
@@ -88,17 +103,22 @@ function resolveSlashMentionPlaceholders(text, { applicationId, guildId = null }
     const fullName = String(fullNameRaw || '').trim().replace(/\s+/g, ' ');
     if (!fullName) return match;
     const rootName = fullName.split(' ')[0];
-    const id = getCachedSlashCommandId({ name: rootName, applicationId, guildId });
+    const id = getCachedSlashCommandId({ name: rootName, applicationId: appId, guildId: gid });
     if (!id) return `/${fullName}`;
     return `</${fullName}:${id}>`;
   });
 }
 
 function cacheCommands({ applicationId, guildId = null, commands }) {
-  if (!applicationId || !Array.isArray(commands)) return;
+  const appId = normalizeDiscordId(applicationId);
+  const gid = normalizeDiscordId(guildId) || null;
+  if (!appId || !Array.isArray(commands)) return;
   for (const cmd of commands) {
-    if(cmd && cmd.name && cmd.id) {
-      CACHE.set(cacheKey({ applicationId, guildId, name: String(cmd.name) }), String(cmd.id));
+    const commandName = normalizeCommandName(cmd?.name);
+    const commandId = normalizeDiscordId(cmd?.id);
+    const key = cacheKey({ applicationId: appId, guildId: gid, name: commandName });
+    if(commandName && commandId && key) {
+      CACHE.set(key, commandId);
     }
   }
 }
@@ -106,25 +126,30 @@ function cacheCommands({ applicationId, guildId = null, commands }) {
 async function loadSlashCommandIdsFromDb({ applicationId, guildId = null } = {}) {
   if (!USE_SLASH_COMMAND_IDS) return 0;
   if (!PERSIST_SLASH_IDS) return 0;
-  if (!applicationId) return 0;
+  const appId = normalizeDiscordId(applicationId);
+  const gid = normalizeDiscordId(guildId) || null;
+  if (!appId) return 0;
 
   try {
     const Model = await getSlashCommandIdModel();
     if (!Model) return 0;
 
     const docs = await Model.find({
-      applicationId: String(applicationId),
-      guildId: guildId ? String(guildId) : null,
+      applicationId: appId,
+      guildId: gid,
     }).lean().exec();
 
     if (Array.isArray(docs)) {
       for (const d of docs) {
         if (d?.name && d?.commandId) {
+          const commandName = normalizeCommandName(d.name);
+          const commandId = normalizeDiscordId(d.commandId);
+          if (!commandName || !commandId) continue;
           CACHE.set(cacheKey({
-            applicationId: String(applicationId),
-            guildId: guildId ? String(guildId) : null,
-            name: String(d.name),
-          }), String(d.commandId));
+            applicationId: appId,
+            guildId: gid,
+            name: commandName,
+          }), commandId);
         }
       }
       return docs.length;
@@ -138,16 +163,18 @@ async function loadSlashCommandIdsFromDb({ applicationId, guildId = null } = {})
 
 async function warmSlashCommandIdsCache({ applicationId, guildId = null } = {}) {
   if (!USE_SLASH_COMMAND_IDS) return 0;
-  if (!applicationId) return 0;
+  const appId = normalizeDiscordId(applicationId);
+  const gid = normalizeDiscordId(guildId) || null;
+  if (!appId) return 0;
 
   const token = process.env.TOKEN;
   if (!token) return 0;
 
   try {
-    const list = await fetchIdsFromDiscord({ applicationId, token, guildId });
+    const list = await fetchIdsFromDiscord({ applicationId: appId, token, guildId: gid });
     if (!Array.isArray(list) || !list.length) return 0;
 
-    cacheCommands({ applicationId, guildId, commands: list });
+    cacheCommands({ applicationId: appId, guildId: gid, commands: list });
 
     if (PERSIST_SLASH_IDS) {
       try {
@@ -159,16 +186,16 @@ async function warmSlashCommandIdsCache({ applicationId, guildId = null } = {}) 
             ops.push({
               updateOne: {
                 filter: {
-                  applicationId: String(applicationId),
-                  guildId: guildId ? String(guildId) : null,
-                  name: String(c.name),
+                  applicationId: appId,
+                  guildId: gid,
+                  name: normalizeCommandName(c.name),
                 },
                 update: {
-                  $set: { commandId: String(c.id) },
+                  $set: { commandId: normalizeDiscordId(c.id) },
                   $setOnInsert: {
-                    applicationId: String(applicationId),
-                    guildId: guildId ? String(guildId) : null,
-                    name: String(c.name),
+                    applicationId: appId,
+                    guildId: gid,
+                    name: normalizeCommandName(c.name),
                   },
                 },
                 upsert: true,
@@ -192,20 +219,26 @@ async function warmSlashCommandIdsCache({ applicationId, guildId = null } = {}) 
 }
 
 async function fetchIdsFromDiscord({ applicationId, token, guildId = null } = {}) {
-  if (!applicationId || !token) return [];
+  const appId = normalizeDiscordId(applicationId);
+  const gid = normalizeDiscordId(guildId) || null;
+  if (!appId || !token) return [];
   const rest = new REST({ version: '10' }).setToken(token);
-  if (guildId) {
-    return rest.get(Routes.applicationGuildCommands(applicationId, guildId));
+  if (gid) {
+    return rest.get(Routes.applicationGuildCommands(appId, gid));
   }
-  return rest.get(Routes.applicationCommands(applicationId));
+  return rest.get(Routes.applicationCommands(appId));
 }
 
 async function getSlashCommandId({ name, applicationId, guildId = null, allowFetch = true } = {}) {
   if (!USE_SLASH_COMMAND_IDS) return null;
-  if (!name || !applicationId) return null;
+  const commandName = normalizeCommandName(name);
+  const appId = normalizeDiscordId(applicationId);
+  const gid = normalizeDiscordId(guildId) || null;
+  if (!commandName || !appId) return null;
 
-  const primaryKey = cacheKey({ applicationId, guildId, name });
-  const globalKey = cacheKey({ applicationId, guildId: null, name });
+  const primaryKey = cacheKey({ applicationId: appId, guildId: gid, name: commandName });
+  const globalKey = cacheKey({ applicationId: appId, guildId: null, name: commandName });
+  if (!primaryKey || !globalKey) return null;
 
   if (CACHE.has(primaryKey)) return CACHE.get(primaryKey);
   if (CACHE.has(globalKey)) return CACHE.get(globalKey);
@@ -216,9 +249,9 @@ async function getSlashCommandId({ name, applicationId, guildId = null, allowFet
       const Model = await getSlashCommandIdModel();
       if (Model) {
         const doc = await Model.findOne({
-          applicationId: String(applicationId),
-          guildId: guildId ? String(guildId) : null,
-          name: String(name),
+          applicationId: appId,
+          guildId: gid,
+          name: commandName,
         }).lean().exec();
 
         if (doc?.commandId) {
@@ -237,12 +270,13 @@ async function getSlashCommandId({ name, applicationId, guildId = null, allowFet
     const token = process.env.TOKEN;
     if (token) {
       try {
-        const list = await fetchIdsFromDiscord({ applicationId, token, guildId });
+        const list = await fetchIdsFromDiscord({ applicationId: appId, token, guildId: gid });
         if (Array.isArray(list) && list.length) {
-          cacheCommands({ applicationId, guildId, commands: list });
-          const found = list.find((c) => c && c.name === name);
+          cacheCommands({ applicationId: appId, guildId: gid, commands: list });
+          const found = list.find((c) => c && normalizeCommandName(c.name) === commandName);
           if (found?.id) {
-            const id = String(found.id);
+            const id = normalizeDiscordId(found.id);
+            if (!id) return null;
 
             if (PERSIST_SLASH_IDS) {
               try {
@@ -250,13 +284,13 @@ async function getSlashCommandId({ name, applicationId, guildId = null, allowFet
                 if (Model) {
                   await Model.updateOne(
                     {
-                      applicationId: String(applicationId),
-                      guildId: guildId ? String(guildId) : null,
-                      name: String(name),
+                      applicationId: appId,
+                      guildId: gid,
+                      name: commandName,
                     },
                     {
                       $set: { commandId: id },
-                      $setOnInsert: { applicationId: String(applicationId), guildId: guildId ? String(guildId) : null, name: String(name) },
+                      $setOnInsert: { applicationId: appId, guildId: gid, name: commandName },
                     },
                     { upsert: true }
                   ).exec();
@@ -274,14 +308,15 @@ async function getSlashCommandId({ name, applicationId, guildId = null, allowFet
       }
 
       // Try global if guild fetch didn't find it
-      if (guildId) {
+      if (gid) {
         try {
-          const list = await fetchIdsFromDiscord({ applicationId, token, guildId: null });
+          const list = await fetchIdsFromDiscord({ applicationId: appId, token, guildId: null });
           if (Array.isArray(list) && list.length) {
-            cacheCommands({ applicationId, guildId: null, commands: list });
-            const found = list.find((c) => c && c.name === name);
+            cacheCommands({ applicationId: appId, guildId: null, commands: list });
+            const found = list.find((c) => c && normalizeCommandName(c.name) === commandName);
             if (found?.id) {
-              const id = String(found.id);
+              const id = normalizeDiscordId(found.id);
+              if (!id) return null;
 
               if (PERSIST_SLASH_IDS) {
                 try {
@@ -289,13 +324,13 @@ async function getSlashCommandId({ name, applicationId, guildId = null, allowFet
                   if (Model) {
                     await Model.updateOne(
                       {
-                        applicationId: String(applicationId),
+                        applicationId: appId,
                         guildId: null,
-                        name: String(name),
+                        name: commandName,
                       },
                       {
                         $set: { commandId: id },
-                        $setOnInsert: { applicationId: String(applicationId), guildId: null, name: String(name) },
+                        $setOnInsert: { applicationId: appId, guildId: null, name: commandName },
                       },
                       { upsert: true }
                     ).exec();
@@ -319,10 +354,13 @@ async function getSlashCommandId({ name, applicationId, guildId = null, allowFet
 }
 
 async function slashMention({ name, subcommand = null, applicationId, guildId = null } = {}) {
-  const fullName = subcommand ? `${name} ${subcommand}` : name;
+  const baseName = normalizeCommandName(name);
+  const subName = subcommand ? normalizeCommandName(subcommand) : '';
+  const fullName = subName ? `${baseName} ${subName}` : baseName;
+  if (!fullName) return '/';
   if (!USE_SLASH_COMMAND_IDS) return `/${fullName}`;
 
-  const id = await getSlashCommandId({ name, applicationId, guildId });
+  const id = await getSlashCommandId({ name: baseName, applicationId, guildId });
   if (!id) return `/${fullName}`;
   return `</${fullName}:${id}>`;
 }

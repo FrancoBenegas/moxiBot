@@ -7,6 +7,7 @@ const { buildSylphaGreeting } = require('../../../Util/sylphacard');
 const { buildDiscordArtsProfile } = require('../../../Util/discordArts');
 const { buildCanvacardWelcomeLeave } = require('../../../Util/canvacard');
 const debugHelper = require('../../../Util/debugHelper');
+const { normalizeDiscordId } = require('../../../Util/idGuards');
 
 function toHexColor(value, fallback = '#00d9ff') {
     if (!value && value !== 0) return fallback;
@@ -57,7 +58,8 @@ module.exports = async (member) => {
     const guild = member?.guild;
     if (!guild) return;
 
-    const guildId = guild.id;
+    const guildId = normalizeDiscordId(guild.id);
+    if (!guildId) return;
 
     const byesDoc = await Byes.findOne({ guildID: guildId, type: 'config' }).lean().catch((err) => {
         debugHelper.error('byes', 'Byes.findOne failed (guildMemberRemove)', err);
@@ -74,7 +76,8 @@ module.exports = async (member) => {
     const cfg = byesDoc || legacyDoc?.Byes;
     if (!cfg?.enabled || !cfg?.channelID) return;
 
-    const channelId = String(cfg.channelID);
+    const channelId = normalizeDiscordId(cfg.channelID);
+    if (!channelId) return;
     const channel = guild.channels.cache.get(channelId) || await guild.channels.fetch(channelId).catch(() => null);
     if (!channel || typeof channel.send !== 'function') return;
 

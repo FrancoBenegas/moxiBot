@@ -1,6 +1,7 @@
 const os = require('os');
 const crypto = require('crypto');
 const { ensureMongoConnection } = require('./mongoConnect');
+const { normalizeDiscordId, normalizeDbText } = require('./idGuards');
 const PlaygroundJobs = require('../Models/PlaygroundJobsSchema');
 const { processPlaygroundJob } = require('./playgroundProcessor');
 
@@ -54,13 +55,15 @@ function computeDedupeKey(type, payload, scope) {
 async function enqueuePlaygroundJob(type, payload = {}, opts = {}) {
     await ensureMongoConnection();
 
-    const botId = normalizeString(opts.botId);
-    const guildId = normalizeString(opts.guildId);
-    const userId = normalizeString(opts.userId);
+    const botId = normalizeDiscordId(opts.botId) || normalizeString(opts.botId);
+    const guildId = normalizeDiscordId(opts.guildId) || normalizeString(opts.guildId);
+    const userId = normalizeDiscordId(opts.userId) || normalizeString(opts.userId);
+    const safeType = normalizeDbText(type, { maxLen: 64, fallback: '' });
+    if (!safeType) throw new Error('Invalid playground job type');
 
     const dedupeEnabled = opts.dedupe !== false;
     const dedupeKey = dedupeEnabled
-        ? normalizeString(opts.dedupeKey) || computeDedupeKey(type, payload, { botId, guildId, userId })
+            ? normalizeString(opts.dedupeKey) || computeDedupeKey(safeType, payload, { botId, guildId, userId })
         : '';
 
     const runAt = opts.runAt instanceof Date ? opts.runAt : (opts.runAt ? new Date(opts.runAt) : new Date());
@@ -79,7 +82,7 @@ async function enqueuePlaygroundJob(type, payload = {}, opts = {}) {
             guildId: guildId || undefined,
             userId: userId || undefined,
             dedupeKey: dedupeKey || undefined,
-            type: normalizeString(type),
+            type: safeType,
             payload: payload || {},
             status: 'queued',
             priority,
@@ -100,9 +103,11 @@ async function enqueuePlaygroundJob(type, payload = {}, opts = {}) {
 async function enqueuePlaygroundJobInstant(type, payload = {}, opts = {}) {
     await ensureMongoConnection();
 
-    const botId = normalizeString(opts.botId);
-    const guildId = normalizeString(opts.guildId);
-    const userId = normalizeString(opts.userId);
+    const botId = normalizeDiscordId(opts.botId) || normalizeString(opts.botId);
+    const guildId = normalizeDiscordId(opts.guildId) || normalizeString(opts.guildId);
+    const userId = normalizeDiscordId(opts.userId) || normalizeString(opts.userId);
+    const safeType = normalizeDbText(type, { maxLen: 64, fallback: '' });
+    if (!safeType) throw new Error('Invalid playground job type');
 
     const runAt = opts.runAt instanceof Date ? opts.runAt : (opts.runAt ? new Date(opts.runAt) : new Date());
     const priority = Number.isFinite(Number(opts.priority)) ? Number(opts.priority) : 0;
@@ -110,7 +115,7 @@ async function enqueuePlaygroundJobInstant(type, payload = {}, opts = {}) {
 
     const dedupeEnabled = opts.dedupe !== false;
     const dedupeKey = dedupeEnabled
-        ? normalizeString(opts.dedupeKey) || computeDedupeKey(type, payload, { botId, guildId, userId })
+            ? normalizeString(opts.dedupeKey) || computeDedupeKey(safeType, payload, { botId, guildId, userId })
         : '';
 
     const job = {
@@ -118,7 +123,7 @@ async function enqueuePlaygroundJobInstant(type, payload = {}, opts = {}) {
         guildId: guildId || undefined,
         userId: userId || undefined,
         dedupeKey: dedupeKey || undefined,
-        type: normalizeString(type),
+        type: safeType,
         payload: payload || {},
         status: 'completed',
         priority,
@@ -151,9 +156,11 @@ async function enqueuePlaygroundJobInstant(type, payload = {}, opts = {}) {
 async function enqueuePlaygroundResult(type, payload = {}, result = {}, opts = {}) {
     await ensureMongoConnection();
 
-    const botId = normalizeString(opts.botId);
-    const guildId = normalizeString(opts.guildId);
-    const userId = normalizeString(opts.userId);
+    const botId = normalizeDiscordId(opts.botId) || normalizeString(opts.botId);
+    const guildId = normalizeDiscordId(opts.guildId) || normalizeString(opts.guildId);
+    const userId = normalizeDiscordId(opts.userId) || normalizeString(opts.userId);
+    const safeType = normalizeDbText(type, { maxLen: 64, fallback: '' });
+    if (!safeType) throw new Error('Invalid playground job type');
 
     const runAt = opts.runAt instanceof Date ? opts.runAt : (opts.runAt ? new Date(opts.runAt) : new Date());
     const priority = Number.isFinite(Number(opts.priority)) ? Number(opts.priority) : 0;
@@ -161,7 +168,7 @@ async function enqueuePlaygroundResult(type, payload = {}, result = {}, opts = {
 
     const dedupeEnabled = opts.dedupe !== false;
     const dedupeKey = dedupeEnabled
-        ? normalizeString(opts.dedupeKey) || computeDedupeKey(type, payload, { botId, guildId, userId })
+            ? normalizeString(opts.dedupeKey) || computeDedupeKey(safeType, payload, { botId, guildId, userId })
         : '';
 
     const job = {
@@ -169,7 +176,7 @@ async function enqueuePlaygroundResult(type, payload = {}, result = {}, opts = {
         guildId: guildId || undefined,
         userId: userId || undefined,
         dedupeKey: dedupeKey || undefined,
-        type: normalizeString(type),
+        type: safeType,
         payload: payload || {},
         status: 'completed',
         priority,

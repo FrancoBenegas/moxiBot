@@ -6,6 +6,7 @@ const { Economy } = require('../../Models/EconomySchema');
 const { getOrCreateEconomy, safeInt } = require('../../Util/economyCore');
 const { addToInventory } = require('../../Util/inventoryOps');
 const { loadCatalog, getItemById } = require('../../Util/inventoryCatalog');
+const { normalizeDiscordId } = require('../../Util/idGuards');
 
 const { economyCategory } = require('../../Util/commandCategories');
 
@@ -99,7 +100,9 @@ module.exports = {
     },
 
     async execute(Moxi, message, args) {
-        const guildId = message.guildId || message.guild?.id;
+        const guildId = normalizeDiscordId(message.guildId || message.guild?.id);
+        const userId = normalizeDiscordId(message.author?.id);
+        if (!userId) return;
         const lang = await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES');
         const t = (k, vars = {}) => moxi.translate(`economy/blackmarket:${k}`, lang, vars);
 
@@ -108,7 +111,7 @@ module.exports = {
         // Cargar economía (si no hay DB, damos un mensaje claro)
         let eco;
         try {
-            eco = await getOrCreateEconomy(message.author.id);
+            eco = await getOrCreateEconomy(userId);
         } catch {
             return message.reply(
                 asV2MessageOptions(
@@ -121,7 +124,7 @@ module.exports = {
             );
         }
 
-        const offers = buildOffers({ lang, guildId, userId: message.author.id });
+        const offers = buildOffers({ lang, guildId, userId });
 
         if (sub === 'buy' || sub === 'comprar') {
             const slot = parseSlot(args?.[1]);
@@ -154,13 +157,13 @@ module.exports = {
             await ensureMongoConnection();
 
             const updated = await Economy.findOneAndUpdate(
-                { userId: message.author.id, balance: { $gte: picked.price } },
+                { userId, balance: { $gte: picked.price } },
                 { $inc: { balance: -picked.price } },
                 { new: true }
             );
 
             if (!updated) {
-                const fresh = await Economy.findOne({ userId: message.author.id });
+                const fresh = await Economy.findOne({ userId });
                 const newBal = safeInt(fresh?.balance, balance);
                 return message.reply(
                     asV2MessageOptions(

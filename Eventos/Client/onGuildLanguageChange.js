@@ -10,16 +10,21 @@ const { ButtonBuilder } = require('../../Util/compatButtonBuilder');
 const { Bot } = require('../../Config');
 const { EMOJIS } = require('../../Util/emojis');
 const { isFlagEnabled } = require('../../Util/debug');
+const { normalizeDiscordId, normalizeDbText } = require('../../Util/idGuards');
 
 module.exports = async (guild, newLanguage) => {
+    const guildId = normalizeDiscordId(guild?.id);
+    if (!guildId) return;
 
     try {
         // --- Actualizar mensaje de reglas ---
-        const rulesMsg = await GuildMessage.findOne({ guildId: guild.id, type: 'rules' });
+        const rulesMsg = await GuildMessage.findOne({ guildId, type: 'rules' });
         if (rulesMsg) {
-            const channel = guild.channels.cache.get(rulesMsg.channelId) || await guild.channels.fetch(rulesMsg.channelId).catch(() => null);
+            const rulesChannelId = normalizeDiscordId(rulesMsg.channelId);
+            const rulesMessageId = normalizeDiscordId(rulesMsg.messageId);
+            const channel = rulesChannelId ? (guild.channels.cache.get(rulesChannelId) || await guild.channels.fetch(rulesChannelId).catch(() => null)) : null;
             if (channel) {
-                const message = await channel.messages.fetch(rulesMsg.messageId).catch(() => null);
+                const message = rulesMessageId ? await channel.messages.fetch(rulesMessageId).catch(() => null) : null;
                 if (message) {
                     // Leer las reglas en el nuevo idioma
                     const rulesPath = path.join(__dirname, '../../Languages', newLanguage, 'rules', 'rules.json');
@@ -78,21 +83,23 @@ module.exports = async (guild, newLanguage) => {
                         // Editar el mensaje de reglas
                         await message.edit({ content: '', components: [container], flags: MessageFlags.IsComponentsV2 });
                         // Actualizar el idioma en el registro
-                        rulesMsg.lastLanguage = newLanguage;
+                        rulesMsg.lastLanguage = normalizeDbText(newLanguage, { maxLen: 12, fallback: 'es-ES' });
                         await rulesMsg.save();
-                        if (isFlagEnabled('onGuildLanguageChange')) console.log(`[ONGUILDLANGUAGECHANGE_DEBUG] Mensaje de reglas actualizado automáticamente para el servidor ${guild.id} (${newLanguage})`);
+                        if (isFlagEnabled('onGuildLanguageChange')) console.log(`[ONGUILDLANGUAGECHANGE_DEBUG] Mensaje de reglas actualizado automáticamente para el servidor ${guildId} (${newLanguage})`);
                     }
                 }
             }
         }
 
         // --- Actualizar mensaje de bugGuide ---
-        const bugGuideMsg = await GuildMessage.findOne({ guildId: guild.id, type: 'bugGuide' });
+        const bugGuideMsg = await GuildMessage.findOne({ guildId, type: 'bugGuide' });
         if (bugGuideMsg) {
             // El bugGuide se guarda como: channelId = threadId, messageId = starterMsgId
-            const thread = guild.channels.cache.get(bugGuideMsg.channelId) || await guild.channels.fetch(bugGuideMsg.channelId).catch(() => null);
+            const threadId = normalizeDiscordId(bugGuideMsg.channelId);
+            const starterId = normalizeDiscordId(bugGuideMsg.messageId);
+            const thread = threadId ? (guild.channels.cache.get(threadId) || await guild.channels.fetch(threadId).catch(() => null)) : null;
             if (thread) {
-                const starterMsg = await thread.messages.fetch(bugGuideMsg.messageId).catch(() => null);
+                const starterMsg = starterId ? await thread.messages.fetch(starterId).catch(() => null) : null;
                 if (starterMsg) {
                     // Leer el contenido de bugGuidelines.json
                     const guidelinesPath = path.join(__dirname, '../../Languages', newLanguage, 'utility', 'bugGuidelines.json');
@@ -119,9 +126,9 @@ module.exports = async (guild, newLanguage) => {
                         // Editar el mensaje guía
                         await starterMsg.edit(guidelines);
                         // Actualizar el idioma en el registro
-                        bugGuideMsg.lastLanguage = newLanguage;
+                        bugGuideMsg.lastLanguage = normalizeDbText(newLanguage, { maxLen: 12, fallback: 'es-ES' });
                         await bugGuideMsg.save();
-                        if (isFlagEnabled('onGuildLanguageChange')) console.log(`[ONGUILDLANGUAGECHANGE_DEBUG] Mensaje de bugGuide actualizado automáticamente para el servidor ${guild.id} (${newLanguage})`);
+                        if (isFlagEnabled('onGuildLanguageChange')) console.log(`[ONGUILDLANGUAGECHANGE_DEBUG] Mensaje de bugGuide actualizado automáticamente para el servidor ${guildId} (${newLanguage})`);
                     }
                 }
             }

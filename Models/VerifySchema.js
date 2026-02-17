@@ -1,5 +1,6 @@
 const { Schema, model, models } = require('mongoose');
 const { ensureMongoConnection } = require('../Util/mongoConnect');
+const { normalizeDiscordId } = require('../Util/idGuards');
 
 const COLLECTION_PRIMARY = 'verify';
 const COLLECTION_LEGACY = 'verification_configs';
@@ -7,8 +8,7 @@ const COLLECTION_LEGACY = 'verification_configs';
 function normalizeId(value) {
   if (value === undefined) return undefined;
   if (value === null) return null;
-  const str = String(value).trim();
-  return str || null;
+  return normalizeDiscordId(value) || null;
 }
 
 function normalizeText(value) {
@@ -87,8 +87,8 @@ const VerifySchema = new Schema({
 const VerifyModel = models.Verify || model('Verify', VerifySchema);
 
 async function getVerificationConfig(guildId) {
-  if (!guildId) return null;
-  const id = String(guildId);
+  const id = normalizeId(guildId);
+  if (!id) return null;
   const connection = await ensureMongoConnection();
 
   const doc = await VerifyModel.findOne({ guildId: id }).lean().exec();
@@ -104,7 +104,8 @@ async function getVerificationConfig(guildId) {
 }
 
 async function upsertVerificationConfig(guildId, patch) {
-  if (!guildId) throw new Error('guildId is required');
+  const safeGuildId = normalizeId(guildId);
+  if (!safeGuildId) throw new Error('guildId is required');
   await ensureMongoConnection();
 
   const now = new Date();
@@ -134,11 +135,11 @@ async function upsertVerificationConfig(guildId, patch) {
   }
 
   const update = {
-    $setOnInsert: { guildId: String(guildId), createdAt: now },
+    $setOnInsert: { guildId: safeGuildId, createdAt: now },
     $set: { ...safePatch, updatedAt: now },
   };
 
-  const result = await VerifyModel.updateOne({ guildId: String(guildId) }, update, { upsert: true }).exec();
+  const result = await VerifyModel.updateOne({ guildId: safeGuildId }, update, { upsert: true }).exec();
   return result.matchedCount > 0 || result.upsertedCount > 0;
 }
 

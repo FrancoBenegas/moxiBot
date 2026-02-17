@@ -4,6 +4,7 @@ const Suggestions = require('../../../../Models/SuggestionsSchema');
 const { isStaff, normalizeSuggestionId, buildSuggestionCard } = require('../../../../Util/suggestions');
 const { buildNoticeContainer } = require('../../../../Util/v2Notice');
 const { EMOJIS } = require('../../../../Util/emojis');
+const { normalizeDiscordId, normalizeDbText } = require('../../../../Util/idGuards');
 
 function authorNameFromTag(tag) {
     if (!tag) return null;
@@ -62,19 +63,24 @@ module.exports = async function suggestModalHandler(interaction, Moxi) {
     const parts = id.split(':');
     const action = parts[1];
     const suggestionId = normalizeSuggestionId(parts[2]);
+    const guildId = normalizeDiscordId(interaction.guildId);
+    if (!guildId) return true;
     if (!['approved', 'denied'].includes(action) || !suggestionId) return true;
 
     const reasonRaw = interaction.fields?.getTextInputValue?.('reason');
-    const reason = reasonRaw && String(reasonRaw).trim().length ? String(reasonRaw).trim() : null;
+    const reason = reasonRaw && String(reasonRaw).trim().length
+        ? normalizeDbText(reasonRaw, { maxLen: 500, fallback: '' })
+        : null;
+    const staffId = normalizeDiscordId(interaction.user?.id) || null;
 
     const now = new Date();
     const updated = await Suggestions.findOneAndUpdate(
-        { guildID: interaction.guildId, type: 'suggestion', suggestionId, status: 'pending' },
+        { guildID: guildId, type: 'suggestion', suggestionId, status: 'pending' },
         {
             $set: {
                 status: action,
-                staffID: interaction.user?.id || null,
-                staffTag: interaction.user?.tag || null,
+                staffID: staffId,
+                staffTag: normalizeDbText(interaction.user?.tag, { maxLen: 80, fallback: '' }) || null,
                 reason,
                 updatedAt: now,
             },
@@ -83,7 +89,7 @@ module.exports = async function suggestModalHandler(interaction, Moxi) {
     ).catch(() => null);
 
     if (!updated) {
-        const existing = await Suggestions.findOne({ guildID: interaction.guildId, type: 'suggestion', suggestionId }).lean().catch(() => null);
+        const existing = await Suggestions.findOne({ guildID: guildId, type: 'suggestion', suggestionId }).lean().catch(() => null);
         const msg = existing?.status === 'approved'
             ? 'Esta sugerencia ya está aprobada.'
             : existing?.status === 'denied'
@@ -140,7 +146,7 @@ module.exports = async function suggestModalHandler(interaction, Moxi) {
             || await interaction.guild.channels.fetch(String(updated.staffMessageChannelID)).catch(() => null);
 
         if (staffChannel && staffChannel.isTextBased && staffChannel.isTextBased()) {
-            const linkUrl = updated.messageID ? `https://discord.com/channels/${interaction.guildId}/${updated.messageChannelID}/${updated.messageID}` : null;
+            const linkUrl = updated.messageID ? `https://discord.com/channels/${guildId}/${updated.messageChannelID}/${updated.messageID}` : null;
             const staffCard = buildSuggestionCard({
                 suggestionId: updated.suggestionId,
                 content: updated.content,

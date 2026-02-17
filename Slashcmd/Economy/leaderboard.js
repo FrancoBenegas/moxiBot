@@ -4,6 +4,7 @@ const moxi = require('../../i18n');
 const { buildNoticeContainer, asV2MessageOptions } = require('../../Util/v2Notice');
 const { EMOJIS } = require('../../Util/emojis');
 const { getSlashCommandDescription } = require('../../Util/slashHelpI18n');
+const { normalizeDiscordId } = require('../../Util/idGuards');
 
 const { description, localizations } = getSlashCommandDescription('leaderboard');
 
@@ -19,7 +20,7 @@ module.exports = {
         .setDescriptionLocalizations(localizations),
 
     async run(Moxi, interaction) {
-        const guildId = interaction.guildId || interaction.guild?.id;
+        const guildId = normalizeDiscordId(interaction.guildId || interaction.guild?.id);
         const lang = await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES');
         const t = (k, vars = {}) => moxi.translate(`economy/leaderboard:${k}`, lang, vars);
 
@@ -80,7 +81,7 @@ module.exports = {
             }
 
             const rows = Array.isArray(top) ? top : [];
-            const ids = rows.map((r) => String(r?.userId || '')).filter(Boolean);
+            const ids = rows.map((r) => normalizeDiscordId(r?.userId)).filter(Boolean);
 
             const botIds = new Set();
             if (interaction.guild && typeof interaction.guild.members?.fetch === 'function') {

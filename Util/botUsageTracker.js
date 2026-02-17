@@ -1,5 +1,6 @@
 const COLLECTION_NAME = 'bot_usage_users';
 const WRITE_TTL_MS = 5 * 60 * 1000;
+const { normalizeDiscordId, normalizeDbText } = require('./idGuards');
 
 const lastWriteByUser = new Map();
 
@@ -17,7 +18,7 @@ function safeString(value, maxLen = 200) {
 
 async function trackBotUserUsage({ userId, guildId, source, name }) {
     try {
-        const uid = safeString(userId, 64);
+        const uid = normalizeDiscordId(userId) || safeString(userId, 64);
         if (!uid) return false;
         if (!isMongoEnabled()) return false;
 
@@ -34,9 +35,9 @@ async function trackBotUserUsage({ userId, guildId, source, name }) {
         const update = {
             $set: {
                 lastSeenAt: new Date(now),
-                lastGuildId: safeString(guildId, 64),
-                lastSource: safeString(source, 32),
-                lastName: safeString(name, 200),
+                lastGuildId: normalizeDiscordId(guildId) || safeString(guildId, 64),
+                lastSource: normalizeDbText(source, { maxLen: 32, fallback: null }),
+                lastName: normalizeDbText(name, { maxLen: 200, fallback: null }),
             },
             $setOnInsert: {
                 firstSeenAt: new Date(now),

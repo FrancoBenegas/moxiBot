@@ -1,4 +1,5 @@
 const moxi = require('../../i18n');
+const { normalizeDiscordId } = require('../../Util/idGuards');
 
 const { economyCategory } = require('../../Util/commandCategories');
 
@@ -21,7 +22,9 @@ module.exports = {
     },
 
     async execute(Moxi, message, args = []) {
-        const guildId = message.guildId || message.guild?.id;
+        const guildId = normalizeDiscordId(message.guildId || message.guild?.id);
+        const userId = normalizeDiscordId(message.author?.id);
+        if (!userId) return;
         const lang = await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES');
         const prefix = await moxi.guildPrefix(guildId, process.env.PREFIX || '.');
 
@@ -72,12 +75,12 @@ module.exports = {
                 const n = Number.parseInt(String(cleaned[1]), 10);
                 if (Number.isFinite(n) && n > 0) page = n - 1;
             }
-            return message.reply({ ...buildCraftMessage({ userId: message.author.id, page, pageSize: 4, lang }), allowedMentions: { repliedUser: false } });
+            return message.reply({ ...buildCraftMessage({ userId, page, pageSize: 4, lang }), allowedMentions: { repliedUser: false } });
         }
 
         await ensureMongoConnection();
         const { Economy } = require('../../Models/EconomySchema');
-        const eco = await Economy.findOne({ userId: message.author.id });
+        const eco = await Economy.findOne({ userId });
 
         const recipe = resolveRecipe(query, lang);
         if (!recipe) {
@@ -87,7 +90,7 @@ module.exports = {
             });
         }
 
-        const result = await craftRecipe({ userId: message.author.id, recipe });
+        const result = await craftRecipe({ userId, recipe });
         if (!result.ok) {
             if (result.reason === 'missing') {
                 const missing = Array.isArray(result.missing) ? result.missing : [];

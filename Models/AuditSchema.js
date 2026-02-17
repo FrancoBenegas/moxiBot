@@ -1,4 +1,5 @@
 const { MongoClient } = require('mongodb');
+const { normalizeDiscordId } = require('../Util/idGuards');
 
 const uri = process.env.MONGODB;
 
@@ -20,8 +21,7 @@ const collectionName = 'audit';
 function normalizeId(value) {
     if (value === undefined) return undefined;
     if (value === null) return null;
-    const str = String(value).trim();
-    return str || null;
+    return normalizeDiscordId(value) || null;
 }
 
 async function withCollection(fn) {
@@ -37,6 +37,7 @@ async function withCollection(fn) {
 }
 
 async function getAuditSettings(guildId) {
+    guildId = normalizeId(guildId);
     if (!guildId) return null;
     return withCollection(collection =>
         collection.findOne({ guildID: guildId }).then(doc => doc || null)
@@ -44,6 +45,7 @@ async function getAuditSettings(guildId) {
 }
 
 async function setAuditChannel(guildId, channelId) {
+    guildId = normalizeId(guildId);
     if (!guildId) throw new Error('guildId is required');
     return withCollection(async (collection) => {
         const now = new Date();
@@ -62,6 +64,7 @@ async function setAuditChannel(guildId, channelId) {
 }
 
 async function setAuditEnabled(guildId, enabled) {
+    guildId = normalizeId(guildId);
     if (!guildId) throw new Error('guildId is required');
     return withCollection(async (collection) => {
         const now = new Date();
@@ -78,6 +81,7 @@ async function setAuditEnabled(guildId, enabled) {
 }
 
 async function deleteAuditSettings(guildId) {
+    guildId = normalizeId(guildId);
     if (!guildId) return false;
     return withCollection(async (collection) => {
         const result = await collection.deleteOne({ guildID: guildId });

@@ -4,6 +4,7 @@ const { EMOJIS } = require('../../Util/emojis');
 const { buildShopData, buildShopMessage } = require('../../Util/shopView');
 const { resolveItemFromInput } = require('../../Util/useItem');
 const { BANK_UPGRADE_ITEM_ID, getBankUpgradeTotalCost, getBankInfo, formatInt } = require('../../Util/bankSystem');
+const { normalizeDiscordId } = require('../../Util/idGuards');
 const { economyCategory } = require('../../Util/commandCategories');
 
 function safeInt(n, fallback = 0) {
@@ -25,7 +26,7 @@ module.exports = {
     },
 
     async execute(Moxi, message, args) {
-        const guildId = message.guildId || message.guild?.id;
+        const guildId = normalizeDiscordId(message.guildId || message.guild?.id);
         const lang = await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES');
         const t = (k, vars = {}) => moxi.translate(`economy/shop:${k}`, lang, vars);
 
@@ -109,7 +110,8 @@ module.exports = {
             }
 
             const { Economy } = require('../../Models/EconomySchema');
-            const userId = message.author.id;
+            const userId = normalizeDiscordId(message.author.id);
+            if (!userId) return;
             let eco = await Economy.findOne({ userId });
             if (!eco) eco = await Economy.create({ userId, balance: 0, bank: 0, sakuras: 0 });
 

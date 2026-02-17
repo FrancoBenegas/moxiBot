@@ -12,6 +12,7 @@ const { parseCrimeCustomId, buildCrimeMessageOptions } = require('../../../../Ut
 const { crimeActivityTitle, crimeOptionLabel, crimeDoorLabel, crimeRiskLabel, crimeWireLabel } = require('../../../../Util/crimeI18n');
 const { shouldShowCooldownNotice } = require('../../../../Util/cooldownNotice');
 const { isPremiumActive } = require('../../../../Util/premium');
+const { normalizeDiscordId } = require('../../../../Util/idGuards');
 
 const CRIME_WINDOW_MS = 60 * 1000;
 const CRIME_MAX_HITS = 3;
@@ -52,13 +53,15 @@ module.exports = async function crimeButtons(interaction, Moxi, logger) {
     if (!parsed) return false;
 
     const { action, userId, parts } = parsed;
+    const safeUserId = normalizeDiscordId(userId);
+    if (!safeUserId) return true;
 
-    if (interaction.user?.id !== String(userId)) {
+    if (interaction.user?.id !== String(safeUserId)) {
         await interaction.reply({ content: 'Solo quien abrió este panel puede usar estos botones.', flags: MessageFlags.Ephemeral }).catch(() => null);
         return true;
     }
 
-    const guildId = interaction.guildId || interaction.guild?.id;
+    const guildId = normalizeDiscordId(interaction.guildId || interaction.guild?.id);
     const lang = await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES');
 
     if (action === 'close') {
@@ -67,7 +70,7 @@ module.exports = async function crimeButtons(interaction, Moxi, logger) {
         const seed = Number.parseInt(parts[4], 10);
         const payload = buildCrimeMessageOptions({
             lang,
-            userId,
+            userId: safeUserId,
             activityId,
             state: {
                 disabled: true,
@@ -79,7 +82,7 @@ module.exports = async function crimeButtons(interaction, Moxi, logger) {
     }
 
     if (action === 'reroll') {
-        const payload = buildCrimeMessageOptions({ lang, userId });
+        const payload = buildCrimeMessageOptions({ lang, userId: safeUserId });
         await interaction.update(payload).catch(() => null);
         return true;
     }
@@ -104,7 +107,7 @@ module.exports = async function crimeButtons(interaction, Moxi, logger) {
 
     let maxHits = CRIME_MAX_HITS;
     try {
-        const premium = await isPremiumActive(userId);
+        const premium = await isPremiumActive(safeUserId);
         if (premium) {
             const bonusRaw = Number(process.env.CRIME_PREMIUM_MAXHITS_BONUS ?? 2);
             const bonus = Number.isFinite(bonusRaw) ? Math.max(0, Math.trunc(bonusRaw)) : 2;
@@ -114,9 +117,9 @@ module.exports = async function crimeButtons(interaction, Moxi, logger) {
         // best-effort
     }
 
-    const cd = claimRateLimit({ userId, key: 'crime', windowMs: CRIME_WINDOW_MS, maxHits });
+    const cd = claimRateLimit({ userId: safeUserId, key: 'crime', windowMs: CRIME_WINDOW_MS, maxHits });
     if (!cd.ok && cd.reason === 'cooldown') {
-        if (!shouldShowCooldownNotice({ userId, key: 'crime' })) {
+        if (!shouldShowCooldownNotice({ userId: safeUserId, key: 'crime' })) {
             return true;
         }
         const fireAt = Date.now() + (Number(cd.nextInMs) || 0);
@@ -127,7 +130,7 @@ module.exports = async function crimeButtons(interaction, Moxi, logger) {
         });
         container.addSeparatorComponents(s => s.setDivider(true));
         container.addActionRowComponents(r => r.addComponents(
-            buildRemindButton({ type: 'crime', fireAt, userId })
+            buildRemindButton({ type: 'crime', fireAt, userId: safeUserId })
         ));
         const payload = {
             content: '',
@@ -150,7 +153,7 @@ module.exports = async function crimeButtons(interaction, Moxi, logger) {
         if (!opt) {
             const payload = buildCrimeMessageOptions({
                 lang,
-                userId,
+                userId: safeUserId,
                 activityId,
                 state: {
                     notice: { emoji: EMOJIS.cross, title: 'Crime', text: 'Opción inválida.' },
@@ -178,7 +181,7 @@ module.exports = async function crimeButtons(interaction, Moxi, logger) {
         if (!r) {
             const payload = buildCrimeMessageOptions({
                 lang,
-                userId,
+                userId: safeUserId,
                 activityId,
                 state: {
                     notice: { emoji: EMOJIS.cross, title: 'Crime', text: 'Riesgo inválido.' },
@@ -204,7 +207,7 @@ module.exports = async function crimeButtons(interaction, Moxi, logger) {
     } else {
         const payload = buildCrimeMessageOptions({
             lang,
-            userId,
+            userId: safeUserId,
             activityId,
             state: {
                 notice: { emoji: EMOJIS.cross, title: 'Crime', text: 'Actividad no soportada.' },
@@ -219,11 +222,11 @@ module.exports = async function crimeButtons(interaction, Moxi, logger) {
 
     if (success) {
         const amount = randInt(rewardRange?.min ?? 40, rewardRange?.max ?? 150);
-        const res = await awardBalance({ userId, amount });
+        const res = await awardBalance({ userId: safeUserId, amount });
         if (!res.ok) {
             const payload = buildCrimeMessageOptions({
                 lang,
-                userId,
+                userId: safeUserId,
                 activityId,
                 state: {
                     notice: { emoji: '⚠️', title: 'Crime', text: res.message || 'No pude darte la recompensa.' },
@@ -243,7 +246,7 @@ module.exports = async function crimeButtons(interaction, Moxi, logger) {
 
         const disabledPanel = buildCrimeMessageOptions({
             lang,
-            userId,
+            userId: safeUserId,
             activityId: activity.id,
             state: {
                 disabled: true,
@@ -255,7 +258,7 @@ module.exports = async function crimeButtons(interaction, Moxi, logger) {
         await interaction.editReply(disabledPanel).catch(() => null);
     } else {
         const fine = randInt(fineRange?.min ?? 20, fineRange?.max ?? 120);
-        const res = await takeBalance({ userId, amount: fine });
+        const res = await takeBalance({ userId: safeUserId, amount: fine });
 
         const lines = [
             `${activity.emoji || '🕵️'} **${crimeActivityTitle(lang, activity)}**${extraTitle ? ` • ${extraTitle}` : ''}`,
@@ -266,7 +269,7 @@ module.exports = async function crimeButtons(interaction, Moxi, logger) {
 
         const disabledPanel = buildCrimeMessageOptions({
             lang,
-            userId,
+            userId: safeUserId,
             activityId: activity.id,
             state: {
                 disabled: true,

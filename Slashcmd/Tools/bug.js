@@ -3,6 +3,7 @@ const { SlashCommandBuilder } = require('../../Util/slashCommandBuilder');
 const moxi = require('../../i18n');
 const { Bot } = require('../../Config');
 const { getSettings, upsertSettings } = require('../../Util/bugStorage');
+const { normalizeDiscordId } = require('../../Util/idGuards');
 const GUIDE_THREAD_REACTION = process.env.BUG_GUIDE_REACTION || '📌';
 
 module.exports = {
@@ -111,13 +112,19 @@ module.exports = {
                 // Guardar en GuildMessage el hilo guía
                 try {
                     const GuildMessage = require('../../Models/GuildMessageSchema');
+                    const guildIdSafe = normalizeDiscordId(guild.id);
+                    const guideThreadId = normalizeDiscordId(guideThread.id);
+                    const starterId = normalizeDiscordId(starter.id);
+                    if (!guildIdSafe || !guideThreadId || !starterId) {
+                        throw new Error('BUG_GUIDE_IDS_INVALID');
+                    }
                     await GuildMessage.findOneAndUpdate(
-                        { guildId: guild.id, type: 'bugGuide' },
+                        { guildId: guildIdSafe, type: 'bugGuide' },
                         {
-                            guildId: guild.id,
+                            guildId: guildIdSafe,
                             type: 'bugGuide',
-                            channelId: guideThread.id,
-                            messageId: starter.id,
+                            channelId: guideThreadId,
+                            messageId: starterId,
                             lastLanguage: lang,
                         },
                         { upsert: true, new: true }

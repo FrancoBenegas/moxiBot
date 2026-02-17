@@ -20,6 +20,7 @@ const LevelSystem = require('../../Global/Helpers/LevelSystem');
 const debugHelper = require('../../Util/debugHelper');
 const { generateRankImage } = require('../../Global/Helpers/WelcomeImage');
 const { setSectionButtonAccessory } = require('../../Util/v2SectionAccessory');
+const { normalizeDiscordId } = require('../../Util/idGuards');
 
 function normalizeStyle(raw) {
     const v = String(raw || '').trim().toLowerCase();
@@ -199,7 +200,8 @@ module.exports = {
         const guild = message.guild;
         if (!guild) return;
 
-        const guildID = message.guildId;
+        const guildID = normalizeDiscordId(message.guildId);
+        if (!guildID) return;
         const raw = args[0];
         const normalized = normalizeStyle(raw);
 
@@ -227,11 +229,13 @@ module.exports = {
         }
 
         const user = message.author;
-        let levelInfo = await LevelSystem.getUserLevelInfo(guildID, user.id).catch(() => null);
+        const userId = normalizeDiscordId(user.id);
+        if (!userId) return;
+        let levelInfo = await LevelSystem.getUserLevelInfo(guildID, userId).catch(() => null);
         if (!levelInfo) {
             levelInfo = { level: 10, currentXp: 50, totalXp: 1000, prestige: 0 };
         }
-        const rankPos = await LevelSystem.getUserRank(guildID, user.id, 'level').catch(() => null);
+        const rankPos = await LevelSystem.getUserRank(guildID, userId, 'level').catch(() => null);
         if (rankPos) levelInfo.rank = rankPos;
 
         const backgroundUrl = await getBackgroundUrl(Moxi, guild, user);
@@ -329,7 +333,8 @@ module.exports = {
         await interaction.deferReply();
 
         const guild = interaction.guild;
-        const guildID = interaction.guildId;
+        const guildID = normalizeDiscordId(interaction.guildId);
+        if (!guildID) return interaction.editReply({ content: 'Guild inválido.' });
         const user = interaction.user;
 
         const raw = interaction.options.getString('style');
@@ -359,11 +364,13 @@ module.exports = {
             return interaction.editReply({ content: '', components: [container], flags: MessageFlags.IsComponentsV2 });
         }
 
-        let levelInfo = await LevelSystem.getUserLevelInfo(guildID, user.id).catch(() => null);
+        const userId = normalizeDiscordId(user.id);
+        if (!userId) return interaction.editReply({ content: 'Usuario inválido.' });
+        let levelInfo = await LevelSystem.getUserLevelInfo(guildID, userId).catch(() => null);
         if (!levelInfo) {
             levelInfo = { level: 10, currentXp: 50, totalXp: 1000, prestige: 0 };
         }
-        const rankPos = await LevelSystem.getUserRank(guildID, user.id, 'level').catch(() => null);
+        const rankPos = await LevelSystem.getUserRank(guildID, userId, 'level').catch(() => null);
         if (rankPos) levelInfo.rank = rankPos;
 
         const backgroundUrl = await getBackgroundUrl(client, guild, user);

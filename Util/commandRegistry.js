@@ -1,6 +1,7 @@
 const logger = require('./logger');
 const { EMOJIS } = require('./emojis');
-const { ensureMongoConnection } = require('./mongoConnect');
+const { ensureMongoConnection, mongoose } = require('./mongoConnect');
+const { normalizeDiscordId } = require('./idGuards');
 const CommandRegistry = require('../Models/CommandsSchema');
 const Subcommands = require('../Models/SubcommandsSchema');
 const moxi = require('../i18n');
@@ -303,7 +304,7 @@ async function syncCommandRegistry(Moxi, opts = {}) {
 
     await ensureMongoConnection();
 
-    const botId = normalizeString(Moxi?.user?.id) || 'unknown-bot';
+    const botId = normalizeDiscordId(Moxi?.user?.id) || normalizeString(Moxi?.user?.id) || 'unknown-bot';
 
     const prefix = Array.from(Moxi?.commands?.values?.() || []);
     const slash = Array.from(Moxi?.slashcommands?.values?.() || []);
@@ -386,7 +387,10 @@ async function syncCommandRegistry(Moxi, opts = {}) {
     let subDeleted = 0;
     if (deleteMissing) {
         try {
-            const delRes = await CommandRegistry.deleteMany({ botId, syncStamp: { $ne: syncStamp } });
+            const delRes = await CommandRegistry.deleteMany({
+                botId,
+                syncStamp: mongoose.trusted({ $ne: syncStamp }),
+            });
             deleted = delRes?.deletedCount ?? 0;
         } catch (err) {
             // Si hay permisos para escribir pero no para borrar, lo registramos.
@@ -395,7 +399,10 @@ async function syncCommandRegistry(Moxi, opts = {}) {
         }
 
         try {
-            const subDelRes = await Subcommands.deleteMany({ botId, syncStamp: { $ne: syncStamp } });
+            const subDelRes = await Subcommands.deleteMany({
+                botId,
+                syncStamp: mongoose.trusted({ $ne: syncStamp }),
+            });
             subDeleted = subDelRes?.deletedCount ?? 0;
         } catch (err) {
             logger.warn('[commandRegistry] No se pudieron borrar subcomandos antiguos (best-effort)');

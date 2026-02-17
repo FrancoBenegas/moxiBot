@@ -1,6 +1,7 @@
 const { Clvls, User } = require('../Models');
 const { Bot } = require('../Config');
 const debugHelper = require('./debugHelper');
+const { normalizeDiscordId, normalizeDbText } = require('./idGuards');
 
 const CONFIG_TTL_MS = 2 * 60 * 1000;
 const clvlsCache = new Map(); // guildId -> { expiresAt, doc }
@@ -30,7 +31,7 @@ function xpNeededForNextLevel(level) {
 }
 
 async function getClvlsConfig(guildId) {
-    const gid = String(guildId || '').trim();
+    const gid = normalizeDiscordId(guildId);
     if (!gid) return null;
 
     const cached = clvlsCache.get(gid);
@@ -49,9 +50,9 @@ async function getClvlsConfig(guildId) {
 }
 
 function isChannelAllowed(channelId, cfg) {
-    const ch = String(channelId || '');
-    const allowed = Array.isArray(cfg?.allowedChannels) ? cfg.allowedChannels.map(String) : [];
-    const blocked = Array.isArray(cfg?.blockedChannels) ? cfg.blockedChannels.map(String) : [];
+    const ch = normalizeDiscordId(channelId);
+    const allowed = Array.isArray(cfg?.allowedChannels) ? cfg.allowedChannels.map((id) => normalizeDiscordId(id)).filter(Boolean) : [];
+    const blocked = Array.isArray(cfg?.blockedChannels) ? cfg.blockedChannels.map((id) => normalizeDiscordId(id)).filter(Boolean) : [];
 
     if (allowed.length > 0) {
         return allowed.includes(ch);
@@ -123,9 +124,9 @@ async function getUserBannerUrl(client, userId) {
 async function sendLevelUpNotification({ message, cfg, newLevel }) {
     if (!cfg?.levelUpNotifications?.enabled) return;
 
-    const targetChannelId = cfg?.levelUpNotifications?.channel
-        ? String(cfg.levelUpNotifications.channel)
-        : String(message.channel.id);
+    const targetChannelId = normalizeDiscordId(cfg?.levelUpNotifications?.channel)
+        || normalizeDiscordId(message?.channel?.id);
+    if (!targetChannelId) return;
 
     const channel = message.guild.channels.cache.get(targetChannelId)
         || await message.guild.channels.fetch(targetChannelId).catch(() => null);
@@ -183,12 +184,15 @@ async function awardXpForMessage(message) {
 
     const levelsDebugEnabled = debugHelper.isEnabled('levels');
 
-    const guildId = message.guild.id;
+    const guildId = normalizeDiscordId(message.guild.id);
+    const userId = normalizeDiscordId(message.author.id);
+    const channelId = normalizeDiscordId(message.channel.id);
+    if (!guildId || !userId || !channelId) return;
     const cfg = await getClvlsConfig(guildId);
     if (!cfg) return;
 
-    if (!isChannelAllowed(message.channel.id, cfg)) {
-        if (levelsDebugEnabled) debugHelper.log('levels', 'channel not allowed', { guildId, channelId: message.channel.id });
+    if (!isChannelAllowed(channelId, cfg)) {
+        if (levelsDebugEnabled) debugHelper.log('levels', 'channel not allowed', { guildId, channelId });
         return;
     }
 
@@ -200,12 +204,12 @@ async function awardXpForMessage(message) {
     const now = nowMs();
 
     // Obtener/crear usuario
-    let userDoc = await User.findOne({ guildID: guildId, userID: message.author.id }).catch(() => null);
+    let userDoc = await User.findOne({ guildID: guildId, userID: userId }).catch(() => null);
     if (!userDoc) {
         userDoc = await User.create({
             guildID: guildId,
-            userID: message.author.id,
-            username: message.author.username,
+            userID: userId,
+            username: normalizeDbText(message.author.username, { maxLen: 64, fallback: 'User' }),
         }).catch(() => null);
     }
     if (!userDoc) return;
@@ -219,7 +223,7 @@ async function awardXpForMessage(message) {
     const maxXp = clampNumber(cfg?.maxXpPerMessage, minXp, 100000, 25);
     let gained = randomIntInclusive(minXp, maxXp);
 
-    const mult = computeMultiplier(message.member, message.channel.id, cfg);
+    const mult = computeMultiplier(message.member, channelId, cfg);
     gained = Math.floor(gained * mult);
     if (gained <= 0) {
         // Aun así actualizar cooldown para evitar spam si hay multiplicador 0.
@@ -231,7 +235,7 @@ async function awardXpForMessage(message) {
 
     const beforeLevel = userDoc.level || 1;
 
-    userDoc.username = message.author.username;
+    userDoc.username = normalizeDbText(message.author.username, { maxLen: 64, fallback: 'User' });
     userDoc.xp = (userDoc.xp || 0) + gained;
     userDoc.totalXp = (userDoc.totalXp || 0) + gained;
     userDoc.lastXpGain = new Date(now);
@@ -252,7 +256,7 @@ async function awardXpForMessage(message) {
     if (levelsDebugEnabled) {
         debugHelper.log('levels', 'xp gain', {
             guildId,
-            userId: message.author.id,
+            userId,
             gained,
             mult,
             level: userDoc.level,

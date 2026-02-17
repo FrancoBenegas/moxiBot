@@ -11,6 +11,7 @@ const { Bot } = require('../Config');
 const { EMOJIS } = require('./emojis');
 const { getItemById } = require('./inventoryCatalog');
 const { formatRemaining } = require('./petSystem');
+const { normalizeDiscordId } = require('./idGuards');
 
 function safeInt(n, fallback = 0) {
     const x = Number(n);
@@ -83,14 +84,18 @@ function paginate(items, page, pageSize) {
 
 async function getUserPets(userId) {
     const { Economy } = require('../Models/EconomySchema');
+    const uid = normalizeDiscordId(userId);
+    if (!uid) {
+        return { pets: [], incubation: null };
+    }
 
     if (typeof process.env.MONGODB === 'string' && process.env.MONGODB.trim()) {
         const { ensureMongoConnection } = require('./mongoConnect');
         await ensureMongoConnection();
     }
 
-    let eco = await Economy.findOne({ userId });
-    if (!eco) eco = await Economy.create({ userId, balance: 0, bank: 0, sakuras: 0 });
+    let eco = await Economy.findOne({ userId: uid });
+    if (!eco) eco = await Economy.create({ userId: uid, balance: 0, bank: 0, sakuras: 0 });
 
     const pets = Array.isArray(eco.pets) ? eco.pets : [];
     const incubation = eco.petIncubation || null;

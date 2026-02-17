@@ -1,6 +1,7 @@
 const os = require('os');
 const { ensureMongoConnection } = require('./mongoConnect');
 const Jobs = require('../Models/JobsSchema');
+const { normalizeDiscordId, normalizeDbText } = require('./idGuards');
 
 function normalizeString(value) {
     if (value === undefined || value === null) return '';
@@ -10,9 +11,9 @@ function normalizeString(value) {
 async function enqueueJob(type, payload = {}, opts = {}) {
     await ensureMongoConnection();
 
-    const botId = normalizeString(opts.botId);
-    const guildId = normalizeString(opts.guildId);
-    const userId = normalizeString(opts.userId);
+    const botId = normalizeDiscordId(opts.botId);
+    const guildId = normalizeDiscordId(opts.guildId);
+    const userId = normalizeDiscordId(opts.userId);
 
     const runAt = opts.runAt instanceof Date ? opts.runAt : (opts.runAt ? new Date(opts.runAt) : new Date());
     const priority = Number.isFinite(Number(opts.priority)) ? Number(opts.priority) : 0;
@@ -22,7 +23,7 @@ async function enqueueJob(type, payload = {}, opts = {}) {
         botId: botId || undefined,
         guildId: guildId || undefined,
         userId: userId || undefined,
-        type: normalizeString(type),
+        type: normalizeDbText(type, { maxLen: 80, fallback: '' }),
         payload: payload || {},
         status: 'queued',
         priority,
@@ -48,7 +49,8 @@ async function takeNextJob(opts = {}) {
         $or: [{ lockedAt: { $exists: false } }, { lockedAt: null }, { lockedAt: { $lt: lockCutoff } }],
     };
 
-    if (opts.botId) filter.botId = normalizeString(opts.botId);
+    const botId = normalizeDiscordId(opts.botId);
+    if (botId) filter.botId = botId;
 
     const update = {
         $set: {

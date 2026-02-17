@@ -3,6 +3,7 @@ const Suggestions = require('../../../../Models/SuggestionsSchema');
 const { isStaff, normalizeSuggestionId } = require('../../../../Util/suggestions');
 const { buildNoticeContainer } = require('../../../../Util/v2Notice');
 const { EMOJIS } = require('../../../../Util/emojis');
+const { normalizeDiscordId } = require('../../../../Util/idGuards');
 
 function buildReasonModal({ action, suggestionId }) {
     const modal = new ModalBuilder()
@@ -36,6 +37,8 @@ module.exports = async function suggestButtons(interaction, Moxi, logger) {
     const parts = id.split(':');
     const actionWord = parts[1];
     const suggestionId = normalizeSuggestionId(parts[2]);
+    const guildId = normalizeDiscordId(interaction.guildId);
+    if (!guildId) return true;
 
     const action = actionWord === 'approve' ? 'approved' : (actionWord === 'deny' ? 'denied' : null);
     if (!action || !suggestionId) return true;
@@ -50,7 +53,7 @@ module.exports = async function suggestButtons(interaction, Moxi, logger) {
     }
 
     // Si ya está resuelta, avisar (y best-effort deshabilitar botones si podemos)
-    const doc = await Suggestions.findOne({ guildID: interaction.guildId, type: 'suggestion', suggestionId }).lean().catch(() => null);
+    const doc = await Suggestions.findOne({ guildID: guildId, type: 'suggestion', suggestionId }).lean().catch(() => null);
     if (!doc) {
         await interaction.reply({
             content: '',

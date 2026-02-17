@@ -7,6 +7,7 @@ const { buildShopData, buildShopMessage } = require('../../Util/shopView');
 const { resolveItemFromInput } = require('../../Util/useItem');
 const { BANK_UPGRADE_ITEM_ID, getBankUpgradeTotalCost, getBankInfo, formatInt } = require('../../Util/bankSystem');
 const { getSlashCommandDescription } = require('../../Util/slashHelpI18n');
+const { normalizeDiscordId } = require('../../Util/idGuards');
 
 const { description, localizations } = getSlashCommandDescription('moxishop');
 
@@ -66,7 +67,9 @@ module.exports = {
         ),
 
     async run(Moxi, interaction) {
-        const guildId = interaction.guildId || interaction.guild?.id;
+        const guildId = normalizeDiscordId(interaction.guildId || interaction.guild?.id);
+        const userId = normalizeDiscordId(interaction.user?.id);
+        if (!userId) return;
         const lang = await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES');
         const t = (k, vars = {}) => moxi.translate(`economy/shop:${k}`, lang, vars);
 
@@ -89,7 +92,7 @@ module.exports = {
             }
 
             const payload = buildShopMessage({
-                userId: interaction.user.id,
+                userId,
                 categoryKey,
                 page,
                 lang,
@@ -148,7 +151,6 @@ module.exports = {
 
             const { Economy } = require('../../Models/EconomySchema');
 
-            const userId = interaction.user.id;
             let eco = await Economy.findOne({ userId });
             if (!eco) {
                 eco = await Economy.create({ userId, balance: 0, bank: 0, sakuras: 0 });

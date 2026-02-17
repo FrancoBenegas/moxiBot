@@ -1,4 +1,5 @@
 const { ensureMongoConnection } = require('./mongoConnect');
+const { normalizeDiscordId, normalizeDbText } = require('./idGuards');
 
 const STARTER_EGG_ITEM_ID = 'mascotas/huevo-de-bosque';
 
@@ -38,6 +39,8 @@ function msUntilNext(lastDate, cooldownMs) {
 }
 
 async function getOrCreateEconomy(userId) {
+  userId = normalizeDiscordId(userId);
+  if (!userId) throw new Error('userId inválido.');
   if (!process.env.MONGODB) {
     throw new Error('MongoDB no está configurado (MONGODB vacío).');
   }
@@ -88,6 +91,9 @@ async function claimCooldownReward({
   minAmount,
   maxAmount,
 } = {}) {
+  userId = normalizeDiscordId(userId);
+  if (!userId) return { ok: false, reason: 'missing-user', message: 'userId inválido.' };
+
   if (!process.env.MONGODB) {
     return { ok: false, reason: 'no-db', message: 'MongoDB no está configurado (MONGODB vacío).' };
   }
@@ -154,6 +160,9 @@ async function claimCooldown({
   field,
   cooldownMs,
 } = {}) {
+  userId = normalizeDiscordId(userId);
+  if (!userId) return { ok: false, reason: 'missing-user', message: 'userId inválido.' };
+
   if (!process.env.MONGODB) {
     return { ok: false, reason: 'no-db', message: 'MongoDB no está configurado (MONGODB vacío).' };
   }
@@ -200,6 +209,9 @@ async function claimCooldown({
 }
 
 async function awardBalance({ userId, amount } = {}) {
+  userId = normalizeDiscordId(userId);
+  if (!userId) return { ok: false, reason: 'missing-user', message: 'userId inválido.' };
+
   if (!process.env.MONGODB) {
     return { ok: false, reason: 'no-db', message: 'MongoDB no está configurado (MONGODB vacío).' };
   }
@@ -234,8 +246,8 @@ async function awardBalance({ userId, amount } = {}) {
 }
 
 async function transferBalance({ fromUserId, toUserId, amount } = {}) {
-  const from = String(fromUserId || '').trim();
-  const to = String(toUserId || '').trim();
+  const from = normalizeDiscordId(fromUserId);
+  const to = normalizeDiscordId(toUserId);
   const inc = safeInt(amount, 0);
 
   if (!process.env.MONGODB) {
@@ -302,9 +314,9 @@ async function transferBalance({ fromUserId, toUserId, amount } = {}) {
 }
 
 async function transferInventoryItem({ fromUserId, toUserId, itemId, amount } = {}) {
-  const from = String(fromUserId || '').trim();
-  const to = String(toUserId || '').trim();
-  const id = String(itemId || '').trim();
+  const from = normalizeDiscordId(fromUserId);
+  const to = normalizeDiscordId(toUserId);
+  const id = normalizeDbText(itemId, { maxLen: 120, fallback: '' });
   const qty = Math.max(1, safeInt(amount, 1));
 
   if (!process.env.MONGODB) {

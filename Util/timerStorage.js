@@ -2,6 +2,7 @@ const { setTimeout, clearTimeout } = require('timers');
 const timers = {};
 const TimerModel = require('../Models/TimerSchema');
 const { ensureMongoConnection } = require('./mongoConnect');
+const { normalizeDiscordId } = require('./idGuards');
 
 async function restoreTimers(onFinish) {
     try {
@@ -30,6 +31,11 @@ async function restoreTimers(onFinish) {
 }
 
 async function setTimer(guildId, channelId, userId, minutos, onFinish) {
+    guildId = normalizeDiscordId(guildId);
+    channelId = normalizeDiscordId(channelId);
+    userId = normalizeDiscordId(userId);
+    if (!guildId || !channelId || !userId) return;
+
     if (!timers[guildId]) timers[guildId] = {};
     if (timers[guildId][channelId]) clearTimeout(timers[guildId][channelId].timeoutId);
     const endTime = Date.now() + minutos * 60 * 1000;
@@ -54,10 +60,17 @@ async function setTimer(guildId, channelId, userId, minutos, onFinish) {
 }
 
 function getTimer(guildId, channelId) {
+    guildId = normalizeDiscordId(guildId);
+    channelId = normalizeDiscordId(channelId);
+    if (!guildId || !channelId) return null;
     return timers[guildId]?.[channelId] || null;
 }
 
 function clearTimer(guildId, channelId) {
+    guildId = normalizeDiscordId(guildId);
+    channelId = normalizeDiscordId(channelId);
+    if (!guildId || !channelId) return;
+
     if (timers[guildId]?.[channelId]) {
         clearTimeout(timers[guildId][channelId].timeoutId);
         delete timers[guildId][channelId];

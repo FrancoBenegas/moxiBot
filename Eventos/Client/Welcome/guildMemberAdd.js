@@ -7,6 +7,7 @@ const { buildSylphaGreeting } = require('../../../Util/sylphacard');
 const { buildDiscordArtsProfile } = require('../../../Util/discordArts');
 const { buildCanvacardWelcomeLeave } = require('../../../Util/canvacard');
 const debugHelper = require('../../../Util/debugHelper');
+const { normalizeDiscordId } = require('../../../Util/idGuards');
 
 function toHexColor(value, fallback = '#00d9ff') {
     if (!value && value !== 0) return fallback;
@@ -53,7 +54,8 @@ module.exports = async (member) => {
     const guild = member?.guild;
     if (!guild) return;
 
-    const guildId = guild.id;
+    const guildId = normalizeDiscordId(guild.id);
+    if (!guildId) return;
 
     const welcomeDoc = await Welcome.findOne({ guildID: guildId, type: 'config' }).lean().catch((err) => {
         debugHelper.error('welcome', 'Welcome.findOne failed (guildMemberAdd)', err);
@@ -70,7 +72,8 @@ module.exports = async (member) => {
     const cfg = welcomeDoc || legacyDoc?.Welcome;
     if (!cfg?.enabled || !cfg?.channelID) return;
 
-    const channelId = String(cfg.channelID);
+    const channelId = normalizeDiscordId(cfg.channelID);
+    if (!channelId) return;
     const channel = guild.channels.cache.get(channelId) || await guild.channels.fetch(channelId).catch(() => null);
     if (!channel || typeof channel.send !== 'function') return;
 
@@ -98,7 +101,7 @@ module.exports = async (member) => {
     try {
         if (style === 'discord-arts') {
             buffer = await buildDiscordArtsProfile({
-                userId: member.id,
+                userId: normalizeDiscordId(member.id),
                 customTag: msgText,
                 customBackground: bg,
             });
@@ -152,7 +155,8 @@ module.exports = async (member) => {
     if (!buffer) return;
 
     const attachment = new AttachmentBuilder(buffer, { name: 'welcome.png' });
-    await channel.send({ content: `<@${member.id}>`, files: [attachment] }).catch((err) => {
+    const memberId = normalizeDiscordId(member.id);
+    await channel.send({ content: memberId ? `<@${memberId}>` : '', files: [attachment] }).catch((err) => {
         debugHelper.error('welcome', 'send failed (guildMemberAdd)', err);
         return null;
     });
