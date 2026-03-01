@@ -93,8 +93,11 @@ function describeMissingPerms(missing) {
 
 module.exports = {
     name: 'welcome',
-    alias: ['bienvenida', 'bienvenidas'],
-    Category: (lang = 'es-ES') => moxi.translate('HELP_CATEGORY_WELCOME', lang),
+    alias: ['bienvenida', 'bienvenidas'],    
+    Category: function (lang) {
+        lang = lang || 'es-ES';
+        return moxi.translate('commands:CATEGORY_SISTEMAS', lang) || 'Sistemas';
+    },
     usage: 'welcome set #canal | welcome off | welcome style [sylphacard|discord-arts|canvacard] | welcome message <texto> | welcome message <lang> <texto> | welcome message clear [lang] | welcome test',
     description: (lang = 'es-ES') => 'Configura el sistema de bienvenidas (sylphacard o discord-arts).',
     permissions: {

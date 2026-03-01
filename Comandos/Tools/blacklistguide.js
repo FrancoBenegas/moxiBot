@@ -24,7 +24,7 @@ module.exports = {
         const key = 'misc:BLACKLIST_GUIDE_DESC';
         const out = moxi.translate(key, lang);
         return isUntranslated(key, out)
-            ? 'Guía rápida para usar blacklist local (admin) y global (owner).'
+            ? 'Guía rápida para usar blacklist local (admin) y global (owner), con niveles, acciones, logs y expiración.'
             : out;
     },
     cooldown: 5,
@@ -39,29 +39,52 @@ module.exports = {
         const title = moxi.translate(titleKey, lang);
         const safeTitle = isUntranslated(titleKey, title) ? 'Guía de Blacklist' : title;
 
-        const localTitle = '🛡️ Local (Admin del servidor)';
-        const globalTitle = '👑 Global (Owner del bot)';
+        const localTitle = '🛡️ Local (Administracion del servidor)';
+        const globalTitle = '👑 Global (Propietario del bot)';
         const bt = '`';
 
         const localLines = [
-            `• ${bt}${prefix}blacklist add @usuario [motivo]${bt}`,
+            `• ${bt}${prefix}blacklist add @usuario [motivo] [nivel=1-5] [dur=1d] [actions=all]${bt}`,
             `• ${bt}${prefix}blacklist remove @usuario${bt}`,
             `• ${bt}${prefix}blacklist check @usuario${bt}`,
             `• ${bt}${prefix}blacklist list${bt}`,
+            `• ${bt}${prefix}blacklist log #canal|off${bt}`,
+            `• ${bt}${prefix}blacklist bypass add|remove <user|role|cmd> <valor>${bt}`,
         ];
 
         const globalLines = [
-            `• ${bt}${prefix}gblacklist add @usuario [motivo]${bt}`,
+            `• ${bt}${prefix}gblacklist add @usuario [motivo] [nivel=1-5] [dur=1d] [actions=all]${bt}`,
             `• ${bt}${prefix}gblacklist remove @usuario${bt}`,
             `• ${bt}${prefix}gblacklist check @usuario${bt}`,
-            `• ${bt}${prefix}gblacklist list${bt}`,
+            `• ${bt}${prefix}gblacklist list [users|guilds]${bt}`,
+            `• ${bt}${prefix}gblacklist guild add <id> [motivo] [nivel=1-5] [dur=1d] [actions=all]${bt}`,
+            `• ${bt}${prefix}gblacklist guild remove <id>${bt}`,
+            `• ${bt}${prefix}gblacklist guild check <id>${bt}`,
+            `• ${bt}${prefix}gblacklist log #canal|off${bt}`,
+            `• ${bt}${prefix}gblacklist bypass add|remove <user|role|cmd> <valor>${bt}`,
         ];
 
-        const notes = [
-            'Notas:',
-            '• Local bloquea comandos solo en este servidor.',
-            '• Global bloquea comandos en todos los servidores del bot.',
-            '• El comando global solo lo puede usar el owner real del bot.',
+        const faqKey = 'misc:BLACKLIST_GUIDE_FAQ';
+        const faqLabel = moxi.translate(faqKey, lang);
+        const safeFaqLabel = isUntranslated(faqKey, faqLabel) ? 'Preguntas frecuentes:' : faqLabel;
+
+        const faqItems = [
+            { key: 'misc:BLACKLIST_GUIDE_FAQ_1', fallback: '• ¿Que bloquea la blacklist local? Unicamente este servidor.' },
+            { key: 'misc:BLACKLIST_GUIDE_FAQ_2', fallback: '• ¿Que bloquea la blacklist global? Todos los servidores y servidores completos.' },
+            { key: 'misc:BLACKLIST_GUIDE_FAQ_3', fallback: '• ¿Como configurar duracion y nivel? Use dur= (12h, 7d) y nivel= (1-5).' },
+            { key: 'misc:BLACKLIST_GUIDE_FAQ_4', fallback: '• ¿Como limitar acciones? actions=all, command, message, interaction, music.' },
+            { key: 'misc:BLACKLIST_GUIDE_FAQ_5', fallback: '• ¿Ejemplos de actions=? actions=command,interaction o actions=message.' },
+            { key: 'misc:BLACKLIST_GUIDE_FAQ_6', fallback: '• ¿Como activar logs? Use log #canal o log off para desactivar.' },
+            { key: 'misc:BLACKLIST_GUIDE_FAQ_7', fallback: '• ¿Como usar bypass? Use bypass add|remove user/role/cmd <valor>.' },
+            { key: 'misc:BLACKLIST_GUIDE_FAQ_8', fallback: '• ¿Quien puede usar global? Solo el owner real del bot.' },
+        ];
+
+        const faqLines = [
+            safeFaqLabel,
+            ...faqItems.map(item => {
+                const text = moxi.translate(item.key, lang);
+                return isUntranslated(item.key, text) ? item.fallback : text;
+            }),
         ];
 
         const container = new ContainerBuilder()
@@ -72,7 +95,7 @@ module.exports = {
             .addSeparatorComponents(s => s.setDivider(true))
             .addTextDisplayComponents(c => c.setContent(`${globalTitle}\n${globalLines.join('\n')}`))
             .addSeparatorComponents(s => s.setDivider(true))
-            .addTextDisplayComponents(c => c.setContent(notes.join('\n')))
+            .addTextDisplayComponents(c => c.setContent(faqLines.join('\n')))
             .addSeparatorComponents(s => s.setDivider(true))
             .addTextDisplayComponents(c => c.setContent(`${EMOJIS.copyright || '©️'} ${Moxi.user.username} • ${new Date().getFullYear()}`));
 
