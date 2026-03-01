@@ -275,6 +275,8 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
       'Root': 'HELP_CATEGORY_ROOT',
       'Tools': 'HELP_CATEGORY_TOOLS',
       'Herramientas': 'HELP_CATEGORY_TOOLS',
+      'Sistemas': 'HELP_CATEGORY_SYSTEMS',
+      'Systems': 'HELP_CATEGORY_SYSTEMS',
       'Welcome': 'HELP_CATEGORY_WELCOME',
       'Sistema de bienvenida': 'HELP_CATEGORY_WELCOME'
     };
@@ -350,6 +352,8 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
         key = 'HELP_CATEGORY_MUSIC_DESC';
       } else if (categoria === 'Admin') {
         key = 'HELP_CATEGORY_ADMIN_DESC';
+      } else if (categoria === 'Systems' || categoria === 'Sistemas') {
+        key = 'HELP_CATEGORY_SYSTEMS_DESC';
       } else if (categoria === 'Welcome') {
         key = 'HELP_CATEGORY_WELCOME_DESC';
       } else {

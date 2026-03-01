@@ -62,6 +62,7 @@ function canonicalCategoryKey(value) {
     if (upper.includes('CATEGORY_GAMES') || upper === 'GAMES' || upper.includes('JUEGOS') || upper.includes('JUEGO')) return 'games';
     if (upper.includes('CATEGORY_ROOT') || upper === 'ROOT' || upper.includes('OWNER') || upper.includes('PROPIETARIO')) return 'root';
     if (upper.includes('CATEGORY_TAROT') || upper === 'TAROT') return 'tarot';
+    if (upper.includes('CATEGORY_SISTEMAS') || upper.includes('SISTEMAS') || upper.includes('SYSTEMS')) return 'systems';
 
     return '';
 }
@@ -89,6 +90,7 @@ function translateKnownCategory(value, lang) {
         games: 'commands:CATEGORY_GAMES',
         root: 'commands:CATEGORY_ROOT',
         tarot: 'commands:CATEGORY_TAROT',
+        systems: 'commands:CATEGORY_SISTEMAS',
     };
 
     const nsKey = keyByCanon[canon];

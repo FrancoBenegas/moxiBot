@@ -6,7 +6,7 @@ const Config = require('../Config');
 const { shouldBlockByTimeGate, buildBlockedMessage } = require('./timeGate');
 const { runWithCommandContext } = require('./commandContext');
 const { getGuildSettingsCached } = require('./guildSettings');
-const { isUserLocallyBlacklisted, isUserGloballyBlacklisted } = require('./blacklistStorage');
+const { resolveBlacklistBlock, logBlacklistHit } = require('./blacklistStorage');
 const { isDiscordOnlyOwner } = require('./ownerPermissions');
 
 const ECON_GATE_NOTICE_TTL_MS = Number.parseInt(process.env.ECON_GATE_NOTICE_TTL_MS || '', 10) || 12_000;
@@ -315,21 +315,55 @@ module.exports = async function handleCommand(Moxi, ctx, args, comando) {
                 const isOwner = await isDiscordOnlyOwner({ client: Moxi, userId }).catch(() => false);
 
                 if (!isOwner) {
-                    const blockedGlobal = await isUserGloballyBlacklisted({ userId });
-                    const blockedLocal = guildId
-                        ? await isUserLocallyBlacklisted({ guildId, userId })
-                        : false;
-
-                    if (blockedGlobal || blockedLocal) {
+                    const roleIds = Array.from(ctx?.member?.roles?.cache?.keys?.() || []);
+                    const block = await resolveBlacklistBlock({
+                        guildId,
+                        userId,
+                        action: 'command',
+                        commandName,
+                        roleIds,
+                    });
+                    if (block?.blocked && block.entry) {
                         const lang = await getLangForCtx(ctx);
                         const t = (key, fallback) => {
                             const out = moxi.translate(key, lang);
                             return (out && out !== key) ? out : fallback;
                         };
 
-                        const content = blockedGlobal
-                            ? t('misc:BLACKLIST_GLOBAL_BLOCKED', 'Estás en blacklist global y no puedes usar comandos.')
-                            : t('misc:BLACKLIST_LOCAL_BLOCKED', 'Estás en blacklist de este servidor y no puedes usar comandos.');
+                        const details = [];
+                        if (block.entry.reason) {
+                            details.push(`${t('misc:BLACKLIST_REASON', 'Motivo')}: ${block.entry.reason}`);
+                        }
+                        if (typeof block.entry.level === 'number') {
+                            details.push(`${t('misc:BLACKLIST_LEVEL', 'Nivel')}: ${block.entry.level}`);
+                        }
+                        if (block.entry.expiresAt) {
+                            const ts = Math.floor(new Date(block.entry.expiresAt).getTime() / 1000);
+                            if (ts) {
+                                details.push(`${t('misc:BLACKLIST_EXPIRES', 'Expira')}: <t:${ts}:R>`);
+                            }
+                        }
+
+                        let content = '';
+                        if (block.targetType === 'guild') {
+                            content = t('misc:BLACKLIST_GUILD_BLOCKED', 'Este servidor está en blacklist global y no puedes usar comandos aquí.');
+                        } else if (block.scope === 'global') {
+                            content = t('misc:BLACKLIST_GLOBAL_BLOCKED', 'Estás en blacklist global y no puedes usar comandos.');
+                        } else {
+                            content = t('misc:BLACKLIST_LOCAL_BLOCKED', 'Estás en blacklist de este servidor y no puedes usar comandos.');
+                        }
+
+                        if (details.length) content += `\n${details.join('\n')}`;
+
+                        await logBlacklistHit({
+                            client: Moxi,
+                            userId,
+                            guildId,
+                            action: 'command',
+                            source: isInteraction ? 'interaction' : 'message',
+                            commandName,
+                            entry: block.entry,
+                        });
 
                         return await replyBlocked(Moxi, ctx, {
                             content,
