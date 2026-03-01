@@ -8,6 +8,7 @@
     "CATEGORY_MUSICA": "음악",
     "CATEGORY_FUN": "재미",
     "CATEGORY_GAMES": "게임",
+    "CATEGORY_SISTEMAS": "시스템",
     "CATEGORY_ROOT": "소유자",
     "CMD_MINESWEEPER_DESC": "지뢰찾기 게임을 시작합니다",
     "CMD_RPS_DESC": "가위바위보를 플레이합니다",

@@ -8,6 +8,7 @@
     "CATEGORY_MUSICA": "音楽",
     "CATEGORY_FUN": "お楽しみ",
     "CATEGORY_GAMES": "ゲーム",
+    "CATEGORY_SISTEMAS": "システム",
     "CATEGORY_ROOT": "オーナー",
     "CMD_MINESWEEPER_DESC": "マインスイーパーを開始します",
     "CMD_RPS_DESC": "じゃんけんで遊ぶ",

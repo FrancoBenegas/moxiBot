@@ -8,6 +8,7 @@
     "CATEGORY_MUSICA": "音乐",
     "CATEGORY_FUN": "娱乐",
     "CATEGORY_GAMES": "游戏",
+    "CATEGORY_SISTEMAS": "系统",
     "CATEGORY_ROOT": "所有者",
     "CMD_MINESWEEPER_DESC": "开始一局扫雷游戏",
     "CMD_RPS_DESC": "玩石头剪刀布",
