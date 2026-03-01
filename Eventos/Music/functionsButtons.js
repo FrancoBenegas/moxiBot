@@ -13,6 +13,7 @@ const { EMOJIS } = require("../../Util/emojis");
 const ms = require("ms");
 const { buildActiveMusicSessionContainer } = require("../../Components/V2/musicControlsComponent");
 const { ButtonBuilder } = require("../../Util/compatButtonBuilder");
+const { resolveBlacklistBlock, logBlacklistHit } = require("../../Util/blacklistStorage");
 
 function v2Flags() {
     return MessageFlags.Ephemeral | MessageFlags.IsComponentsV2;
@@ -102,6 +103,64 @@ Moxi.on("interactionCreate", async (interaction) => {
     if (interaction.isButton()) {
         // Si este listener está registrado 2+ veces (hot reload), evitamos doble acknowledge.
         if (interaction.deferred || interaction.replied) return;
+
+        try {
+            const guildId = interaction.guild?.id || null;
+            const userId = interaction.user?.id || null;
+            if (guildId && userId) {
+                const roleIds = Array.from(interaction?.member?.roles?.cache?.keys?.() || []);
+                const block = await resolveBlacklistBlock({
+                    guildId,
+                    userId,
+                    action: 'music',
+                    commandName: interaction.customId || null,
+                    roleIds,
+                });
+                if (block?.blocked && block.entry) {
+                    await logBlacklistHit({
+                        client: Moxi,
+                        userId,
+                        guildId,
+                        action: 'music-button',
+                        source: 'interaction',
+                        commandName: interaction.customId || null,
+                        entry: block.entry,
+                    });
+
+                    const lang = await moxi.guildLang(interaction.guild?.id, process.env.DEFAULT_LANG || 'es-ES');
+                    const t = (key, fallback) => {
+                        const out = moxi.translate(key, lang);
+                        return (out && out !== key) ? out : fallback;
+                    };
+
+                    let msg = '';
+                    if (block.targetType === 'guild') {
+                        msg = t('misc:BLACKLIST_GUILD_BLOCKED', 'Este servidor está en blacklist global y no puedes usar el bot aquí.');
+                    } else if (block.scope === 'global') {
+                        msg = t('misc:BLACKLIST_GLOBAL_BLOCKED', 'Estás en blacklist global y no puedes usar el bot.');
+                    } else {
+                        msg = t('misc:BLACKLIST_LOCAL_BLOCKED', 'Estás en blacklist de este servidor y no puedes usar el bot.');
+                    }
+
+                    const details = [];
+                    if (block.entry.reason) {
+                        details.push(`${t('misc:BLACKLIST_REASON', 'Motivo')}: ${block.entry.reason}`);
+                    }
+                    if (typeof block.entry.level === 'number') {
+                        details.push(`${t('misc:BLACKLIST_LEVEL', 'Nivel')}: ${block.entry.level}`);
+                    }
+                    if (block.entry.expiresAt) {
+                        const ts = Math.floor(new Date(block.entry.expiresAt).getTime() / 1000);
+                        if (ts) details.push(`${t('misc:BLACKLIST_EXPIRES', 'Expira')}: <t:${ts}:R>`);
+                    }
+                    if (details.length) msg += `\n${details.join('\n')}`;
+
+                    return safeReply(interaction, { components: [buildV2Notice(msg)], flags: v2Flags() });
+                }
+            }
+        } catch {
+            // best-effort
+        }
 
         // Botones deshabilitados del panel V2 anterior (por seguridad)
         if (typeof interaction.customId === 'string' && interaction.customId.endsWith('_d')) {

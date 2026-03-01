@@ -19,6 +19,8 @@ const { maybeAutoReplyWithAi } = require('../../Util/aiAutoReply');
 const { isOwnerWithClient } = require('../../Util/ownerPermissions');
 const { maybeHandleAiChatConfigMessage } = require('../../Util/aiChatConfig');
 const { isWeatherQuestion, getWeatherForText, formatWeatherReplyEs } = require('../../Util/weather');
+const { resolveBlacklistBlock, logBlacklistHit } = require('../../Util/blacklistStorage');
+const { processMessage: processModerationMessage } = require('../../Util/moderationEngine');
 
 const AFK_OVERRIDE_GIF = process.env.AFK_GIF_URL;
 const AFK_MENTION_GIF_URL = process.env.AFK_MENTION_GIF_URL || AFK_OVERRIDE_GIF;
@@ -333,6 +335,39 @@ Moxi.on("messageCreate", async (message) => {
   // Responder solo al prefijo efectivo (env o personalizado).
   const prefixesToUse = uniqStrings([prefix]);
   const matched = matchPrefix(message.content, prefixesToUse);
+
+  if (!matched) {
+    const guildId = message.guild?.id || null;
+    const userId = message.author?.id || null;
+    if (guildId && userId) {
+      const roleIds = Array.from(message?.member?.roles?.cache?.keys?.() || []);
+      const block = await resolveBlacklistBlock({
+        guildId,
+        userId,
+        action: 'message',
+        roleIds,
+      });
+      if (block?.blocked && block.entry) {
+        await logBlacklistHit({
+          client: Moxi,
+          userId,
+          guildId,
+          action: 'message',
+          source: 'message',
+          commandName: null,
+          entry: block.entry,
+        });
+        return;
+      }
+    }
+  }
+
+  try {
+    const modResult = await processModerationMessage({ client: Moxi, message });
+    if (modResult?.handled) return;
+  } catch (err) {
+    debugHelper?.error?.('automod', 'processModerationMessage failed', err);
+  }
 
   // IMPORTANTE: no queremos que ciertos comandos (p.ej. say) quiten el estado AFK del usuario.
   let skipAfkCleanup = false;
