@@ -314,7 +314,8 @@ Moxi.on("messageCreate", async (message) => {
     message.guild.settings = settings;
     // Compat: algunos comandos nuevos usan message.translate('misc:KEY', vars)
     const dbLang = settings?.Language ?? settings?.language ?? settings?.LANGUAGE ?? settings?.lang;
-    const langForTranslate = dbLang ? String(dbLang) : (process.env.DEFAULT_LANG || 'es-ES');
+    const fallbackLang = dbLang ? String(dbLang) : (process.env.DEFAULT_LANG || 'es-ES');
+    const langForTranslate = await moxi.userLang(message.guild.id, message.author?.id, fallbackLang);
     message.lang = langForTranslate;
     message.translate = (key, vars = {}) => moxi.translate(key, langForTranslate, vars);
     // Prefijo efectivo: env por defecto, o personalizado por servidor si se cambió.
@@ -322,7 +323,8 @@ Moxi.on("messageCreate", async (message) => {
   } catch {
     // fallback al prefijo de entorno
     prefix = envPrefix;
-    const langForTranslate = process.env.DEFAULT_LANG || 'es-ES';
+    const fallbackLang = process.env.DEFAULT_LANG || 'es-ES';
+    const langForTranslate = await moxi.userLang(message.guild.id, message.author?.id, fallbackLang).catch(() => fallbackLang);
     message.lang = langForTranslate;
     message.translate = (key, vars = {}) => moxi.translate(key, langForTranslate, vars);
   }
