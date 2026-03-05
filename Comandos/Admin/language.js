@@ -39,7 +39,12 @@ function isServerScopeToken(value) {
   return ['server', 'servidor', 'guild', 'global'].includes(v);
 }
 
-function buildPanel({ lang, serverLangCode, languages, botUsername }) {
+function buildPanel({ lang, serverLangCode, languages, botUsername, page = 0, pageSize = 5, disableAll = false }) {
+  const safePageSize = Number.isFinite(pageSize) && pageSize > 0 ? Math.trunc(pageSize) : 5;
+  const totalPages = Math.max(1, Math.ceil(languages.length / safePageSize));
+  const safePage = Math.min(Math.max(0, Number(page) || 0), totalPages - 1);
+  const start = safePage * safePageSize;
+  const pageItems = languages.slice(start, start + safePageSize);
   const serverSelectedName = languages.find((l) => l.code === serverLangCode)?.name || serverLangCode;
   const container = new ContainerBuilder()
     .setAccentColor(Bot.AccentColor)
@@ -49,11 +54,37 @@ function buildPanel({ lang, serverLangCode, languages, botUsername }) {
         + `${moxi.translate('LANGUAGE_DESCRIPTION', lang)}\n`
         + `Cada usuario puede elegir su idioma con el botón \`Usuario\`.\n`
         + `El botón \`Servidor\` solo funciona para admins.\n\n`
-        + `**${EMOJIS.book} ${moxi.translate('AVAILABLE_LANGUAGES', lang) || 'Idiomas disponibles'}**\n${'─'.repeat(30)}`
+        + `**${EMOJIS.book} ${moxi.translate('AVAILABLE_LANGUAGES', lang) || 'Idiomas disponibles'}** (página ${safePage + 1}/${totalPages})\n${'─'.repeat(30)}`
       )
     );
 
-  for (const langItem of languages) {
+  container.addSectionComponents((section) =>
+    setSectionButtonAccessory(
+      section.addTextDisplayComponents((text) =>
+        text.setContent('◀ Página anterior')
+      ),
+      new ButtonBuilder()
+        .setCustomId('lang_page_prev')
+        .setLabel('Anterior')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(disableAll || safePage <= 0)
+    )
+  );
+
+  container.addSectionComponents((section) =>
+    setSectionButtonAccessory(
+      section.addTextDisplayComponents((text) =>
+        text.setContent('Página siguiente ▶')
+      ),
+      new ButtonBuilder()
+        .setCustomId('lang_page_next')
+        .setLabel('Siguiente')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(disableAll || safePage >= totalPages - 1)
+    )
+  );
+
+  for (const langItem of pageItems) {
     const serverSelected = serverLangCode === langItem.code;
     const title = `${langItem.emoji} **${langItem.name}** (${langItem.code})${serverSelected ? ` ${EMOJIS.tick}` : ''}`;
 
@@ -66,6 +97,7 @@ function buildPanel({ lang, serverLangCode, languages, botUsername }) {
           .setCustomId(`lang_user_${langItem.code}`)
           .setLabel('Usuario')
           .setStyle(ButtonStyle.Danger)
+          .setDisabled(disableAll)
       )
     );
 
@@ -78,6 +110,7 @@ function buildPanel({ lang, serverLangCode, languages, botUsername }) {
           .setCustomId(`lang_server_${langItem.code}`)
           .setLabel(serverSelected ? 'Activo' : 'Servidor')
           .setStyle(serverSelected ? ButtonStyle.Success : ButtonStyle.Secondary)
+          .setDisabled(disableAll)
       )
     );
   }
@@ -91,7 +124,7 @@ function buildPanel({ lang, serverLangCode, languages, botUsername }) {
       c.setContent(`${EMOJIS.copyright} ${botUsername} • ${new Date().getFullYear()}`)
     );
 
-  return container;
+  return { container, page: safePage, totalPages };
 }
 
 module.exports = {
@@ -190,25 +223,53 @@ module.exports = {
     }
 
     const serverLangCode = await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES');
-    const panel = buildPanel({
+    const PAGE_SIZE = 5;
+    let currentPage = 0;
+    let currentServerLangCode = serverLangCode;
+
+    const panelResult = buildPanel({
       lang: fallbackLang,
-      serverLangCode,
+      serverLangCode: currentServerLangCode,
       languages,
       botUsername: Moxi.user.username,
+      page: currentPage,
+      pageSize: PAGE_SIZE,
     });
+    currentPage = panelResult.page;
 
     const msg = await message.channel.send({
-      components: [panel],
+      components: [panelResult.container],
       flags: MessageFlags.IsComponentsV2,
     });
 
     const collector = msg.createMessageComponentCollector({
-      filter: (i) => i.customId.startsWith('lang_user_') || i.customId.startsWith('lang_server_'),
+      filter: (i) => i.customId.startsWith('lang_user_')
+        || i.customId.startsWith('lang_server_')
+        || i.customId.startsWith('lang_page_'),
       time: 5 * 60 * 1000,
     });
 
     collector.on('collect', async (i) => {
       try {
+        if (i.customId === 'lang_page_prev' || i.customId === 'lang_page_next') {
+          currentPage += (i.customId === 'lang_page_prev' ? -1 : 1);
+          const viewerLang = await moxi.userLang(guildId, i.user?.id, currentServerLangCode);
+          const nextPanel = buildPanel({
+            lang: viewerLang,
+            serverLangCode: currentServerLangCode,
+            languages,
+            botUsername: Moxi.user.username,
+            page: currentPage,
+            pageSize: PAGE_SIZE,
+          });
+          currentPage = nextPanel.page;
+
+          return i.update({
+            components: [nextPanel.container],
+            flags: MessageFlags.IsComponentsV2,
+          }).catch(() => null);
+        }
+
         const isServerScope = i.customId.startsWith('lang_server_');
         const prefix = isServerScope ? 'lang_server_' : 'lang_user_';
         const selectedCode = i.customId.slice(prefix.length);
@@ -252,16 +313,20 @@ module.exports = {
           message.guild.settings = message.guild.settings || {};
           message.guild.settings.Language = selectedCode;
           invalidateGuildSettingsCache(guildId);
+          currentServerLangCode = selectedCode;
 
           const nextPanel = buildPanel({
-            lang: await moxi.userLang(guildId, i.user?.id, selectedCode),
-            serverLangCode: selectedCode,
+            lang: await moxi.userLang(guildId, i.user?.id, currentServerLangCode),
+            serverLangCode: currentServerLangCode,
             languages,
             botUsername: Moxi.user.username,
+            page: currentPage,
+            pageSize: PAGE_SIZE,
           });
+          currentPage = nextPanel.page;
 
           await i.update({
-            components: [nextPanel],
+            components: [nextPanel.container],
             flags: MessageFlags.IsComponentsV2,
           }).catch(() => null);
 
@@ -299,20 +364,13 @@ module.exports = {
           serverLangCode: latestServerLang,
           languages,
           botUsername: Moxi.user.username,
+          page: currentPage,
+          pageSize: PAGE_SIZE,
+          disableAll: true,
         });
 
-        for (const component of disabled.components || []) {
-          if (Array.isArray(component.components)) {
-            for (const inner of component.components) {
-              if (inner?.data && typeof inner.data.custom_id === 'string') {
-                inner.setDisabled?.(true);
-              }
-            }
-          }
-        }
-
         await msg.edit({
-          components: [disabled],
+          components: [disabled.container],
           flags: MessageFlags.IsComponentsV2,
         }).catch(() => null);
       } catch (err) {
