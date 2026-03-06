@@ -5,7 +5,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start:clean": "node index.js 2>&1 | findstr /V \"Multiple Resolves\" | findstr /V \"AbortError\" | findstr /V \"DeprecationWarning\"",
-    "dev": "set NODE_ENV=development&& set DEBUG=1&& nodemon index.js",
+    "dev": "set NODE_ENV=development&& set DEBUG=1&& set AUTO_DEPLOY_SLASH=true&& nodemon index.js",
     "postinstall": "node scripts/postinstall.js"
   },
   "keywords": [

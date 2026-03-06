@@ -9,6 +9,7 @@ const { getGuildSettingsCached } = require('./guildSettings');
 const { isUserLocallyBlacklisted, isUserGloballyBlacklisted } = require('./blacklistStorage');
 const { isDiscordOnlyOwner } = require('./ownerPermissions');
 const { checkCommandPermissions } = require('./commandPermissions');
+const { getMaintenanceStateCached } = require('./maintenanceMode');
 
 const ECON_GATE_NOTICE_TTL_MS = Number.parseInt(process.env.ECON_GATE_NOTICE_TTL_MS || '', 10) || 12_000;
 const ECON_GATE_AUTO_DELETE_MS = Number.parseInt(process.env.ECON_GATE_AUTO_DELETE_MS || '', 10) || 10_000;
@@ -307,6 +308,27 @@ async function shouldBlockByEconomyGate(ctx, comando) {
     return { shouldBlock: false };
 }
 
+async function shouldBlockByMaintenanceGate(Moxi, ctx, comando) {
+    const state = await getMaintenanceStateCached();
+    if (!state?.enabled) return { shouldBlock: false };
+
+    const commandName = String(resolveCommandName(comando) || '').trim().toLowerCase();
+    if (commandName === 'mantenimiento') {
+        return { shouldBlock: false };
+    }
+
+    const userId = ctx?.user?.id || ctx?.author?.id || (ctx?.member && ctx.member.user && ctx.member.user.id) || null;
+    if (userId) {
+        const isOwner = await isDiscordOnlyOwner({ client: Moxi, userId }).catch(() => false);
+        if (isOwner) return { shouldBlock: false };
+    }
+
+    return {
+        shouldBlock: true,
+        state,
+    };
+}
+
 // Handler global para comandos prefix y slash
 // Uso: require y llama a handleCommand(client, ctx, args, comando)
 
@@ -362,6 +384,20 @@ module.exports = async function handleCommand(Moxi, ctx, args, comando) {
     }
 
     // --- ECONOMY GATE (canal dedicado / toggle) ---
+    try {
+        const maintenance = await shouldBlockByMaintenanceGate(Moxi, ctx, comando);
+        if (maintenance?.shouldBlock) {
+            const state = maintenance.state || {};
+            const reason = (typeof state.reason === 'string' ? state.reason.trim() : '');
+            const content = reason
+                ? `El bot esta en mantenimiento.\nMotivo: ${reason}`
+                : 'El bot esta en mantenimiento. Intentalo de nuevo en unos minutos.';
+            return await replyBlocked(Moxi, ctx, { content, isInteraction });
+        }
+    } catch {
+        // best-effort: si falla el gate, no bloqueamos
+    }
+
     try {
         const perms = await checkCommandPermissions({ client: Moxi, ctx, command: comando });
         if (perms?.blocked) {
