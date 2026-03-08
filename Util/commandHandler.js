@@ -8,8 +8,6 @@ const { runWithCommandContext } = require('./commandContext');
 const { getGuildSettingsCached } = require('./guildSettings');
 const { resolveBlacklistBlock, logBlacklistHit } = require('./blacklistStorage');
 const { isDiscordOnlyOwner } = require('./ownerPermissions');
-const { checkCommandPermissions } = require('./commandPermissions');
-const { getMaintenanceStateCached } = require('./maintenanceMode');
 
 const ECON_GATE_NOTICE_TTL_MS = Number.parseInt(process.env.ECON_GATE_NOTICE_TTL_MS || '', 10) || 12_000;
 const ECON_GATE_AUTO_DELETE_MS = Number.parseInt(process.env.ECON_GATE_AUTO_DELETE_MS || '', 10) || 10_000;
@@ -205,23 +203,6 @@ async function getLangForCtx(ctx) {
     }
 }
 
-function formatMissingPermissionsMessage({ lang, userMissing, botMissing }) {
-    const lines = [];
-    const userLabel = moxi.translate('HELP_PERMISSIONS_USER', lang) || 'Usuario';
-    const botLabel = moxi.translate('HELP_PERMISSIONS_BOT', lang) || 'Bot';
-    const title = moxi.translate('HELP_PERMISSIONS', lang) || 'Permisos';
-
-    if (Array.isArray(userMissing) && userMissing.length > 0) {
-        lines.push(`- ${userLabel}: ${userMissing.join(', ')}`);
-    }
-    if (Array.isArray(botMissing) && botMissing.length > 0) {
-        lines.push(`- ${botLabel}: ${botMissing.join(', ')}`);
-    }
-
-    const body = lines.length ? lines.join('\n') : '-';
-    return `${title} insuficientes:\n${body}`;
-}
-
 async function replyBlocked(Moxi, ctx, { content, isInteraction, autoDeleteMs, deleteUserMessage }) {
     if (isInteraction) {
         const payload = { content, flags: MessageFlags.Ephemeral };
@@ -306,27 +287,6 @@ async function shouldBlockByEconomyGate(ctx, comando) {
     }
 
     return { shouldBlock: false };
-}
-
-async function shouldBlockByMaintenanceGate(Moxi, ctx, comando) {
-    const state = await getMaintenanceStateCached();
-    if (!state?.enabled) return { shouldBlock: false };
-
-    const commandName = String(resolveCommandName(comando) || '').trim().toLowerCase();
-    if (commandName === 'mantenimiento') {
-        return { shouldBlock: false };
-    }
-
-    const userId = ctx?.user?.id || ctx?.author?.id || (ctx?.member && ctx.member.user && ctx.member.user.id) || null;
-    if (userId) {
-        const isOwner = await isDiscordOnlyOwner({ client: Moxi, userId }).catch(() => false);
-        if (isOwner) return { shouldBlock: false };
-    }
-
-    return {
-        shouldBlock: true,
-        state,
-    };
 }
 
 // Handler global para comandos prefix y slash
@@ -418,35 +378,6 @@ module.exports = async function handleCommand(Moxi, ctx, args, comando) {
     }
 
     // --- ECONOMY GATE (canal dedicado / toggle) ---
-    try {
-        const maintenance = await shouldBlockByMaintenanceGate(Moxi, ctx, comando);
-        if (maintenance?.shouldBlock) {
-            const state = maintenance.state || {};
-            const reason = (typeof state.reason === 'string' ? state.reason.trim() : '');
-            const content = reason
-                ? `El bot esta en mantenimiento.\nMotivo: ${reason}`
-                : 'El bot esta en mantenimiento. Intentalo de nuevo en unos minutos.';
-            return await replyBlocked(Moxi, ctx, { content, isInteraction });
-        }
-    } catch {
-        // best-effort: si falla el gate, no bloqueamos
-    }
-
-    try {
-        const perms = await checkCommandPermissions({ client: Moxi, ctx, command: comando });
-        if (perms?.blocked) {
-            const lang = await getLangForCtx(ctx);
-            const content = formatMissingPermissionsMessage({
-                lang,
-                userMissing: perms.userMissing,
-                botMissing: perms.botMissing,
-            });
-            return await replyBlocked(Moxi, ctx, { content, isInteraction });
-        }
-    } catch {
-        // best-effort
-    }
-
     try {
         const gate = await shouldBlockByEconomyGate(ctx, comando);
         if (gate?.shouldBlock) {

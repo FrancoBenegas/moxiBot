@@ -137,11 +137,6 @@ Cuando el modo IA está activo en un canal, el bot intercepta preguntas de clima
 
 - `TOKEN=...` (recomendado): token del bot (valor que usa el proyecto hoy).
 - `DISCORD_TOKEN=...` (alternativa): también se acepta por compatibilidad con tutoriales.
-- `GUILD_ACTIVITY_WEBHOOK_URL=https://discord.com/api/webhooks/...` (opcional): webhook para avisos cuando el bot entra/sale de servidores.
-- `GUILD_ACTIVITY_LOG_CHANNEL_ID=...` (opcional): canal fallback para esos avisos si no hay webhook.
-- `GUILD_ACTIVITY_WEBHOOK_NAME=Invitaciones Bot` (opcional): nombre visible del webhook.
-- `GUILD_ACTIVITY_WEBHOOK_AVATAR_URL=https://...` (opcional): avatar del webhook.
-- `GUILD_ACTIVITY_WEBHOOK_MENTION=@GOKU ULTRA` (opcional): texto/mención encima del embed.
 
 No compartas ni subas tus keys (si se filtraron, rótalas/regénéralas).
 
