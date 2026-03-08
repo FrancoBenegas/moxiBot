@@ -10,6 +10,7 @@ const validEvents = [
     'clientReady',
     'channelCreate', 'channelDelete', 'channelUpdate',
     'emojiCreate', 'emojiDelete', 'emojiUpdate',
+    'guildCreate', 'guildDelete',
     'guildBanAdd', 'guildBanRemove',
     'guildMemberAdd', 'guildMemberRemove', 'guildMemberUpdate',
     'messageCreate', 'messageDelete', 'messageDeleteBulk', 'messageBulkDelete', 'messageUpdate',
