@@ -3,6 +3,7 @@ const mentionPanel = require('../Client/mentionPanel');
 const Config = require('../../Config');
 
 const { getGuildSettingsCached } = require('../../Util/guildSettings');
+const { getUserPrefix } = require('../../Util/userPrefix');
 const { getSettings: getBugSettings } = require('../../Util/bugStorage');
 const moxi = require('../../i18n');
 const logger = require('../../Util/logger');
@@ -310,6 +311,8 @@ Moxi.on("messageCreate", async (message) => {
     : globalPrefixes[0];
 
   let prefix = globalPrefixes[0];
+  let serverPrefix = globalPrefixes[0];
+  let userPrefix = '';
   let settings = null;
   try {
     settings = await getGuildSettingsCached(message.guild.id);
@@ -320,11 +323,15 @@ Moxi.on("messageCreate", async (message) => {
     const langForTranslate = await moxi.userLang(message.guild.id, message.author?.id, fallbackLang);
     message.lang = langForTranslate;
     message.translate = (key, vars = {}) => moxi.translate(key, langForTranslate, vars);
-    // Prefijo efectivo: env por defecto, o personalizado por servidor si se cambió.
-    prefix = await moxi.guildPrefix(message.guild.id, envPrefix);
+    // Prefijos efectivos: por servidor y por usuario.
+    serverPrefix = await moxi.guildPrefix(message.guild.id, envPrefix);
+    userPrefix = await getUserPrefix(message.guild.id, message.author?.id, '').catch(() => '');
+    prefix = userPrefix || serverPrefix;
   } catch {
     // fallback al prefijo de entorno
     prefix = envPrefix;
+    serverPrefix = envPrefix;
+    userPrefix = '';
     const fallbackLang = process.env.DEFAULT_LANG || 'es-ES';
     const langForTranslate = await moxi.userLang(message.guild.id, message.author?.id, fallbackLang).catch(() => fallbackLang);
     message.lang = langForTranslate;
@@ -332,10 +339,10 @@ Moxi.on("messageCreate", async (message) => {
   }
 
   const raw = settings?.Prefix;
-  debugHelper.log('prefix', `guildId=${message.guild.id} global=${JSON.stringify(globalPrefixes)} settings.Prefix=${JSON.stringify(raw)} resolved=${prefix}`);
+  debugHelper.log('prefix', `guildId=${message.guild.id} global=${JSON.stringify(globalPrefixes)} settings.Prefix=${JSON.stringify(raw)} server=${serverPrefix} user=${userPrefix || '-'} resolved=${prefix}`);
 
-  // Responder solo al prefijo efectivo (env o personalizado).
-  const prefixesToUse = uniqStrings([prefix]);
+  // Aceptar ambos: prefijo personal del usuario y prefijo del servidor.
+  const prefixesToUse = uniqStrings([userPrefix, serverPrefix, prefix]);
   const matched = matchPrefix(message.content, prefixesToUse);
 
   if (!matched) {
