@@ -104,8 +104,8 @@ module.exports = {
         .setName('set')
         .setDescription('Configurar canal/roles y (opcional) enviar el panel')
         .addChannelOption(o => o.setName('canal').setDescription('Canal donde estará el panel').setRequired(true))
-        .addChannelOption(o => o.setName('canal_log').setDescription('Canal donde se enviará el log de verificaciones (por defecto: el canal del panel)').setRequired(false))
         .addRoleOption(o => o.setName('rol_verificado').setDescription('Rol que se asigna al verificar').setRequired(true))
+        .addChannelOption(o => o.setName('canal_log').setDescription('Canal donde se enviará el log de verificaciones (por defecto: el canal del panel)').setRequired(false))
         .addRoleOption(o => o.setName('rol_no_verificado').setDescription('Rol a dar al entrar (y quitar al verificar)').setRequired(false))
         .addStringOption(o =>
           o
