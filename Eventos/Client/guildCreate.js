@@ -1,50 +1,27 @@
 // Evento: El bot entra a un servidor nuevo
-const { EmbedBuilder } = require('discord.js');
-const { sendDiscordWebhook } = require('../../Util/webhookSend');
+const { ContainerBuilder, TextDisplayBuilder, SeparatorBuilder } = require('discord.js');
 
 module.exports = async (guild) => {
     console.log('[DEBUG][guildCreate] Evento disparado en guild:', guild.id, guild.name);
-    const webhookUrl = process.env.GUILD_ACTIVITY_WEBHOOK_URL;
-    const fallbackChannelId = process.env.GUILD_ACTIVITY_LOG_CHANNEL_ID;
-    const webhookName = process.env.GUILD_ACTIVITY_WEBHOOK_NAME || 'Invitaciones Bot';
-    const webhookAvatar = process.env.GUILD_ACTIVITY_WEBHOOK_AVATAR_URL || guild.client.user?.displayAvatarURL?.() || undefined;
-    const webhookMention = process.env.GUILD_ACTIVITY_WEBHOOK_MENTION || `@${guild.client.user?.username || 'MoxiBot'}`;
-
-    const embed = new EmbedBuilder()
-        .setColor(0x39d353)
-        .setTitle('Bot invitado a un servidor')
-        .setDescription(`El servidor **${guild.name}** ha invitado al bot.`)
-        .addFields(
-            { name: 'Servidor', value: guild.name || 'Desconocido', inline: true },
-            { name: 'Guild ID', value: guild.id || 'N/A', inline: true },
-            { name: 'Miembros', value: String(guild.memberCount ?? 0), inline: true },
-            { name: 'Owner', value: guild.ownerId || 'N/A', inline: false }
-        )
-        .setThumbnail(guild.iconURL({ size: 256 }) || null)
-        .setTimestamp();
-
-    if (webhookUrl) {
-        await sendDiscordWebhook(webhookUrl, {
-            username: webhookName,
-            avatar_url: webhookAvatar,
-            content: webhookMention,
-            embeds: [embed.toJSON()],
-        });
-        console.log('[DEBUG][guildCreate] Aviso enviado por webhook configurable.');
-        return;
-    }
-
-    if (!fallbackChannelId) {
-        console.log('[DEBUG][guildCreate] Sin webhook ni canal fallback configurado.');
-        return;
-    }
-
-    const logChannel = guild.client.channels.cache.get(fallbackChannelId);
+    const LOG_CHANNEL_ID = '1460414202777833665';
+    const logChannel = guild.client.channels.cache.get(LOG_CHANNEL_ID);
     if (!logChannel) {
-        console.log('[DEBUG][guildCreate] Canal de logs no encontrado:', fallbackChannelId);
+        console.log('[DEBUG][guildCreate] Canal de logs no encontrado:', LOG_CHANNEL_ID);
         return;
     }
 
-    await logChannel.send({ embeds: [embed] });
-    console.log('[DEBUG][guildCreate] Aviso enviado al canal fallback.');
+    const now = new Date();
+    const timeStr = now.toISOString().replace('T', ' ').replace('Z', ' UTC');
+    const container = new ContainerBuilder()
+        .setAccentColor(0xA259FF)
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`# 🤖 MoxiBot añadido a un servidor`))
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`Servidor: **${guild.name}**`))
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`ID: ${guild.id}`))
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`Miembros: ${guild.memberCount}`))
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`Propietario: <@${guild.ownerId}>`))
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`🕒 ${timeStr}`));
+
+    await logChannel.send({ content: '', components: [container] });
+    console.log('[DEBUG][guildCreate] Embed enviado al canal de logs.');
 };

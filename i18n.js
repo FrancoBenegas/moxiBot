@@ -359,20 +359,6 @@ async function getGuildLanguageCached(guildId, fallbackLang = 'es-ES') {
   }
 }
 
-async function getUserLanguageCached(guildId, userId, fallbackLang = 'es-ES') {
-  const gid = guildId ? String(guildId) : '';
-  const uid = userId ? String(userId) : '';
-  if (!gid || !uid) return resolveLocaleFromWorkspace(fallbackLang, 'es-ES');
-
-  try {
-    const { getUserLanguage } = require('./Util/userLanguage');
-    const raw = await getUserLanguage(gid, uid, fallbackLang);
-    return resolveLocaleFromWorkspace(raw, fallbackLang);
-  } catch {
-    return resolveLocaleFromWorkspace(fallbackLang, 'es-ES');
-  }
-}
-
 async function getGuildPrefixCached(guildId, fallbackPrefix = '.') {
   const strictEnvPrefix = ['1', 'true', 'yes', 'on'].includes(String(process.env.STRICT_ENV_PREFIX || '0').trim().toLowerCase());
   const envPrefix = (typeof process.env.PREFIX === 'string' && process.env.PREFIX.trim())
@@ -409,11 +395,9 @@ const moxi = {
   t: translate,
 
   getGuildLanguageCached,
-  getUserLanguageCached,
   getGuildPrefixCached,
   tGuild: translateGuild,
   guildLang: getGuildLanguageCached,
-  userLang: getUserLanguageCached,
   guildPrefix: getGuildPrefixCached,
   translationGuild: translateGuild,
 

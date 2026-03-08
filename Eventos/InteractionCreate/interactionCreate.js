@@ -54,8 +54,7 @@ Moxi.on("interactionCreate", async (interaction) => {
       const settings = await getGuildSettingsCached(guildId);
       if (interaction.guild) interaction.guild.settings = settings;
       const dbLang = settings?.Language ?? settings?.language ?? settings?.LANGUAGE ?? settings?.lang;
-      const fallbackLang = dbLang ? String(dbLang) : lang;
-      lang = await moxi.userLang(guildId, interaction.user?.id, fallbackLang);
+      if (dbLang) lang = String(dbLang);
     }
     interaction.lang = lang;
     interaction.translate = (key, vars = {}) => moxi.translate(key, lang, vars);
