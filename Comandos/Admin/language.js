@@ -223,7 +223,7 @@ module.exports = {
     }
 
     const serverLangCode = await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES');
-    const PAGE_SIZE = 5;
+    const PAGE_SIZE = 2;
     let currentPage = 0;
     let currentServerLangCode = serverLangCode;
 

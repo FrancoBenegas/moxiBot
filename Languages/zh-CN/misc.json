@@ -678,5 +678,7 @@
   "PORTAL_NO_CHANNEL": "I couldn't find a valid channel to create the official invite.",
   "PORTAL_ERR": "I couldn't resolve the official invite.",
   "HELP_CATEGORY_CATEGORY_UTILIDAD": "实用工具",
-  "HELP_CATEGORY_CATEGORY_UTILIDAD_DESC": "通用实用工具命令。"
+  "HELP_CATEGORY_CATEGORY_UTILIDAD_DESC": "通用实用工具命令。",
+  "HELP_CATEGORY_CATEGORY_TOOLS": "工具",
+  "HELP_CATEGORY_CATEGORY_TOOLS_DESC": "您Discord服务器的有用工具。"
 }
