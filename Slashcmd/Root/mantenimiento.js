@@ -40,6 +40,15 @@ function formatDateTag(dateLike) {
     return `<t:${Math.floor(date.getTime() / 1000)}:F>`;
 }
 
+async function collectMaintenanceGuildCount(client) {
+    if (client?.shard && typeof client.shard.broadcastEval === 'function') {
+        const shardCounts = await client.shard.broadcastEval((c) => c.guilds.cache.size);
+        return shardCounts.reduce((acc, n) => acc + Number(n || 0), 0);
+    }
+
+    return Number(client?.guilds?.cache?.size || 0);
+}
+
 function createAnnouncementContainer({ enabled, reason, updatedByTag, accentColor }) {
     const title = enabled ? 'Mantenimiento activado' : 'Mantenimiento desactivado';
     const stateLine = enabled
@@ -271,7 +280,23 @@ module.exports = {
         )
         .addSubcommand(sub =>
             sub
+                .setName('on')
+                .setDescription('Activa mantenimiento global del bot')
+                .addStringOption(o =>
+                    o
+                        .setName('motivo')
+                        .setDescription('Motivo visible para los usuarios')
+                        .setRequired(false)
+                )
+        )
+        .addSubcommand(sub =>
+            sub
                 .setName('desactivar')
+                .setDescription('Desactiva mantenimiento global del bot')
+        )
+        .addSubcommand(sub =>
+            sub
+                .setName('off')
                 .setDescription('Desactiva mantenimiento global del bot')
         )
         .addSubcommand(sub =>
@@ -312,7 +337,7 @@ module.exports = {
             }));
         }
 
-        if (sub === 'activar') {
+        if (sub === 'activar' || sub === 'on') {
             await interaction.deferReply({ flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2 });
 
             const reason = interaction.options.getString('motivo') || 'Actualizacion interna.';
@@ -340,9 +365,12 @@ module.exports = {
             updatedByTag: interaction.user?.tag,
         });
 
+        const guildCount = await collectMaintenanceGuildCount(Moxi).catch(() => 0);
+
         return interaction.editReply(buildPanel({
             title: 'Mantenimiento desactivado',
-            body: `${EMOJIS.tick || '✅'} El modo mantenimiento quedo **INACTIVO**.`,
+            body: `${EMOJIS.tick || '✅'} El modo mantenimiento quedo **INACTIVO**.\n` +
+                `${EMOJIS.earth || '🌍'} Servidores aplicados: **${guildCount}**`,
             ephemeral: true,
         }));
     },
