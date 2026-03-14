@@ -44,9 +44,9 @@ function buildReminderMessage({ userId, type }) {
 function getDefaultInviteUrl() {
     const clientId = process.env.CLIENT_ID;
     if (clientId) {
-        return `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(clientId)}&permissions=8&integration_type=0&scope=bot`;
+        return `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(clientId)}&permissions=8&integration_type=0&scope=bot%20applications.commands`;
     }
-    return 'https://discord.com/oauth2/authorize?client_id=1456441655769956436&permissions=8&integration_type=0&scope=bot';
+    return 'https://discord.com/oauth2/authorize?client_id=1456441655769956436&permissions=8&integration_type=0&scope=bot%20applications.commands';
 }
 
 function buildReminderButtonsRow() {

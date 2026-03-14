@@ -34,6 +34,10 @@ async function panelV2({ client: Moxi, message, prefix }) {
     function t(str) {
         return str.replace(/\{\{(\w+)\}\}/g, (_, k) => replacements[k] || '');
     }
+
+    const appId = String(process.env.CLIENT_ID || Moxi?.user?.id || '1456441655769956436').trim();
+    const inviteUrl = `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(appId)}&permissions=8&integration_type=0&scope=bot%20applications.commands`;
+
     const container = new ContainerBuilder()
         .setAccentColor(Bot.AccentColor)
         .addTextDisplayComponents(c =>
@@ -55,7 +59,7 @@ async function panelV2({ client: Moxi, message, prefix }) {
         .addSeparatorComponents(s => s.setDivider(true))
         .addActionRowComponents(row =>
             row.addComponents(
-                new LinkButtonBuilder().setLabel(t(panel.invite)).setURL('https://discord.com/oauth2/authorize?client_id=1456441655769956436&permissions=8&integration_type=0&scope=bot'),
+                new LinkButtonBuilder().setLabel(t(panel.invite)).setURL(inviteUrl),
                 new LinkButtonBuilder().setLabel(t(panel.support)).setURL('https://discord.gg/tu-servidor'),
                 new LinkButtonBuilder().setLabel(t(panel.web)).setURL('https://moxilab.net')
             )
