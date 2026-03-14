@@ -261,7 +261,7 @@ module.exports = {
         .addSubcommand(sub =>
             sub
                 .setName('activar')
-                .setDescription('Activa mantenimiento y avisa a todos los servidores')
+                .setDescription('Activa mantenimiento global del bot')
                 .addStringOption(o =>
                     o
                         .setName('motivo')
@@ -272,7 +272,7 @@ module.exports = {
         .addSubcommand(sub =>
             sub
                 .setName('desactivar')
-                .setDescription('Desactiva mantenimiento y avisa a todos los servidores')
+                .setDescription('Desactiva mantenimiento global del bot')
         )
         .addSubcommand(sub =>
             sub
@@ -323,14 +323,10 @@ module.exports = {
                 updatedByTag: interaction.user?.tag,
             });
 
-            const sent = await broadcastMaintenanceNotice(Moxi, next);
-
             return interaction.editReply(buildPanel({
                 title: 'Mantenimiento activado',
                 body: `${EMOJIS.tick || '✅'} El modo mantenimiento quedo **ACTIVO**.\n` +
-                    `${EMOJIS.warn || '⚠️'} Motivo: ${next.reason || '-'}\n` +
-                    `${EMOJIS.earth || '🌍'} Aviso enviado: **${sent.sent}**/${sent.attempted} servidores.\n` +
-                    `${EMOJIS.cross || '❌'} Fallidos: ${sent.failed}`,
+                    `${EMOJIS.warn || '⚠️'} Motivo: ${next.reason || '-'}`,
                 ephemeral: true,
             }));
         }
@@ -344,13 +340,9 @@ module.exports = {
             updatedByTag: interaction.user?.tag,
         });
 
-        const sent = await broadcastMaintenanceNotice(Moxi, next);
-
         return interaction.editReply(buildPanel({
             title: 'Mantenimiento desactivado',
-            body: `${EMOJIS.tick || '✅'} El modo mantenimiento quedo **INACTIVO**.\n` +
-                `${EMOJIS.earth || '🌍'} Aviso enviado: **${sent.sent}**/${sent.attempted} servidores.\n` +
-                `${EMOJIS.cross || '❌'} Fallidos: ${sent.failed}`,
+            body: `${EMOJIS.tick || '✅'} El modo mantenimiento quedo **INACTIVO**.`,
             ephemeral: true,
         }));
     },
