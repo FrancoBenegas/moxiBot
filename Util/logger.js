@@ -31,9 +31,10 @@ function parseLogLevel() {
   if (raw) {
     const key = raw.toLowerCase();
 
-    // En desarrollo solemos querer ver más logs. Si DEBUG (global o por flags)
-    // está activo y LOG_LEVEL=info viene desde .env, elevamos a debug.
-    if (key === 'info' && anyDebugEnvEnabled()) return LEVELS.debug;
+    // Si cualquier flag de debug está activa, los logs debug deben verse aunque
+    // LOG_LEVEL venga configurado a warn/info/error en el .env.
+    // Solo respetamos silent como opt-out explícito.
+    if (key !== 'silent' && anyDebugEnvEnabled()) return LEVELS.debug;
 
     if (Object.prototype.hasOwnProperty.call(LEVELS, key)) return LEVELS[key];
     const asNum = Number(key);

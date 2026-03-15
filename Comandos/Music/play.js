@@ -49,7 +49,7 @@ module.exports = {
         lang = lang || 'es-ES';
         return moxi.translate('commands:CATEGORY_MUSICA', lang);
     },
-    usage: 'play <canción> <plataforma>',
+    usage: 'play <canción> [youtube|spotify]',
     description: function (lang) { return moxi.translate('commands:CMD_PLAY_DESC', lang || 'es-ES'); },
     async execute(Moxi, message, args) {
         const guildId = message.guild?.id;
@@ -86,10 +86,13 @@ module.exports = {
         }
 
         // Permite: .play <texto con espacios> [spotify|youtube]
+        // Default robusto: YouTube. Solo usar Spotify por defecto cuando
+        // el input sea claramente un enlace/URI de Spotify.
         const last = String(args[args.length - 1] || '').toLowerCase();
         const hasPlatform = last === 'spotify' || last === 'youtube';
-        const platform = hasPlatform ? last : 'spotify';
         const track = (hasPlatform ? args.slice(0, -1) : args).join(' ').trim();
+        const looksLikeSpotify = /^spotify:/i.test(track) || /(?:https?:\/\/)?(?:open\.)?spotify\.com\//i.test(track);
+        const platform = hasPlatform ? last : (looksLikeSpotify ? 'spotify' : 'youtube');
         const responder = makeResponder(message);
         // Simula la estructura de interaction para reutilizar la lógica
         const fakeInteraction = {

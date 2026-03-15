@@ -433,6 +433,20 @@ function normalizeSpotifyIdentifier(input) {
     }
 }
 
+async function waitForVoiceHandshake(player, { timeoutMs = 7000, intervalMs = 150 } = {}) {
+    const startedAt = Date.now();
+
+    while ((Date.now() - startedAt) < timeoutMs) {
+        const voice = player?.connection?.voice;
+        const nodeSessionId = player?.node?.sessionId;
+        const ready = Boolean(nodeSessionId && voice?.sessionId && voice?.endpoint && voice?.token);
+        if (ready) return true;
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+
+    return false;
+}
+
 
 
 module.exports = {
@@ -682,6 +696,34 @@ module.exports = {
                 }
             }
 
+            // Fallback genérico: para texto libre en Spotify (sin URL/URI),
+            // intentar YouTube para evitar que /play falle cuando spsearch no responde.
+            if ((isLoadFailed || isNoMatches) && lugar === 'spotify' && !looksLikeSpotifyTrack && !looksLikeSpotifyPlaylist && !looksLikeSpotifyAlbum && !looksLikeSpotifyArtist) {
+                try {
+                    const ytQuery = String(requestedTrack || '').trim();
+                    if (ytQuery) {
+                        debugHelper.warn('play', 'spotify text search failed; fallback to ytsearch', { guildId, requesterId, ytQuery });
+                        const trySources = ['ytsearch', 'ytmsearch'];
+                        for (const src of trySources) {
+                            const ytRes = await Moxi.poru.resolve({ query: ytQuery, source: src, requester: interaction.member });
+                            const ytType = String(ytRes?.loadType ?? '');
+                            const ytLower = ytType.toLowerCase();
+                            const ytUpper = ytType.toUpperCase();
+                            const ytFailed = ytLower === 'error' || ytUpper === 'LOAD_FAILED';
+                            const ytEmpty = ytLower === 'empty' || ytUpper === 'NO_MATCHES';
+                            if (!ytFailed && !ytEmpty) {
+                                Object.assign(res, ytRes);
+                                ({ rawLoadType, isLoadFailed, isNoMatches, isPlaylistLoaded } = computeFlags(res));
+                                debugHelper.warn('play', 'spotify text fallback resolved via', { guildId, requesterId, source: src });
+                                break;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    debugHelper.warn('play', 'spotify text fallback failed', { guildId, requesterId, message: e?.message });
+                }
+            }
+
             // Fallback Spotify (playlist/álbum/artista) -> YouTube: con client_credentials intentamos
             // leer la colección pública desde Spotify API y convertirla a búsquedas de YouTube.
             if ((isLoadFailed || isNoMatches) && (looksLikeSpotifyPlaylist || looksLikeSpotifyAlbum || looksLikeSpotifyArtist)) {
@@ -823,6 +865,17 @@ module.exports = {
 
                 if (!player.isPlaying) {
                     try {
+                        const ready = await waitForVoiceHandshake(player);
+                        if (!ready) {
+                            debugHelper.warn('play', 'voice handshake timeout before play (spotify collection fallback)', {
+                                guildId,
+                                requesterId,
+                                hasNodeSession: Boolean(player?.node?.sessionId),
+                                hasVoiceSession: Boolean(player?.connection?.voice?.sessionId),
+                                hasEndpoint: Boolean(player?.connection?.voice?.endpoint),
+                                hasToken: Boolean(player?.connection?.voice?.token),
+                            });
+                        }
                         await player.play();
                     } catch (e) {
                         debugHelper.error('play', 'player.play failed (spotify collection fallback)', { guildId, requesterId, message: e?.message || String(e) });
@@ -902,6 +955,17 @@ module.exports = {
             }
             if (!player.isPlaying) {
                 try {
+                    const ready = await waitForVoiceHandshake(player);
+                    if (!ready) {
+                        debugHelper.warn('play', 'voice handshake timeout before play', {
+                            guildId,
+                            requesterId,
+                            hasNodeSession: Boolean(player?.node?.sessionId),
+                            hasVoiceSession: Boolean(player?.connection?.voice?.sessionId),
+                            hasEndpoint: Boolean(player?.connection?.voice?.endpoint),
+                            hasToken: Boolean(player?.connection?.voice?.token),
+                        });
+                    }
                     await player.play();
                 } catch (e) {
                     debugHelper.error('play', 'player.play failed', { guildId, requesterId, message: e?.message || String(e) });
