@@ -104,6 +104,38 @@ const UserSchema = new Schema(
         updatedAt: {
             type: Date,
             default: Date.now
+        },
+
+        // Marriage System
+        marriage: {
+            spouse: {
+                type: String,
+                default: null
+            },
+            anniversaryDate: {
+                type: Date,
+                default: null
+            },
+            marriedAt: {
+                type: Date,
+                default: null
+            }
+        },
+
+        // Marriage Proposals
+        marriageProposal: {
+            from: {
+                type: String,
+                default: null
+            },
+            anniversaryDate: {
+                type: Date,
+                default: null
+            },
+            createdAt: {
+                type: Date,
+                default: null
+            }
         }
     },
     {
