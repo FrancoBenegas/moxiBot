@@ -4,6 +4,7 @@
     "prefix_label": "✨ **Prefijo en este servidor:** `{{prefix}}`",
     "prefix_source_env": "Origen del prefijo: **ENV (.env)**",
     "prefix_source_custom": "Origen del prefijo: **Personalizado por servidor**",
+    "user_prefix_label": "👤 **Tu prefijo personal:** `{{userPrefix}}`",
     "forgot_prefix": "¿Olvidaste mi prefijo? Solo tienes que mencionarme para verlo en cualquier momento.",
     "invite": "Invítame",
     "support": "Soporte",

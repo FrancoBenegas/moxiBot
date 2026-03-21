@@ -4,6 +4,7 @@
     "prefix_label": "✨ **本服务器的前缀：** `{{prefix}}`",
     "prefix_source_env": "前缀来源：**ENV (.env)**",
     "prefix_source_custom": "前缀来源：**服务器自定义设置**",
+    "user_prefix_label": "👤 **你的个人前缀：** `{{userPrefix}}`",
     "forgot_prefix": "忘记我的前缀了？随时@我即可查看。",
     "invite": "邀请我",
     "support": "支持",
