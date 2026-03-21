@@ -63,6 +63,7 @@ function canonicalCategoryKey(value) {
     if (upper.includes('CATEGORY_ROOT') || upper === 'ROOT' || upper.includes('OWNER') || upper.includes('PROPIETARIO')) return 'root';
     if (upper.includes('CATEGORY_TAROT') || upper === 'TAROT') return 'tarot';
     if (upper.includes('CATEGORY_SISTEMAS') || upper.includes('SISTEMAS') || upper.includes('SYSTEMS')) return 'systems';
+    if (upper.includes('CATEGORY_MARRIAGE') || upper === 'MARRIAGE' || upper.includes('MATRIMONIO')) return 'marriage';
 
     return '';
 }
@@ -91,6 +92,7 @@ function translateKnownCategory(value, lang) {
         root: 'commands:CATEGORY_ROOT',
         tarot: 'commands:CATEGORY_TAROT',
         systems: 'commands:CATEGORY_SISTEMAS',
+        marriage: 'commands:CATEGORY_MARRIAGE',
     };
 
     const nsKey = keyByCanon[canon];

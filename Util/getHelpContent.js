@@ -22,6 +22,7 @@ function normalizeCategoryKey(value) {
   if (upper.includes('CATEGORY_ADMIN')) return 'Admin';
   if (upper.includes('CATEGORY_MODERATION') || upper.includes('MODERATION') || upper.includes('MODERACION')) return 'Moderation';
   if (upper.includes('CATEGORY_ROOT')) return 'Root';
+  if (upper.includes('CATEGORY_MARRIAGE') || upper.includes('MARRIAGE') || upper.includes('MATRIMONIO')) return 'Marriage';
 
   // Games / Juegos
   if (upper.includes('CATEGORY_GAMES') || upper === 'GAMES') return 'Games';
@@ -42,6 +43,12 @@ function normalizeCategoryKey(value) {
   if (upper.includes('娱乐') || upper.includes('娛樂')) return 'Fun';
   if (upper.includes('مرح')) return 'Fun';
   if (upper.includes('मज़ा') || upper.includes('मजा')) return 'Fun';
+
+  // Marriage / Matrimonio
+  if (upper.includes('MARIAGE')) return 'Marriage';
+  if (upper.includes('HOCHZEIT') || upper.includes('MATRIMONIO') || upper.includes('PERNIKAHAN')) return 'Marriage';
+  if (upper.includes('結婚') || upper.includes('결혼') || upper.includes('婚')) return 'Marriage';
+  if (upper.includes('الزواج') || upper.includes('विवाह')) return 'Marriage';
 
   // Equivalentes árabes (por si el value viene ya traducido)
   if (value.includes('الأدوات')) return 'Tools';
@@ -277,6 +284,8 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
       'Herramientas': 'HELP_CATEGORY_TOOLS',
       'Sistemas': 'HELP_CATEGORY_SYSTEMS',
       'Systems': 'HELP_CATEGORY_SYSTEMS',
+      'Marriage': 'HELP_CATEGORY_MARRIAGE',
+      'Matrimonio': 'HELP_CATEGORY_MARRIAGE',
       'Welcome': 'HELP_CATEGORY_WELCOME',
       'Sistema de bienvenida': 'HELP_CATEGORY_WELCOME'
     };
@@ -426,6 +435,8 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
           ? '🎵'
           : (categoria === 'Fun')
             ? '🎉'
+            : (categoria === 'Marriage')
+              ? '💍'
             : (categoria === 'Admin')
               ? '🛡️'
               : (categoria === 'Moderation')
