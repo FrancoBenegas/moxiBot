@@ -1,3 +1,6 @@
+const { ActionRowBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
+const { ButtonBuilder } = require('./compatButtonBuilder');
+const { Bot } = require('../Config');
 const User = require('../Models/UserSchema');
 
 const PROPOSAL_TIMEOUT = 48 * 60 * 60 * 1000;
@@ -125,6 +128,37 @@ async function divorce({ guildId, userId }) {
     return { ok: true, spouseId };
 }
 
+function buildProposalMessage({ proposerId, targetUserId, anniversaryDate }) {
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`marriage_accept_${proposerId}_${targetUserId}`)
+            .setLabel('Aceptar')
+            .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+            .setCustomId(`marriage_reject_${proposerId}_${targetUserId}`)
+            .setLabel('Rechazar')
+            .setStyle(ButtonStyle.Danger)
+    );
+
+    const embed = new EmbedBuilder()
+        .setColor(Bot.AccentColor)
+        .setTitle('Propuesta de matrimonio')
+        .setDescription(`<@${proposerId}> te ha propuesto matrimonio.`)
+        .addFields(
+            { name: 'Proponente', value: `<@${proposerId}>`, inline: true },
+            { name: 'Destino', value: `<@${targetUserId}>`, inline: true },
+            { name: 'Aniversario', value: formatDateTag(anniversaryDate), inline: false }
+        )
+        .setFooter({ text: 'Tienes 48 horas para responder.' });
+
+    return {
+        content: `<@${targetUserId}>, tienes una propuesta de matrimonio.`,
+        embeds: [embed],
+        components: [row],
+        allowedMentions: { repliedUser: false },
+    };
+}
+
 module.exports = {
     PROPOSAL_TIMEOUT,
     formatDateTag,
@@ -135,4 +169,5 @@ module.exports = {
     acceptProposal,
     declineProposal,
     divorce,
+    buildProposalMessage,
 };
