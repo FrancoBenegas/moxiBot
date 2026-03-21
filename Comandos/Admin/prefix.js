@@ -68,18 +68,9 @@ module.exports = {
             const currentServerPrefix = await moxi.guildPrefix(message.guild?.id, globalPrefix);
             const currentUserPrefix = await getUserPrefix(message.guild?.id, message.author?.id, '').catch(() => '');
             const currentPrefix = currentUserPrefix || currentServerPrefix;
-            const isEnvSource = String(currentServerPrefix || '') === String(envPrefix || '');
-            const prefixSourceText = /^es(-|$)/i.test(String(lang || ''))
-                ? (isEnvSource
-                    ? 'Origen del prefijo: **ENV (.env)**'
-                    : 'Origen del prefijo: **Personalizado por servidor**')
-                : (isEnvSource
-                    ? 'Prefix source: **ENV (.env)**'
-                    : 'Prefix source: **Server custom setting**');
-
             const userSourceText = currentUserPrefix
                 ? `Prefijo personal: **\`${currentUserPrefix}\`**`
-                : 'Prefijo personal: **No configurado** (usas el del servidor)';
+                : 'Usa `prefix user` para configurarlo con botones.';
 
             const mentionPrefix = Moxi?.user?.id ? `<@${Moxi.user.id}>` : '';
             const alsoPrefixes = [
@@ -94,8 +85,7 @@ module.exports = {
                 .addSeparatorComponents(s => s.setDivider(true))
                 .addTextDisplayComponents(c => c.setContent(moxi.translate('prefix-panels:CURRENT_PREFIX_DESC', lang, { prefix: currentPrefix })))
                 .addTextDisplayComponents(c => c.setContent(userSourceText))
-                .addTextDisplayComponents(c => c.setContent(prefixSourceText))
-                .addTextDisplayComponents(c => c.setContent('Usos: `prefix user !` | `prefix user reset` | `prefix server !` (admin)'))
+                .addTextDisplayComponents(c => c.setContent('Usos: `prefix user` (botones) | `prefix server !` (admin)'))
                 .addTextDisplayComponents(c => c.setContent(moxi.translate('prefix-panels:ALSO_CAN_USE', lang, { prefixes: alsoPrefixes })))
                 .addSeparatorComponents(s => s.setDivider(true))
                 .addTextDisplayComponents(c => c.setContent(`${EMOJIS.copyright} ${Moxi.user.username} • ${new Date().getFullYear()}`));
@@ -124,7 +114,7 @@ module.exports = {
                         .addTextDisplayComponents(c => c.setContent(currentUserPrefix
                             ? `Tu prefijo personal actual es: **\`${currentUserPrefix}\`**`
                             : 'No tienes prefijo personal configurado (usas el del servidor).'))
-                        .addTextDisplayComponents(c => c.setContent('Selecciona un botón para cambiarlo rápido, o usa `prefix user <prefijo>` para uno personalizado.'))
+                        .addTextDisplayComponents(c => c.setContent('Selecciona un botón para cambiarlo rápido.'))
                         .addSeparatorComponents(s => s.setDivider(true))
                         .addTextDisplayComponents(c => c.setContent(`${EMOJIS.copyright} ${Moxi.user.username} • ${new Date().getFullYear()}`));
 
