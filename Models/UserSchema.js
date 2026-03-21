@@ -106,6 +106,38 @@ const UserSchema = new Schema(
             default: Date.now
         },
 
+        // User profile customization
+        profile: {
+            phrase: {
+                type: String,
+                default: ''
+            },
+            stats: {
+                pats: {
+                    type: Number,
+                    default: 0
+                },
+                charisma: {
+                    type: Number,
+                    default: 0
+                },
+                deaths: {
+                    type: Number,
+                    default: 0
+                }
+            },
+            birthday: {
+                day: {
+                    type: Number,
+                    default: null
+                },
+                month: {
+                    type: Number,
+                    default: null
+                }
+            }
+        },
+
         // Marriage System
         marriage: {
             spouse: {
