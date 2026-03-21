@@ -166,6 +166,8 @@
   "HELP_CATEGORY_FUN_DESC": "Comandos de diversión: 8ball, dice.",
   "HELP_CATEGORY_GAMES": "Juegos",
   "HELP_CATEGORY_GAMES_DESC": "Juegos: buscaminas, rps, tictactoe.",
+  "HELP_CATEGORY_MARRIAGE": "Matrimonio",
+  "HELP_CATEGORY_MARRIAGE_DESC": "Comandos de matrimonio: proponer, aceptar, aniversario y divorcio.",
   "GAMES_MINESWEEPER_TITLE": "Buscaminas",
   "GAMES_MINESWEEPER_HELP": "Clic para abrir • Usa el modo 🚩 para marcar",
   "HELP_CATEGORY_TAROT": "Tarot",

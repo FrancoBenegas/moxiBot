@@ -163,6 +163,8 @@
   "HELP_CATEGORY_FUN_DESC": "Fun commands: 8ball, dice.",
   "HELP_CATEGORY_GAMES": "Games",
   "HELP_CATEGORY_GAMES_DESC": "Games: minesweeper, rps, tictactoe.",
+  "HELP_CATEGORY_MARRIAGE": "Marriage",
+  "HELP_CATEGORY_MARRIAGE_DESC": "Marriage commands: propose, accept, anniversary, and divorce.",
   "HELP_CATEGORY_TAROT": "Tarot",
   "HELP_CATEGORY_TAROT_DESC": "Tarot and card commands.",
   "TAROT_TITLE": "Tarot",
