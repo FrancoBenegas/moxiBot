@@ -1,10 +1,8 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const { marriageCategory } = require('../../Util/commandCategories');
-const { Bot } = require('../../Config');
 const {
-    formatDateTag,
     parseAnniversaryInput,
     createProposal,
+    buildProposalMessage,
 } = require('../../Util/marriageCore');
 
 module.exports = {
@@ -41,25 +39,10 @@ module.exports = {
             return message.reply({ content: res.message, allowedMentions: { repliedUser: false } });
         }
 
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`marriage_accept_${message.author.id}_${targetUser.id}`).setLabel('Aceptar').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId(`marriage_reject_${message.author.id}_${targetUser.id}`).setLabel('Rechazar').setStyle(ButtonStyle.Danger)
-        );
-
-        const emb = new EmbedBuilder()
-            .setColor(Bot.AccentColor)
-            .setTitle('Propuesta de matrimonio')
-            .setDescription(`<@${message.author.id}> te propuso matrimonio, <@${targetUser.id}>.`)
-            .addFields(
-                { name: 'Aniversario', value: formatDateTag(parsed.date), inline: false },
-            )
-            .setFooter({ text: 'Solo la persona propuesta puede responder.' });
-
-        return message.reply({
-            content: `<@${targetUser.id}> tienes una propuesta de matrimonio.`,
-            embeds: [emb],
-            components: [row],
-            allowedMentions: { repliedUser: false },
-        });
+        return message.reply(buildProposalMessage({
+            proposerId: message.author.id,
+            targetUserId: targetUser.id,
+            anniversaryDate: parsed.date,
+        }));
     },
 };

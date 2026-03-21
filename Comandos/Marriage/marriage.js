@@ -1,8 +1,9 @@
-﻿const { MessageFlags, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+﻿const { MessageFlags, EmbedBuilder } = require('discord.js');
 const moxi = require('../../i18n');
 const { marriageCategory } = require('../../Util/commandCategories');
 const { Bot } = require('../../Config');
 const User = require('../../Models/UserSchema');
+const { buildProposalMessage } = require('../../Util/marriageCore');
 
 function formatDateTag(dateLike) {
     if (!dateLike) return '-';
@@ -139,28 +140,11 @@ async function handlePropose(Moxi, message, guildId, proposer, targetUser, anniv
 
     await targetDoc.save();
 
-    const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`marriage_accept_${proposer.id}_${targetUser.id}`).setLabel('Aceptar').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`marriage_reject_${proposer.id}_${targetUser.id}`).setLabel('Rechazar').setStyle(ButtonStyle.Danger)
-    );
-
-    const emb = new EmbedBuilder()
-        .setColor(Bot.AccentColor)
-        .setTitle(' Propuesta de matrimonio')
-        .setDescription(`<@${proposer.id}> te ha propuesto matrimonio.`)
-        .addFields(
-            { name: 'Proponente', value: `<@${proposer.id}>`, inline: true },
-            { name: 'Destino', value: `<@${targetUser.id}>`, inline: true },
-            { name: 'Aniversario', value: formatDateTag(anniversaryDate), inline: false },
-        )
-        .setFooter({ text: 'Tienes 48 horas para responder.' });
-
-    await message.reply({
-        content: `<@${targetUser.id}>, tienes una propuesta de matrimonio.`,
-        embeds: [emb],
-        components: [row],
-        allowedMentions: { repliedUser: false },
-    });
+    await message.reply(buildProposalMessage({
+        proposerId: proposer.id,
+        targetUserId: targetUser.id,
+        anniversaryDate,
+    }));
 }
 
 async function handleView(Moxi, message, guildId, targetUser) {
