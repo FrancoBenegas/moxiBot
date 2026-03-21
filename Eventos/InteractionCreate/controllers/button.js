@@ -12,6 +12,7 @@ const handlers = [
   require('./buttons/ping'),
   require('./buttons/helpV2'),
   require('./buttons/helpLegacy'),
+  require('./buttons/userPrefix'),
   require('./buttons/userPerms'),
   require('./buttons/timer'),
   require('./buttons/channel'),
