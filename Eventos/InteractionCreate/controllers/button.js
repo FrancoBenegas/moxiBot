@@ -32,6 +32,7 @@ const handlers = [
   require('./buttons/workApply'),
   require('./buttons/suggest'),
   require('./buttons/craft'),
+  require('./buttons/marriage'), // <-- Añadido para marriage
 ];
 
 module.exports = async function buttonController(interaction, Moxi, logger) {
