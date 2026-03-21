@@ -68,9 +68,6 @@ module.exports = {
             const currentServerPrefix = await moxi.guildPrefix(message.guild?.id, globalPrefix);
             const currentUserPrefix = await getUserPrefix(message.guild?.id, message.author?.id, '').catch(() => '');
             const currentPrefix = currentUserPrefix || currentServerPrefix;
-            const userSourceText = currentUserPrefix
-                ? `Prefijo personal: **\`${currentUserPrefix}\`**`
-                : 'Usa `prefix user` para configurarlo con botones.';
 
             const mentionPrefix = Moxi?.user?.id ? `<@${Moxi.user.id}>` : '';
             const alsoPrefixes = [
@@ -84,8 +81,6 @@ module.exports = {
                 .addTextDisplayComponents(c => c.setContent(`# ${moxi.translate('prefix-panels:CURRENT_PREFIX_TITLE', lang)}`))
                 .addSeparatorComponents(s => s.setDivider(true))
                 .addTextDisplayComponents(c => c.setContent(moxi.translate('prefix-panels:CURRENT_PREFIX_DESC', lang, { prefix: currentPrefix })))
-                .addTextDisplayComponents(c => c.setContent(userSourceText))
-                .addTextDisplayComponents(c => c.setContent('Usos: `prefix user` (botones) | `prefix server !` (admin)'))
                 .addTextDisplayComponents(c => c.setContent(moxi.translate('prefix-panels:ALSO_CAN_USE', lang, { prefixes: alsoPrefixes })))
                 .addSeparatorComponents(s => s.setDivider(true))
                 .addTextDisplayComponents(c => c.setContent(`${EMOJIS.copyright} ${Moxi.user.username} • ${new Date().getFullYear()}`));
