@@ -92,11 +92,6 @@ module.exports = async (Moxi, player, track) => {
         const channel = Moxi.channels.cache.get(player.textChannel);
         if (!channel) return;
 
-            // Diagnóstico: confirmación de que Lavalink inició la reproducción
-            if (process.env.PORU_DEBUG === '1' || process.env.MUSIC_DEBUG === '1') {
-                console.error(`[trackStart] guild=${player.guildId} | track="${track?.info?.title}" | hasVoiceEndpoint=${Boolean(player?.connection?.voice?.endpoint)} | hasVoiceSession=${Boolean(player?.connection?.voice?.sessionId)}`);
-            }
-
         // --- 1. DESACTIVAR BOTONES ANTERIORES ---
         const lastSession = await player.get("lastSessionData");
 
