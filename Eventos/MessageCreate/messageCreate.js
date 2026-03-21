@@ -341,8 +341,17 @@ Moxi.on("messageCreate", async (message) => {
   const raw = settings?.Prefix;
   debugHelper.log('prefix', `guildId=${message.guild.id} global=${JSON.stringify(globalPrefixes)} settings.Prefix=${JSON.stringify(raw)} server=${serverPrefix} user=${userPrefix || '-'} resolved=${prefix}`);
 
-  // Aceptar ambos: prefijo personal del usuario y prefijo del servidor.
-  const prefixesToUse = uniqStrings([userPrefix, serverPrefix, prefix]);
+  // Construir lista de prefijos efectivos: personal, servidor, globales (moxi, mx, etc.) y mención.
+  const botMentionPrefix = Moxi?.user?.id ? `<@${Moxi.user.id}>` : null;
+  const prefixesToUse = uniqStrings([
+    userPrefix,
+    serverPrefix,
+    prefix,
+    ...globalPrefixes,
+    'moxi',
+    'mx',
+    botMentionPrefix,
+  ]);
   const matched = matchPrefix(message.content, prefixesToUse);
 
   if (!matched) {
@@ -399,7 +408,7 @@ Moxi.on("messageCreate", async (message) => {
   // Responder a la mención del bot (solo si el mensaje es SOLO la mención)
   if (message.mentions.has(Moxi.user) && message.content.trim().replace(/<@!?\d+>/g, '').length === 0) {
     // prefix ya resuelto desde settings/cache arriba
-    const panelResult = await mentionPanel({ client: Moxi, message, prefix });
+    const panelResult = await mentionPanel({ client: Moxi, message, prefix, serverPrefix: serverPrefix || null, userPrefix: userPrefix || null });
     // Si el resultado es nulo, undefined o no tiene contenido ni embeds, no enviar nada
     if (!panelResult) return;
     if (
