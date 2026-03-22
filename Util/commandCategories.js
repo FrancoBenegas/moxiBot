@@ -21,8 +21,10 @@ const toolsCategory = makeCategory('commands:CATEGORY_HERRAMIENTAS');
 const musicCategory = makeCategory('commands:CATEGORY_MUSICA');
 const funCategory = makeCategory('commands:CATEGORY_FUN');
 const gamesCategory = makeCategory('commands:CATEGORY_GAMES');
+const genshinCategory = makeCategory('commands:CATEGORY_GENSHIN');
 const rootCategory = makeCategory('commands:CATEGORY_ROOT');
 const marriageCategory = makeCategory('commands:CATEGORY_MARRIAGE');
+const systemsCategory = makeCategory('commands:CATEGORY_SISTEMAS');
 
 module.exports = {
     makeCategory,
@@ -33,6 +35,8 @@ module.exports = {
     musicCategory,
     funCategory,
     gamesCategory,
+    genshinCategory,
     rootCategory,
     marriageCategory,
+    systemsCategory,
 };

@@ -3,6 +3,8 @@ const { ButtonBuilder } = require('./compatButtonBuilder');
 const { Bot } = require('../Config');
 const User = require('../Models/UserSchema');
 
+const GLOBAL_SCOPE_GUILD_ID = 'GLOBAL';
+
 const PROPOSAL_TIMEOUT = 48 * 60 * 60 * 1000;
 
 function formatDateTag(dateLike) {
@@ -30,16 +32,22 @@ function parseAnniversaryInput(input) {
 }
 
 async function ensureUserDoc(guildId, user) {
-    let doc = await User.findOne({ guildID: guildId, userID: user.id });
+    let doc = await User.findOne({ guildID: GLOBAL_SCOPE_GUILD_ID, userID: user.id });
     if (!doc) {
-        doc = new User({ guildID: guildId, userID: user.id, username: user.username });
+        doc = await User.findOne({ userID: user.id }).sort({ updatedAt: -1, createdAt: -1 });
+        if (doc) doc.guildID = GLOBAL_SCOPE_GUILD_ID;
+    }
+    if (!doc) {
+        doc = new User({ guildID: GLOBAL_SCOPE_GUILD_ID, userID: user.id, username: user.username });
     }
     doc.username = user.username;
     return doc;
 }
 
 async function getUserDoc(guildId, userId) {
-    return User.findOne({ guildID: guildId, userID: userId });
+    const globalDoc = await User.findOne({ guildID: GLOBAL_SCOPE_GUILD_ID, userID: userId });
+    if (globalDoc) return globalDoc;
+    return User.findOne({ userID: userId }).sort({ updatedAt: -1, createdAt: -1 });
 }
 
 async function createProposal({ guildId, proposer, targetUser, anniversaryDate }) {
@@ -48,7 +56,13 @@ async function createProposal({ guildId, proposer, targetUser, anniversaryDate }
 
     if (targetUser.bot) return { ok: false, message: 'No puedes casarte con bots.' };
     if (proposer.id === targetUser.id) return { ok: false, message: 'No puedes proponerte a ti mismo.' };
-    if (proposerDoc.marriage?.spouse) return { ok: false, message: `Ya estas casado con <@${proposerDoc.marriage.spouse}>.` };
+    if (proposerDoc.marriage?.spouse) {
+        return {
+            ok: false,
+            message: `Ya estas casado con <@${proposerDoc.marriage.spouse}>. No se permiten infidelidades.`,
+            alertSpouseId: String(proposerDoc.marriage.spouse),
+        };
+    }
     if (targetDoc.marriage?.spouse) return { ok: false, message: `<@${targetUser.id}> ya esta casado/a.` };
     if (targetDoc.marriageProposal?.from) return { ok: false, message: `<@${targetUser.id}> ya tiene una propuesta pendiente.` };
 
@@ -63,7 +77,7 @@ async function createProposal({ guildId, proposer, targetUser, anniversaryDate }
 }
 
 async function acceptProposal({ guildId, targetUserId, proposerId }) {
-    const targetDoc = await User.findOne({ guildID: guildId, userID: targetUserId });
+    const targetDoc = await getUserDoc(guildId, targetUserId);
     if (!targetDoc?.marriageProposal?.from) return { ok: false, message: 'No tienes propuestas pendientes.' };
 
     if (proposerId && targetDoc.marriageProposal.from !== proposerId) {
@@ -78,8 +92,8 @@ async function acceptProposal({ guildId, targetUserId, proposerId }) {
     }
 
     const finalProposerId = targetDoc.marriageProposal.from;
-    let proposerDoc = await User.findOne({ guildID: guildId, userID: finalProposerId });
-    if (!proposerDoc) proposerDoc = new User({ guildID: guildId, userID: finalProposerId });
+    let proposerDoc = await getUserDoc(guildId, finalProposerId);
+    if (!proposerDoc) proposerDoc = new User({ guildID: GLOBAL_SCOPE_GUILD_ID, userID: finalProposerId });
 
     if (targetDoc.marriage?.spouse || proposerDoc.marriage?.spouse) {
         targetDoc.marriageProposal = { from: null, anniversaryDate: null, createdAt: null };
@@ -96,11 +110,24 @@ async function acceptProposal({ guildId, targetUserId, proposerId }) {
     proposerDoc.marriage = { spouse: targetUserId, anniversaryDate: safeAnn, marriedAt: now };
 
     await Promise.all([targetDoc.save(), proposerDoc.save()]);
+
+    // Incrementar contador con $inc (atómico, no depende de change tracking)
+    await Promise.all([
+        User.updateOne(
+            { guildID: GLOBAL_SCOPE_GUILD_ID, userID: targetUserId },
+            { $inc: { 'socialProgress.marriagesCount': 1 }, $set: { 'socialProgress.lastMarriageAt': now } }
+        ),
+        User.updateOne(
+            { guildID: GLOBAL_SCOPE_GUILD_ID, userID: finalProposerId },
+            { $inc: { 'socialProgress.marriagesCount': 1 }, $set: { 'socialProgress.lastMarriageAt': now } }
+        ),
+    ]);
+
     return { ok: true, proposerId: finalProposerId };
 }
 
 async function declineProposal({ guildId, targetUserId, proposerId }) {
-    const targetDoc = await User.findOne({ guildID: guildId, userID: targetUserId });
+    const targetDoc = await getUserDoc(guildId, targetUserId);
     if (!targetDoc?.marriageProposal?.from) return { ok: false, message: 'No tienes propuestas pendientes.' };
 
     if (proposerId && targetDoc.marriageProposal.from !== proposerId) {
@@ -115,17 +142,52 @@ async function declineProposal({ guildId, targetUserId, proposerId }) {
 }
 
 async function divorce({ guildId, userId }) {
-    const userDoc = await User.findOne({ guildID: guildId, userID: userId });
+    const userDoc = await getUserDoc(guildId, userId);
     if (!userDoc?.marriage?.spouse) return { ok: false, message: 'No estas casado/a.' };
 
     const spouseId = userDoc.marriage.spouse;
-    const spouseDoc = await User.findOne({ guildID: guildId, userID: spouseId });
+    const spouseDoc = await getUserDoc(guildId, spouseId);
 
     userDoc.marriage = { spouse: null, anniversaryDate: null, marriedAt: null };
     if (spouseDoc) spouseDoc.marriage = { spouse: null, anniversaryDate: null, marriedAt: null };
 
     await Promise.all([userDoc.save(), spouseDoc ? spouseDoc.save() : Promise.resolve()]);
     return { ok: true, spouseId };
+}
+
+async function changeAnniversary({ guildId, userId, newDate }) {
+    const userDoc = await getUserDoc(guildId, userId);
+    if (!userDoc?.marriage?.spouse) return { ok: false, message: 'No estas casado/a.' };
+
+    const spouseDoc = await getUserDoc(guildId, userDoc.marriage.spouse);
+
+    userDoc.marriage.anniversaryDate = newDate;
+    if (spouseDoc) spouseDoc.marriage.anniversaryDate = newDate;
+
+    await Promise.all([userDoc.save(), spouseDoc ? spouseDoc.save() : Promise.resolve()]);
+
+    // Actualiza hitos sociales para que el cambio de aniversario se refleje en perfil.
+    const now = new Date();
+    await Promise.all([
+        User.updateOne(
+            { guildID: GLOBAL_SCOPE_GUILD_ID, userID: String(userId) },
+            {
+                $inc: { 'socialProgress.anniversariesCelebrated': 1 },
+                $set: { 'socialProgress.lastAnniversaryAt': now },
+            }
+        ),
+        spouseDoc
+            ? User.updateOne(
+                { guildID: GLOBAL_SCOPE_GUILD_ID, userID: String(userDoc.marriage.spouse) },
+                {
+                    $inc: { 'socialProgress.anniversariesCelebrated': 1 },
+                    $set: { 'socialProgress.lastAnniversaryAt': now },
+                }
+            )
+            : Promise.resolve(),
+    ]);
+
+    return { ok: true, spouseId: userDoc.marriage.spouse };
 }
 
 function buildProposalMessage({ proposerId, targetUserId, anniversaryDate }) {
@@ -169,5 +231,6 @@ module.exports = {
     acceptProposal,
     declineProposal,
     divorce,
+    changeAnniversary,
     buildProposalMessage,
 };

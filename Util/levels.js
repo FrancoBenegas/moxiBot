@@ -253,6 +253,9 @@ async function awardXpForMessage(message) {
 
     await userDoc.save().catch(() => null);
 
+    // Nivel global (acumula entre todos los servidores, estilo Nekotina)
+    awardGlobalXp(userId).catch(() => null);
+
     if (levelsDebugEnabled) {
         debugHelper.log('levels', 'xp gain', {
             guildId,
@@ -271,8 +274,40 @@ async function awardXpForMessage(message) {
     }
 }
 
+const GLOBAL_XP_COOLDOWN_SEC = 60;
+const GLOBAL_XP_MIN = 15;
+const GLOBAL_XP_MAX = 40;
+
+async function awardGlobalXp(userId) {
+    const uid = normalizeDiscordId(userId);
+    if (!uid) return;
+
+    const { Economy } = require('../Models/EconomySchema');
+    const now = nowMs();
+
+    const eco = await Economy.findOne({ userId: uid }).catch(() => null);
+    if (!eco) return;
+
+    const lastGain = eco.lastGlobalXpGain ? new Date(eco.lastGlobalXpGain).getTime() : 0;
+    if (lastGain && (now - lastGain) < (GLOBAL_XP_COOLDOWN_SEC * 1000)) return;
+
+    const gained = randomIntInclusive(GLOBAL_XP_MIN, GLOBAL_XP_MAX);
+
+    eco.globalXp = (eco.globalXp || 0) + gained;
+    eco.globalTotalXp = (eco.globalTotalXp || 0) + gained;
+    eco.lastGlobalXpGain = new Date(now);
+
+    while (eco.globalXp >= xpNeededForNextLevel(eco.globalLevel || 1)) {
+        eco.globalXp -= xpNeededForNextLevel(eco.globalLevel || 1);
+        eco.globalLevel = (eco.globalLevel || 1) + 1;
+    }
+
+    await eco.save().catch(() => null);
+}
+
 module.exports = {
     getClvlsConfig,
     awardXpForMessage,
+    awardGlobalXp,
     xpNeededForNextLevel,
 };

@@ -1,5 +1,7 @@
 const { User } = require('../Models');
 
+const GLOBAL_SCOPE_GUILD_ID = 'GLOBAL';
+
 function normalizePhrase(input) {
     const text = String(input || '').trim();
     if (!text) return '';
@@ -20,7 +22,7 @@ function parseBirthdayInput(input) {
     const test = new Date(2004, month - 1, day);
     const valid = test.getFullYear() === 2004 && (test.getMonth() + 1) === month && test.getDate() === day;
     if (!valid) {
-        return { ok: false, message: 'La fecha de cumpleanos no es valida.' };
+        return { ok: false, message: 'La fecha de cumpleaños no es valida.' };
     }
 
     return { ok: true, value: { day, month } };
@@ -46,9 +48,13 @@ function parseProfileNumber(input, label) {
 }
 
 async function ensureUserDoc(guildId, userId, username = '') {
-    let doc = await User.findOne({ guildID: guildId, userID: userId }).catch(() => null);
+    let doc = await User.findOne({ guildID: GLOBAL_SCOPE_GUILD_ID, userID: userId }).catch(() => null);
     if (!doc) {
-        doc = await User.create({ guildID: guildId, userID: userId, username }).catch(() => null);
+        doc = await User.findOne({ userID: userId }).sort({ updatedAt: -1, createdAt: -1 }).catch(() => null);
+        if (doc) doc.guildID = GLOBAL_SCOPE_GUILD_ID;
+    }
+    if (!doc) {
+        doc = await User.create({ guildID: GLOBAL_SCOPE_GUILD_ID, userID: userId, username }).catch(() => null);
     }
     if (!doc) throw new Error('USER_DOC_CREATE_FAILED');
     if (username && doc.username !== username) doc.username = username;
@@ -59,6 +65,12 @@ async function ensureUserDoc(guildId, userId, username = '') {
     doc.profile.birthday = doc.profile.birthday && typeof doc.profile.birthday === 'object'
         ? doc.profile.birthday
         : { day: null, month: null };
+    doc.profile.birthdayConfig = doc.profile.birthdayConfig && typeof doc.profile.birthdayConfig === 'object'
+        ? doc.profile.birthdayConfig
+        : { blockedGuilds: [], lastSetAt: null };
+    if (!Array.isArray(doc.profile.birthdayConfig.blockedGuilds)) {
+        doc.profile.birthdayConfig.blockedGuilds = [];
+    }
     return doc;
 }
 
@@ -78,6 +90,7 @@ async function updateUserProfile(guildId, user, updates = {}) {
                 day: Number(birthday.day) || null,
                 month: Number(birthday.month) || null,
             };
+            doc.profile.birthdayConfig.lastSetAt = new Date();
         }
     }
 
@@ -98,10 +111,23 @@ async function updateUserProfile(guildId, user, updates = {}) {
     return doc;
 }
 
+async function setBirthdayGuildAccess(guildId, user, allow = true) {
+    const doc = await ensureUserDoc(guildId, user.id, user.username);
+    const current = new Set((doc?.profile?.birthdayConfig?.blockedGuilds || []).map((x) => String(x)));
+    if (allow) current.delete(String(guildId));
+    else current.add(String(guildId));
+    doc.profile.birthdayConfig.blockedGuilds = Array.from(current);
+    doc.markModified('profile');
+    await doc.save();
+    return doc;
+}
+
 module.exports = {
     normalizePhrase,
     parseBirthdayInput,
     parseProfileNumber,
     formatBirthday,
+    ensureUserDoc,
+    setBirthdayGuildAccess,
     updateUserProfile,
 };

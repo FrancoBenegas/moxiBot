@@ -10,6 +10,7 @@ const { getActivePet } = require('./petSystem');
 const { formatBirthday } = require('./profileSettings');
 const { getJobDisplayName } = require('./workSystem');
 const { formatDateTag } = require('./marriageCore');
+const { RELATIONSHIP_TYPES } = require('./relationshipCore');
 
 function formatInt(value) {
     const num = Number(value);
@@ -97,16 +98,33 @@ function formatMarriageCompact(userDoc) {
     return `<@${spouseId}>`;
 }
 
+function formatRelationshipsCompact(userDoc) {
+    const rels = Array.isArray(userDoc?.relationships) ? userDoc.relationships : [];
+    if (!rels.length) return 'Sin relaciones';
+
+    return rels
+        .map((r) => {
+            const info = RELATIONSHIP_TYPES[r?.type] || { emoji: '💛', label: r?.type || 'relación' };
+            return `${info.emoji} <@${r.userId}>`;
+        })
+        .join(', ');
+}
+
 function buildMarriageValue(userDoc) {
     const spouseId = userDoc?.marriage?.spouse ? String(userDoc.marriage.spouse) : '';
-    if (!spouseId) {
-        return '💞 Solter@';
-    }
+    const marriageLine = spouseId
+        ? `💍 <@${spouseId}>\n💒 ${formatDateTag(userDoc?.marriage?.anniversaryDate)}`
+        : '💍 Solter@';
 
-    return (
-        `💞 <@${spouseId}>\n` +
-        `💒 ${formatDateTag(userDoc?.marriage?.anniversaryDate)}`
-    );
+    const rels = Array.isArray(userDoc?.relationships) ? userDoc.relationships : [];
+    const relLines = rels.length
+        ? rels.map((r) => {
+            const info = RELATIONSHIP_TYPES[r?.type] || { emoji: '💛', label: r?.type || 'relación' };
+            return `${info.emoji} ${info.label}: <@${r.userId}>`;
+        })
+        : ['💛 Sin relaciones'];
+
+    return [marriageLine, ...relLines].join('\n');
 }
 
 function buildNekosText(eco) {
@@ -117,6 +135,44 @@ function buildNekosText(eco) {
         .slice(-3)
         .map((pet) => `🐾 ${String(pet?.name || 'Neko').trim()}`)
         .join('\n');
+}
+
+function countCelebratedAnniversaries(anniversaryDateLike, now = new Date()) {
+    if (!anniversaryDateLike) return 0;
+    const ann = anniversaryDateLike instanceof Date ? anniversaryDateLike : new Date(anniversaryDateLike);
+    if (Number.isNaN(ann.getTime())) return 0;
+
+    let years = now.getFullYear() - ann.getFullYear();
+    if (years <= 0) return 0;
+
+    const anniversaryThisYear = new Date(ann);
+    anniversaryThisYear.setFullYear(now.getFullYear());
+    if (anniversaryThisYear > now) years -= 1;
+
+    return Math.max(0, years);
+}
+
+function buildSocialMilestones(userDoc) {
+    const social = userDoc?.socialProgress || {};
+    const compatChecks = Math.max(0, Number(social.compatChecks || 0));
+    const relCreated = Math.max(0, Number(social.relationshipsCreated || 0));
+    // Fallback: si está casado pero el contador aún es 0 (matrimonio previo al fix), mostrar al menos 1
+    const rawMarriages = Math.max(0, Number(social.marriagesCount || 0));
+    const marriagesCount = rawMarriages === 0 && userDoc?.marriage?.spouse ? 1 : rawMarriages;
+    const rawAnnCount = Math.max(0, Number(social.anniversariesCelebrated || 0));
+    const calculatedAnnCount = countCelebratedAnniversaries(userDoc?.marriage?.anniversaryDate);
+    const annCount = Math.max(rawAnnCount, calculatedAnnCount);
+    const firstRel = social.firstRelationshipAt ? timestampTag(social.firstRelationshipAt, 'D') : '-';
+    const lastCompat = social.lastCompatibilityAt ? timestampTag(social.lastCompatibilityAt, 'R') : '-';
+
+    return (
+        `🧪 Compat checks: ${formatInt(compatChecks)}\n` +
+        `🤝 Relaciones creadas: ${formatInt(relCreated)}\n` +
+        `💍 Matrimonios: ${formatInt(marriagesCount)}\n` +
+        `🎉 Aniversarios celebrados: ${formatInt(annCount)}\n` +
+        `📌 Primera relacion social: ${firstRel}\n` +
+        `🕒 Ultimo compat: ${lastCompat}`
+    );
 }
 
 const PROFILE_PAGES = Object.freeze([
@@ -165,23 +221,29 @@ async function buildProfileMessage({ guild, guildId, lang = 'es-ES', targetUser,
     if (!targetUser?.id) throw new Error('TARGET_USER_REQUIRED');
 
     const member = await resolveTargetMember(guild, targetUser, targetMember);
-    const [stats, levelInfo, userDoc, eco] = await Promise.all([
+    const userDocPromise = (async () => {
+        const globalDoc = await User.findOne({ guildID: 'GLOBAL', userID: targetUser.id }).lean().catch(() => null);
+        if (globalDoc) return globalDoc;
+        return User.findOne({ userID: targetUser.id }).sort({ updatedAt: -1, createdAt: -1 }).lean().catch(() => null);
+    })();
+    const [stats, levelInfo, guildUserDoc, userDoc, eco] = await Promise.all([
         LevelSystem.getUserStats(guildId, targetUser.id).catch(() => null),
         LevelSystem.getUserLevelInfo(guildId, targetUser.id).catch(() => null),
         User.findOne({ guildID: guildId, userID: targetUser.id }).lean().catch(() => null),
+        userDocPromise,
         getOrCreateEconomyRaw(targetUser.id).catch(() => null),
     ]);
 
-    const level = Math.max(1, Number(stats?.level ?? levelInfo?.level ?? userDoc?.level ?? 1) || 1);
-    const prestige = Math.max(0, Number(stats?.prestige ?? levelInfo?.prestige ?? userDoc?.prestige ?? 0) || 0);
-    const rank = Math.max(0, Number(stats?.rank ?? userDoc?.rank ?? 0) || 0);
-    const currentXp = Math.max(0, Number(levelInfo?.currentXp ?? userDoc?.xp ?? 0) || 0);
+    const level = Math.max(1, Number(stats?.level ?? levelInfo?.level ?? guildUserDoc?.level ?? 1) || 1);
+    const prestige = Math.max(0, Number(stats?.prestige ?? levelInfo?.prestige ?? guildUserDoc?.prestige ?? 0) || 0);
+    const rank = Math.max(0, Number(stats?.rank ?? guildUserDoc?.rank ?? 0) || 0);
+    const currentXp = Math.max(0, Number(levelInfo?.currentXp ?? guildUserDoc?.xp ?? 0) || 0);
     const requiredXp = xpNeededForNextLevel(level);
-    const totalXp = Math.max(0, Number(stats?.totalXp ?? userDoc?.totalXp ?? 0) || 0);
-    const messages = Math.max(0, Number(stats?.messages ?? userDoc?.stats?.messagesCount ?? 0) || 0);
-    const reactions = Math.max(0, Number(stats?.reactions ?? userDoc?.stats?.reactionsReceived ?? 0) || 0);
-    const streak = Math.max(0, Number(stats?.streak ?? userDoc?.streak ?? 0) || 0);
-    const maxStreak = Math.max(0, Number(stats?.maxStreak ?? userDoc?.maxStreak ?? 0) || 0);
+    const totalXp = Math.max(0, Number(stats?.totalXp ?? guildUserDoc?.totalXp ?? 0) || 0);
+    const messages = Math.max(0, Number(stats?.messages ?? guildUserDoc?.stats?.messagesCount ?? 0) || 0);
+    const reactions = Math.max(0, Number(stats?.reactions ?? guildUserDoc?.stats?.reactionsReceived ?? 0) || 0);
+    const streak = Math.max(0, Number(stats?.streak ?? guildUserDoc?.streak ?? 0) || 0);
+    const maxStreak = Math.max(0, Number(stats?.maxStreak ?? guildUserDoc?.maxStreak ?? 0) || 0);
     const badgeCount = Array.isArray(userDoc?.badges) ? userDoc.badges.length : Math.max(0, Number(stats?.badges ?? 0) || 0);
 
     const balance = Math.max(0, Number(eco?.balance ?? 0) || 0);
@@ -211,6 +273,9 @@ async function buildProfileMessage({ guild, guildId, lang = 'es-ES', targetUser,
     const pats = Math.max(0, Number(userDoc?.profile?.stats?.pats ?? 0) || 0);
     const charisma = Math.max(0, Number(userDoc?.profile?.stats?.charisma ?? 0) || 0);
     const deaths = Math.max(0, Number(userDoc?.profile?.stats?.deaths ?? 0) || 0);
+    const globalLevel = Math.max(1, Number(eco?.globalLevel ?? 1) || 1);
+    const globalXp = Math.max(0, Number(eco?.globalXp ?? 0) || 0);
+    const globalXpRequired = xpNeededForNextLevel(globalLevel);
     const registeredDate = member?.joinedAt ? formatShortDate(member.joinedAt) : formatShortDate(targetUser.createdAt);
     const rankingText = rank > 0 ? formatInt(rank) : 'Sin clasificar';
     const leagueText = prestige > 0 ? `Prestigio ${formatInt(prestige)}` : 'Sin clasificar';
@@ -238,7 +303,8 @@ async function buildProfileMessage({ guild, guildId, lang = 'es-ES', targetUser,
 
     if (selectedPage === 'overview') {
         embed.setDescription(
-            `⭐ **Nivel:** ${formatInt(level)} (${formatInt(currentXp)}/${formatInt(requiredXp)} XP)\n` +
+            `⭐ **Nivel srv:** ${formatInt(level)} (${formatInt(currentXp)}/${formatInt(requiredXp)} XP)\n` +
+            `🌐 **Nivel global:** ${formatInt(globalLevel)} (${formatInt(globalXp)}/${formatInt(globalXpRequired)} XP)\n` +
             `👑 **Rank:** ${rankingText}\n` +
             `🧾 **Nekodex:** ${nekodexCount}\n` +
             `💼 **Profesion:** ${jobName || 'Sin trabajo'}\n` +
@@ -269,7 +335,7 @@ async function buildProfileMessage({ guild, guildId, lang = 'es-ES', targetUser,
                 inline: true,
             },
             {
-                name: 'Cumpleanos',
+                name: 'Cumpleaños',
                 value: `🎂 ${birthdayText}`,
                 inline: true,
             },
@@ -281,6 +347,11 @@ async function buildProfileMessage({ guild, guildId, lang = 'es-ES', targetUser,
             {
                 name: 'Matrimonio',
                 value: buildMarriageValue(userDoc),
+                inline: false,
+            },
+            {
+                name: 'Hitos sociales',
+                value: buildSocialMilestones(userDoc),
                 inline: false,
             }
         );
@@ -337,7 +408,7 @@ async function buildProfileMessage({ guild, guildId, lang = 'es-ES', targetUser,
         embed.addFields(
             { name: 'Actividad', value: `💬 ${formatInt(messages)} mensajes\n✨ ${formatInt(reactions)} reacciones\n🔥 Max racha ${formatInt(maxStreak)}`, inline: true },
             { name: 'Progreso', value: `⭐ Nivel ${formatInt(level)}\n📈 ${buildProgressBar(currentXp, requiredXp)}\n👑 Rank ${rankingText}`, inline: true },
-            { name: 'Perfil', value: `🐱 Clubes: ${formatInt(clubCount)}\n💞 Matrimonio: ${formatMarriageCompact(userDoc)}\n🎂 Cumpleanos: ${birthdayText}`, inline: false },
+            { name: 'Perfil', value: `🐱 Clubes: ${formatInt(clubCount)}\n💞 Matrimonio: ${formatMarriageCompact(userDoc)}\n💛 Relaciones: ${formatRelationshipsCompact(userDoc)}\n🎂 Cumpleaños: ${birthdayText}`, inline: false },
         );
     }
 
