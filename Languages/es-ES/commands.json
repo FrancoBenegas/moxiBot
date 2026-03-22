@@ -8,6 +8,7 @@
     "CATEGORY_MUSICA": "Música",
     "CATEGORY_FUN": "Diversión",
     "CATEGORY_GAMES": "Juegos",
+    "CATEGORY_GENSHIN": "Genshin",
     "CATEGORY_MARRIAGE": "Matrimonio",
     "CATEGORY_SISTEMAS": "Sistemas",
     "CATEGORY_UTILIDAD": "Utilidad",
@@ -130,4 +131,5 @@
     "CMD_DICE_DESC": "Tira un dado (puedes elegir lados).",
     "CMD_8BALL_DESC": "Hazle una pregunta a la Bola 8 mágica.",
     "CMD_SHIP_DESC": "Calcula la compatibilidad entre dos personas."
+    ,"CMD_BIRTHDAY_DESC": "Módulo de cumpleaños del perfil."
 }

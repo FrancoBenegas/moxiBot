@@ -267,9 +267,9 @@
   "HELP_SLASH_COMMANDS": "Comandos de barra (slash)",
   "HELP_SELECT_PLACEHOLDER": "Selecciona una categoría",
   "HELP_NO_COMMANDS": "No hay comandos en esta categoría.",
-  "HELP_DESCRIPTION_TEXT": "Usa `{{prefix}}help <command>` para ver detalles sobre un comando específico.\n\n**Categoría: {{category}}**",
+  "HELP_DESCRIPTION_TEXT": "Usa `{{prefix}}help comando` para ver detalles sobre un comando específico.\n\n**Categoría: {{category}}**",
   "HELP_FOOTER": "Página {{current}}/{{total}} • Usa los botones para navegar",
-  "HELP_HOME_DESCRIPTION": "¡Bienvenido al menú de ayuda! Usa `{{prefix}}help <command>` para ver detalles.\n\nUsa los botones de abajo para navegar por las categorías de comandos.",
+  "HELP_HOME_DESCRIPTION": "¡Bienvenido al menú de ayuda! Usa `{{prefix}}help comando` para ver detalles.\n\nUsa los botones de abajo para navegar por las categorías de comandos.",
   "HELP_HOME_FOOTER": "Haz clic en un botón para ver los comandos de esa categoría",
   "HELP_INFO": "```diff\n- Se usó un argumento no válido\n+ Lee abajo y vuelve a intentarlo\n\nUso: {{USAGE}}```",
   "HELP_INSTRUCTIONS": "Pulsa el botón **?** para obtener ayuda sobre el comando.",
@@ -608,5 +608,7 @@
   "INVITE_OK_CHANNEL": "INVITE_OK_CHANNEL",
   "INVITE_OK_LINK": "INVITE_OK_LINK",
   "INVITE_OK_STATUS": "INVITE_OK_STATUS",
-  "INVITE_OK_REQUESTED_BY": "INVITE_OK_REQUESTED_BY"
+  "INVITE_OK_REQUESTED_BY": "INVITE_OK_REQUESTED_BY",
+  "HELP_CATEGORY_GENSHIN": "HELP_CATEGORY_GENSHIN",
+  "HELP_CATEGORY_GENSHIN_DESC": "HELP_CATEGORY_GENSHIN_DESC"
 }

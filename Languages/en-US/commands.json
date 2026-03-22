@@ -8,6 +8,7 @@
     "CATEGORY_MUSICA": "Music",
     "CATEGORY_FUN": "Fun",
     "CATEGORY_GAMES": "Games",
+    "CATEGORY_GENSHIN": "Genshin",
     "CATEGORY_MARRIAGE": "Marriage",
     "CATEGORY_SISTEMAS": "Systems",
     "CATEGORY_TAROT": "Tarot",
@@ -129,4 +130,5 @@
     "CMD_DICE_DESC": "Roll a dice (optionally choose sides).",
     "CMD_8BALL_DESC": "Ask the Magic 8-Ball a question.",
     "CMD_SHIP_DESC": "Calculates compatibility between two people."
+    ,"CMD_BIRTHDAY_DESC": "Profile birthday module."
 }
