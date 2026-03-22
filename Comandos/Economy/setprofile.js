@@ -6,8 +6,8 @@ module.exports = {
     name: 'setprofile',
     alias: ['perfilset', 'editprofile'],
     Category: economyCategory,
-    usage: 'setprofile frase <texto> | setprofile cumpleanos <DD/MM|off> | setprofile pats|carisma|muertes <numero>',
-    description: 'Edita tu frase, cumpleanos y stats sociales del perfil',
+    usage: 'setprofile frase <texto> | setprofile cumpleaños <DD/MM|off> | setprofile pats|carisma|muertes <numero>',
+    description: 'Edita tu frase, cumpleaños y stats sociales del perfil',
     cooldown: 3,
     command: {
         prefix: true,
@@ -20,9 +20,9 @@ module.exports = {
         const field = String(args?.[0] || '').trim().toLowerCase();
         const value = args?.slice(1).join(' ').trim() || '';
 
-        if (!field || !['frase', 'phrase', 'cumpleanos', 'birthday', 'pats', 'carisma', 'charisma', 'muertes', 'deaths'].includes(field)) {
+        if (!field || !['frase', 'phrase', 'cumpleaños', 'birthday', 'pats', 'carisma', 'charisma', 'muertes', 'deaths'].includes(field)) {
             return message.reply({
-                content: 'Usa: setprofile frase <texto> | setprofile cumpleanos <DD/MM|off> | setprofile pats|carisma|muertes <numero>',
+                content: 'Usa: setprofile frase <texto> | setprofile cumpleaños <DD/MM|off> | setprofile pats|carisma|muertes <numero>',
                 allowedMentions: { repliedUser: false },
             });
         }
@@ -69,7 +69,7 @@ module.exports = {
 
         if (value.toLowerCase() === 'off' || value.toLowerCase() === 'reset') {
             await updateUserProfile(guildId, message.author, { birthday: null });
-            return message.reply({ content: 'Tu cumpleanos fue eliminado del perfil.', allowedMentions: { repliedUser: false } });
+            return message.reply({ content: 'Tu cumpleaños fue eliminado del perfil.', allowedMentions: { repliedUser: false } });
         }
 
         const parsed = parseBirthdayInput(value);
@@ -78,6 +78,6 @@ module.exports = {
         }
 
         await updateUserProfile(guildId, message.author, { birthday: parsed.value });
-        return message.reply({ content: `Tu cumpleanos del perfil ahora es ${value.replace('/', '-')}.`, allowedMentions: { repliedUser: false } });
+        return message.reply({ content: `Tu cumpleaños del perfil ahora es ${value.replace('/', '-')}.`, allowedMentions: { repliedUser: false } });
     },
 };
