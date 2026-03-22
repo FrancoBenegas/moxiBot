@@ -74,6 +74,12 @@ const EconomySchema = new mongoose.Schema({
     lastCarnival: { type: Date },
     lastXmas: { type: Date },
 
+    // --- Nivel global (igual en todos los servidores, estilo Nekotina) ---
+    globalLevel: { type: Number, default: 1 },
+    globalXp: { type: Number, default: 0 },
+    globalTotalXp: { type: Number, default: 0 },
+    lastGlobalXpGain: { type: Date, default: null },
+
     redeemedCodes: { type: [String], default: () => ([]) },
 });
 

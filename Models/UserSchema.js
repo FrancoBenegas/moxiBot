@@ -135,6 +135,38 @@ const UserSchema = new Schema(
                     type: Number,
                     default: null
                 }
+            },
+            birthdayConfig: {
+                blockedGuilds: {
+                    type: [String],
+                    default: []
+                },
+                lastSetAt: {
+                    type: Date,
+                    default: null
+                }
+            },
+            genshin: {
+                uid: {
+                    type: String,
+                    default: null
+                },
+                region: {
+                    type: String,
+                    default: null
+                },
+                linkedAt: {
+                    type: Date,
+                    default: null
+                },
+                manualRoster: {
+                    type: [String],
+                    default: []
+                },
+                manualRosterUpdatedAt: {
+                    type: Date,
+                    default: null
+                }
             }
         },
 
@@ -165,6 +197,56 @@ const UserSchema = new Schema(
                 default: null
             },
             createdAt: {
+                type: Date,
+                default: null
+            }
+        },
+
+        // Extra Relationships (amigo, hermano, crush, rival, etc.)
+        relationships: {
+            type: [{
+                userId: { type: String },
+                type: { type: String, default: 'amigo' },
+                since: { type: Date, default: Date.now }
+            }],
+            default: []
+        },
+
+        // Social progression (Fase 1)
+        socialProgress: {
+            compatChecks: {
+                type: Number,
+                default: 0
+            },
+            relationshipsCreated: {
+                type: Number,
+                default: 0
+            },
+            marriagesCount: {
+                type: Number,
+                default: 0
+            },
+            anniversariesCelebrated: {
+                type: Number,
+                default: 0
+            },
+            firstRelationshipAt: {
+                type: Date,
+                default: null
+            },
+            lastRelationshipAt: {
+                type: Date,
+                default: null
+            },
+            lastCompatibilityAt: {
+                type: Date,
+                default: null
+            },
+            lastMarriageAt: {
+                type: Date,
+                default: null
+            },
+            lastAnniversaryAt: {
                 type: Date,
                 default: null
             }
