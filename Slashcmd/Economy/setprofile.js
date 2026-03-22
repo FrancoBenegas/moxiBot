@@ -19,8 +19,8 @@ module.exports = {
         )
         .addStringOption((opt) =>
             opt
-                .setName('cumpleanos')
-                .setDescription('Cumpleanos DD/MM o off')
+                .setName('cumpleaños')
+                .setDescription('Cumpleaños DD/MM o off')
                 .setRequired(false)
         )
         .addIntegerOption((opt) =>
@@ -45,13 +45,13 @@ module.exports = {
     async run(Moxi, interaction) {
         const guildId = interaction.guildId || interaction.guild?.id;
         const phrase = interaction.options.getString('frase');
-        const birthdayRaw = interaction.options.getString('cumpleanos');
+        const birthdayRaw = interaction.options.getString('cumpleaños');
         const pats = interaction.options.getInteger('pats');
         const charisma = interaction.options.getInteger('carisma');
         const deaths = interaction.options.getInteger('muertes');
 
         if (phrase == null && birthdayRaw == null && pats == null && charisma == null && deaths == null) {
-            return interaction.reply({ content: 'Pon una frase, un cumpleanos o algun stat editable.', ephemeral: true });
+            return interaction.reply({ content: 'Pon una frase, un cumpleaños o algun stat editable.', ephemeral: true });
         }
 
         const updates = {};
@@ -97,7 +97,7 @@ module.exports = {
             const value = birthday?.day && birthday?.month
                 ? `${String(birthday.day).padStart(2, '0')}-${String(birthday.month).padStart(2, '0')}`
                 : 'No configurado';
-            lines.push(`Cumpleanos: ${value}`);
+            lines.push(`Cumpleaños: ${value}`);
         }
         if (pats != null) lines.push(`Pats: ${doc.profile?.stats?.pats ?? 0}`);
         if (charisma != null) lines.push(`Carisma: ${doc.profile?.stats?.charisma ?? 0}`);
