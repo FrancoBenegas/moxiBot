@@ -1,6 +1,7 @@
 # Códigos de Mercado de Spotify (SPOTIFY_MARKET)
 
 ## Uso en .env
+
 ```
 SPOTIFY_MARKET=KR
 ```
@@ -8,11 +9,13 @@ SPOTIFY_MARKET=KR
 ## Lista Completa por Región
 
 ### América del Norte
+
 - US (Estados Unidos)
 - CA (Canadá)
 - MX (México)
 
 ### América Central
+
 - CR (Costa Rica)
 - SV (El Salvador)
 - GT (Guatemala)
@@ -21,6 +24,7 @@ SPOTIFY_MARKET=KR
 - PA (Panamá)
 
 ### América del Sur
+
 - AR (Argentina)
 - BR (Brasil)
 - CL (Chile)
@@ -34,6 +38,7 @@ SPOTIFY_MARKET=KR
 - VE (Venezuela)
 
 ### Europa Occidental
+
 - AT (Austria)
 - BE (Bélgica)
 - FR (Francia)
@@ -48,6 +53,7 @@ SPOTIFY_MARKET=KR
 - GB (Reino Unido)
 
 ### Europa Central y Oriental
+
 - BG (Bulgaria)
 - HR (Croacia)
 - CZ (República Checa)
@@ -68,16 +74,20 @@ SPOTIFY_MARKET=KR
 - UA (Ucrania)
 
 ### Nórdica
+
 - IS (Islandia)
 - NO (Noruega)
 
 ### Liechtenstein
+
 - LI (Liechtenstein)
 
 ### Chipre
+
 - CY (Chipre)
 
 ### Oriente Medio
+
 - BH (Bahréin)
 - IL (Israel)
 - JO (Jordania)
@@ -89,16 +99,19 @@ SPOTIFY_MARKET=KR
 - AE (Emiratos Árabes Unidos)
 
 ### Asia Central
+
 - AZ (Azerbaiyán)
 - KZ (Kazajistán)
 
 ### Asia del Sur
+
 - BD (Bangladés)
 - IN (India)
 - PK (Pakistán)
 - LK (Sri Lanka)
 
 ### Asia del Sudeste
+
 - BN (Brunei)
 - KH (Camboya)
 - ID (Indonesia)
@@ -111,6 +124,7 @@ SPOTIFY_MARKET=KR
 - VN (Vietnam)
 
 ### Asia Oriental
+
 - CN (China)
 - HK (Hong Kong)
 - JP (Japón)
@@ -119,11 +133,13 @@ SPOTIFY_MARKET=KR
 - TW (Taiwan)
 
 ### Oceanía
+
 - AU (Australia)
 - FJ (Fiyi)
 - NZ (Nueva Zelanda)
 
 ### África
+
 - EG (Egipto)
 - GH (Ghana)
 - KE (Kenia)
@@ -151,6 +167,7 @@ US CA MX CR SV GT HN NI PA AR BR CL CO CU DO EC PE PY UY VE AT BE FR DE IE IT LU
 ---
 
 ## Nota
+
 Si una canción no está disponible en tu mercado seleccionado, cambia a otro mercado o usa YouTube:
 ```
 ytsearch:nombre de la canción
