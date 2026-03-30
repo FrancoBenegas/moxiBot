@@ -2,7 +2,6 @@ const {
     PermissionsBitField: { Flags },
     ContainerBuilder,
     MessageFlags,
-    AttachmentBuilder,
     MediaGalleryBuilder,
     MediaGalleryItemBuilder,
 } = require('discord.js');
@@ -12,6 +11,24 @@ const debugHelper = require('../../Util/debugHelper');
 const moxi = require('../../i18n');
 
 const LEVELUP_FILE = 'levelup-preview.png';
+
+function toAttachmentPayload(data, name) {
+    if (!data) return null;
+
+    if (Buffer.isBuffer(data)) {
+        return { attachment: data, name };
+    }
+
+    if (data instanceof Uint8Array) {
+        return { attachment: Buffer.from(data), name };
+    }
+
+    if (typeof data === 'string' && data.trim()) {
+        return { attachment: data, name };
+    }
+
+    return null;
+}
 
 function toHexColor(color, fallback = '#ffb6e6') {
     if (typeof color === 'number' && Number.isFinite(color)) {
@@ -134,20 +151,21 @@ module.exports = {
             const user = message.author;
             const levelUpPreview = await renderLevelUpPreview({ client: Moxi, user, newLevel: 10 });
 
-            const files = [];
-            if (levelUpPreview) {
-                files.push(new AttachmentBuilder(levelUpPreview, { name: LEVELUP_FILE }));
-            }
+            const previewFile = toAttachmentPayload(levelUpPreview, LEVELUP_FILE);
+            const container = buildPanel({ hasLevelUp: !!previewFile });
 
-            const container = buildPanel({ hasLevelUp: !!levelUpPreview });
-
-            await message.reply({
+            const replyPayload = {
                 content: '',
                 components: [container],
-                files,
                 flags: MessageFlags.IsComponentsV2,
                 allowedMentions: { repliedUser: false }
-            });
+            };
+
+            if (previewFile) {
+                replyPayload.files = [previewFile];
+            }
+
+            await message.reply(replyPayload);
         } catch (error) {
             debugHelper.error('levelsetup', 'execute error', { guildId: message.guildId, error });
             console.error('[LevelSetup Command] Error:', error);
@@ -167,19 +185,20 @@ module.exports = {
             const user = interaction.user;
             const levelUpPreview = await renderLevelUpPreview({ client, user, newLevel: 10 });
 
-            const files = [];
-            if (levelUpPreview) {
-                files.push(new AttachmentBuilder(levelUpPreview, { name: LEVELUP_FILE }));
-            }
+            const previewFile = toAttachmentPayload(levelUpPreview, LEVELUP_FILE);
+            const container = buildPanel({ hasLevelUp: !!previewFile });
 
-            const container = buildPanel({ hasLevelUp: !!levelUpPreview });
-
-            await interaction.editReply({
+            const replyPayload = {
                 content: '',
                 components: [container],
-                files,
                 flags: MessageFlags.IsComponentsV2
-            });
+            };
+
+            if (previewFile) {
+                replyPayload.files = [previewFile];
+            }
+
+            await interaction.editReply(replyPayload);
         } catch (error) {
             debugHelper.error('levelsetup', 'interaction error', { guildId: interaction.guildId, error });
             console.error('[LevelSetup Command] Interaction error:', error);
