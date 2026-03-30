@@ -666,11 +666,20 @@ async function handleBugThreadStatus(message) {
 
 async function handleAfkCleanup(message) {
   if (!message || !message.author) return;
-  const wasAfk = await afkStorage.clearAfk(message.author.id, { botId: Moxi?.user?.id });
-  if (!wasAfk) return;
+  const cleared = await afkStorage.clearAfkForContext(
+    message.author.id,
+    message.guild?.id,
+    { botId: Moxi?.user?.id }
+  );
+  if (!cleared?.latestEntry) return;
+  const lang = message.lang || (process.env.DEFAULT_LANG || 'es-ES');
+  const entry = cleared.latestEntry;
   const container = buildAfkContainer({
     title: message.translate('AFK_CLEARED_TITLE'),
-    lines: [message.translate('AFK_CLEARED_DETAIL', { user: message.author.tag })],
+    lines: [
+      message.translate('AFK_CLEARED_DETAIL', { user: message.author.tag }),
+      message.translate('AFK_DURATION', { duration: formatAfkDuration(entry.createdAt, lang) }),
+    ],
     gifUrl: await resolveAfkGif(AFK_CLEARED_GIF_URL),
   });
   const response = await message.reply({
@@ -698,15 +707,14 @@ async function handleAfkMentions(message) {
   const lines = [];
   for (let index = 0; index < limit; index += 1) {
     const { user, entry } = entries[index];
-    if (entry.scope === 'guild') {
-      lines.push(`${EMOJIS.person} ${user.toString()} · ${user.tag}`);
-      lines.push(message.translate('AFK_SCOPE_GUILD'));
-      lines.push(message.translate('AFK_MESSAGE_LINE', { message: entry.message || message.translate('AFK_DEFAULT_MESSAGE') }));
-      lines.push(message.translate('AFK_DURATION', { duration: formatAfkDuration(entry.createdAt, lang) }));
-      lines.push(message.translate('AFK_SINCE', { since: formatAfkTimestamp(entry.createdAt, lang) }));
-      if (index < limit - 1) {
-        lines.push('');
-      }
+    const scopeKey = entry.scope === 'global' ? 'AFK_SCOPE_GLOBAL' : 'AFK_SCOPE_GUILD';
+    lines.push(`${EMOJIS.person} ${user.toString()} · ${user.tag}`);
+    lines.push(message.translate(scopeKey));
+    lines.push(message.translate('AFK_MESSAGE_LINE', { message: entry.message || message.translate('AFK_DEFAULT_MESSAGE') }));
+    lines.push(message.translate('AFK_DURATION', { duration: formatAfkDuration(entry.createdAt, lang) }));
+    lines.push(message.translate('AFK_SINCE', { since: formatAfkTimestamp(entry.createdAt, lang) }));
+    if (index < limit - 1) {
+      lines.push('');
     }
   }
   const container = buildAfkContainer({

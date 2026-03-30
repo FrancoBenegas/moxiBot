@@ -1,13 +1,92 @@
 diff --git a/node_modules/poru/dist/src/Player/Connection.js b/node_modules/poru/dist/src/Player/Connection.js
-index 93b3a65..448d688 100644
+index 93b3a65..90a34e8 100644
 --- a/node_modules/poru/dist/src/Player/Connection.js
 +++ b/node_modules/poru/dist/src/Player/Connection.js
-@@ -39,16 +39,39 @@ class Connection {
+@@ -16,6 +16,7 @@ class Connection {
+     sessionId;
+     region;
+     voice;
++    voiceRawEndpoint;
+     self_mute;
+     self_deaf;
+     /**
+@@ -31,24 +32,104 @@ class Connection {
+             token: null,
+             endpoint: null,
+         };
++        this.voiceRawEndpoint = null;
+         this.self_mute = false;
+         this.self_deaf = false;
+     }
++    isVoiceUpdateError(res) {
++        return Boolean(typeof res === "object" && res && "status" in res && "error" in res);
++    }
++    buildEndpointCandidates() {
++        const raw = String(this.voiceRawEndpoint || this.voice.endpoint || "").trim();
++        const noProto = raw.replace(/^wss?:\/\//i, "");
++        const noPort = noProto.replace(/:\d+$/, "");
++        return [...new Set([
++            String(this.voice.endpoint || "").trim(),
++            noPort,
++            noProto,
++            raw,
++        ].filter(Boolean))];
++    }
++    async updateVoiceWithFallback(reason) {
++        const debugVoice = (process.env.PORU_DEBUG === "1" || process.env.DEBUG === "1");
++        const endpoints = this.buildEndpointCandidates();
++        const sessionId = this.voice.sessionId || null;
++        const token = this.voice.token || null;
++
++        if (!sessionId || !token || endpoints.length === 0) {
++            debugVoice && this.player.poru.emit(
++                "debug",
++                this.player.node.name,
++                `[Voice] -> [Lavalink] skip updatePlayer(voice) (${reason}) | guild=${this.player.guildId} hasSession=${Boolean(sessionId)} hasToken=${Boolean(token)} endpoints=${endpoints.length}`
++            );
++            return false;
++        }
++
++        for (const endpoint of endpoints) {
++            const voicePayload = { sessionId, token, endpoint };
++            const res = await this.player.node.rest.updatePlayer({
++                guildId: this.player.guildId,
++                data: { voice: voicePayload },
++            });
++
++            if (this.isVoiceUpdateError(res) || !res) {
++                if (debugVoice) {
++                    const status = res?.status ?? "null";
++                    const error = res?.error ?? "unknown";
++                    const message = res?.message ?? "";
++                    this.player.poru.emit(
++                        "debug",
++                        this.player.node.name,
++                        `[Voice] -> [Lavalink] updatePlayer(voice) failed (${reason}) endpoint=${endpoint} status=${status} error=${error} ${message}`
++                    );
++                }
++                continue;
++            }
++
++            this.voice.endpoint = endpoint;
++            debugVoice && this.player.poru.emit(
++                "debug",
++                this.player.node.name,
++                `[Voice] -> [Lavalink] updatePlayer(voice) ok (${reason}) endpoint=${endpoint} | guild=${this.player.guildId}`
++            );
++            return true;
++        }
++
++        return false;
++    }
+     /**
+      * Set the voice server update
       * @param data The data from the voice server update
       */
      async setServersUpdate(data) {
 -        if (!data.endpoint)
 -            throw new Error("[Poru Error] No Session id found.");
+-        this.voice.endpoint = data.endpoint;
 +        if (!data.endpoint) {
 +            this.player.poru.emit(
 +                "debug",
@@ -16,63 +95,49 @@ index 93b3a65..448d688 100644
 +            );
 +            return;
 +        }
-         this.voice.endpoint = data.endpoint;
++        const rawEndpoint = String(data.endpoint || "").trim();
++        const normalizedEndpoint = rawEndpoint
++            .replace(/^wss?:\/\//i, "")
++            .replace(/:\d+$/, "");
++        this.voiceRawEndpoint = rawEndpoint;
++        this.voice.endpoint = normalizedEndpoint;
          this.voice.token = data.token;
-         this.region = data.endpoint.split(".").shift()?.replace(/[0-9]/g, "") || null;
+-        this.region = data.endpoint.split(".").shift()?.replace(/[0-9]/g, "") || null;
 -        await this.player.node.rest.updatePlayer({
-+        const res = await this.player.node.rest.updatePlayer({
-             guildId: this.player.guildId,
-             data: { voice: this.voice },
-         });
+-            guildId: this.player.guildId,
+-            data: { voice: this.voice },
+-        });
++        this.region = normalizedEndpoint.split(".").shift()?.replace(/[0-9]/g, "") || null;
++        const ok = await this.updateVoiceWithFallback("serverUpdate");
          this.player.poru.emit("debug", this.player.node.name, `[Voice] <- [Discord] : Voice Server Update | Server: ${this.region} Guild: ${this.player.guildId}`);
 +
 +        if (process.env.PORU_DEBUG === "1" || process.env.DEBUG === "1") {
-+            if (!res) {
++            if (!ok) {
 +                this.player.poru.emit(
 +                    "debug",
 +                    this.player.node.name,
-+                    `[Voice] -> [Lavalink] updatePlayer(voice) returned null | Guild: ${this.player.guildId}`
-+                );
-+            }
-+            else if (typeof res === "object" && res && "status" in res && "error" in res) {
-+                this.player.poru.emit(
-+                    "debug",
-+                    this.player.node.name,
-+                    `[Voice] -> [Lavalink] updatePlayer(voice) error ${res.status} ${res.error} | ${res.message ?? ""}`
++                    `[Voice] -> [Lavalink] updatePlayer(voice) failed after all endpoint variants | Guild: ${this.player.guildId}`
 +                );
 +            }
 +        }
      }
      ;
      /**
-@@ -65,6 +88,37 @@ class Connection {
+@@ -65,6 +146,24 @@ class Connection {
          this.self_deaf = self_deaf;
          this.self_mute = self_mute;
          this.voice.sessionId = session_id || null;
 +        // Si el VOICE_SERVER_UPDATE llegó antes, ya tenemos endpoint/token.
 +        // En ese caso necesitamos reenviar el voice object con sessionId para completar el handshake.
 +        if (this.voice.sessionId && this.voice.endpoint && this.voice.token) {
-+            this.player.node.rest
-+                .updatePlayer({
-+                guildId: this.player.guildId,
-+                data: { voice: this.voice },
-+            })
-+                .then((res) => {
-+                if (process.env.PORU_DEBUG === "1" || process.env.DEBUG === "1") {
-+                    if (!res) {
-+                        this.player.poru.emit(
-+                            "debug",
-+                            this.player.node.name,
-+                            `[Voice] -> [Lavalink] updatePlayer(voice) (from stateUpdate) returned null | Guild: ${this.player.guildId}`
-+                        );
-+                    }
-+                    else if (typeof res === "object" && res && "status" in res && "error" in res) {
-+                        this.player.poru.emit(
-+                            "debug",
-+                            this.player.node.name,
-+                            `[Voice] -> [Lavalink] updatePlayer(voice) (from stateUpdate) error ${res.status} ${res.error} | ${res.message ?? ""}`
-+                        );
-+                    }
++            this.updateVoiceWithFallback("stateUpdate")
++                .then((ok) => {
++                if ((process.env.PORU_DEBUG === "1" || process.env.DEBUG === "1") && !ok) {
++                    this.player.poru.emit(
++                        "debug",
++                        this.player.node.name,
++                        `[Voice] -> [Lavalink] updatePlayer(voice) (from stateUpdate) failed after all endpoint variants | Guild: ${this.player.guildId}`
++                    );
 +                }
 +            })
 +                .catch(() => null);
