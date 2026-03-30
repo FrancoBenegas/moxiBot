@@ -465,7 +465,8 @@ module.exports = {
             .addStringOption(pl => pl.setName("platform")
                 .setDescription(moxi.translate('commands:OPT_PLATFORM_DESC', 'es-ES') || 'Elige una plataforma para reproducir música')
                 .addChoices({ name: "YouTube", value: "youtube" })
-                .addChoices({ name: "Spotify", value: "spotify" }).setRequired(true)))
+                .addChoices({ name: "Spotify", value: "spotify" })
+                .addChoices({ name: "SoundCloud", value: "soundcloud" }).setRequired(true)))
 
         .addSubcommand(subcommand => subcommand
             .setName("pause")
@@ -589,8 +590,12 @@ module.exports = {
             debugHelper.log('play', 'start', { guildId, requesterId, track: requestedTrack, platform: lugar });
 
             // YouTube: ytsearch
-            // Spotify: spsearch (lavasrc). Para URLs/URIs de Spotify, Poru enviará el identificador tal cual.
-            const source = lugar === 'youtube' ? 'ytsearch' : 'spsearch';
+            // Spotify: spsearch (lavasrc)
+            // SoundCloud: scsearch (texto) o URL directa (sin source)
+            let source;
+            if (lugar === 'youtube') source = 'ytsearch';
+            else if (lugar === 'spotify') source = 'spsearch';
+            else if (lugar === 'soundcloud') source = 'scsearch';
 
             const normalizedSpotify = lugar === 'spotify' ? normalizeSpotifyIdentifier(requestedTrack) : null;
             // Importante: si el usuario pega un enlace open.spotify.com, preferimos pasar la URL tal cual
@@ -606,11 +611,20 @@ module.exports = {
                     // ignore
                 }
             }
+            if (lugar === 'soundcloud') {
+                const isUrl = /^https?:\/\//i.test(String(requestedTrack || '').trim());
+                if (isUrl) {
+                    // Para enlaces directos de SoundCloud, dejar que Lavalink resuelva por URL.
+                    source = undefined;
+                }
+            }
             if (normalizedSpotify) {
                 debugHelper.log('play', 'normalized spotify identifier', { guildId, requesterId, from: requestedTrack, to: normalizedSpotify });
             }
 
-            const res = await Moxi.poru.resolve({ query, source, requester: interaction.member });
+            const resolvePayload = { query, requester: interaction.member };
+            if (source) resolvePayload.source = source;
+            const res = await Moxi.poru.resolve(resolvePayload);
             const computeFlags = (r) => {
                 const raw = String(r?.loadType ?? '');
                 const lower = raw.toLowerCase();
