@@ -2,11 +2,7 @@
 
 const {
   ButtonStyle,
-  LinkButtonBuilder,
-  PrimaryButtonBuilder,
-  SecondaryButtonBuilder,
-  SuccessButtonBuilder,
-  DangerButtonBuilder,
+  ButtonBuilder: DiscordButtonBuilder,
 } = require('discord.js');
 
 const { toComponentEmoji } = require('./discordEmoji');
@@ -71,32 +67,22 @@ class ButtonBuilder {
     const style = this._style;
     const styleKey = typeof style === 'string' ? style.trim().toLowerCase() : null;
     const isLink = style === ButtonStyle.Link || styleKey === 'link';
-    const isPrimary = style === ButtonStyle.Primary || styleKey === 'primary';
-    const isSecondary = style === ButtonStyle.Secondary || styleKey === 'secondary';
-    const isSuccess = style === ButtonStyle.Success || styleKey === 'success';
-    const isDanger = style === ButtonStyle.Danger || styleKey === 'danger';
 
-    let builder;
+    // Crear un ButtonBuilder genérico (discord.js v14)
+    const builder = new DiscordButtonBuilder();
+
+    // Establecer el estilo
+    builder.setStyle(this._style);
+
     if (isLink) {
-      builder = new LinkButtonBuilder();
       if (isNonEmptyString(this._url)) builder.setURL(this._url);
-    } else if (isPrimary) {
-      builder = new PrimaryButtonBuilder();
-    } else if (isSuccess) {
-      builder = new SuccessButtonBuilder();
-    } else if (isDanger) {
-      builder = new DangerButtonBuilder();
-    } else if (isSecondary) {
-      builder = new SecondaryButtonBuilder();
     } else {
-      builder = new SecondaryButtonBuilder();
-    }
-
-    if (!isLink && isNonEmptyString(this._customId)) {
-      builder.setCustomId(this._customId);
-      // Validación: si no hay label ni emoji, asigna un label por defecto visible
-      if (!isNonEmptyString(this._label) && !this._emoji) {
-        builder.setLabel('\u200b'); 
+      if (isNonEmptyString(this._customId)) {
+        builder.setCustomId(this._customId);
+        // Validación: si no hay label ni emoji, asigna un label por defecto visible
+        if (!isNonEmptyString(this._label) && !this._emoji) {
+          builder.setLabel('\u200b'); 
+        }
       }
     }
 

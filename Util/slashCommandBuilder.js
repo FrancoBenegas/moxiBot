@@ -1,103 +1,60 @@
-const { ChatInputCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder: DiscordSlashCommandBuilder } = require('discord.js');
 
-function withSingularAliases(builder) {
-  if (!builder || typeof builder !== 'object') return builder;
-
-  const aliasMap = {
-    addStringOption: 'addStringOptions',
-    addIntegerOption: 'addIntegerOptions',
-    addNumberOption: 'addNumberOptions',
-    addBooleanOption: 'addBooleanOptions',
-    addUserOption: 'addUserOptions',
-    addChannelOption: 'addChannelOptions',
-    addRoleOption: 'addRoleOptions',
-    addMentionableOption: 'addMentionableOptions',
-    addAttachmentOption: 'addAttachmentOptions',
-    addSubcommand: 'addSubcommands',
-    addSubcommandGroup: 'addSubcommandGroups',
-  };
-
-  for (const [singular, plural] of Object.entries(aliasMap)) {
-    if(typeof builder[singular] !== 'function' && typeof builder[plural] === 'function') {
-      // Definimos el alias como función normal para respetar "this".
-      Object.defineProperty(builder, singular, {
-        value: function (fn) {
-          return this[plural](fn);
-        },
-        enumerable: false,
-      });
-    }
-  }
-
-  return builder;
-}
-
-class SlashCommandBuilder extends ChatInputCommandBuilder {
+class SlashCommandBuilder extends DiscordSlashCommandBuilder {
   setDMPermission(enabled) {
-    // En discord.js v15, setDMPermission fue sustituido por contexts.
-    // Para compatibilidad con el código existente:
-    // - true  => permitir en Guild + DMs
-    // - false => solo Guild
-    const { InteractionContextType } = require('discord.js');
-
-    if (typeof this.setContexts === 'function') {
-      if (enabled) {
-        return this.setContexts([
-          InteractionContextType.Guild,
-          InteractionContextType.BotDM,
-          InteractionContextType.PrivateChannel,
-        ]);
-      }
-
-      return this.setContexts([InteractionContextType.Guild]);
+    // En discord.js v14, setDMPermission sigue existiendo
+    // Solo lo heredamos del padre
+    if (typeof super.setDMPermission === 'function') {
+      return super.setDMPermission(enabled);
     }
 
     return this;
   }
 
-  addStringOption(fn) {
-    return this.addStringOptions(fn);
+  // Métodos plurales (mapeo a singulares de discord.js v14)
+  addStringOptions(fn) {
+    return this.addStringOption(fn);
   }
 
-  addIntegerOption(fn) {
-    return this.addIntegerOptions(fn);
+  addIntegerOptions(fn) {
+    return this.addIntegerOption(fn);
   }
 
-  addNumberOption(fn) {
-    return this.addNumberOptions(fn);
+  addNumberOptions(fn) {
+    return this.addNumberOption(fn);
   }
 
-  addBooleanOption(fn) {
-    return this.addBooleanOptions(fn);
+  addBooleanOptions(fn) {
+    return this.addBooleanOption(fn);
   }
 
-  addUserOption(fn) {
-    return this.addUserOptions(fn);
+  addUserOptions(fn) {
+    return this.addUserOption(fn);
   }
 
-  addChannelOption(fn) {
-    return this.addChannelOptions(fn);
+  addChannelOptions(fn) {
+    return this.addChannelOption(fn);
   }
 
-  addRoleOption(fn) {
-    return this.addRoleOptions(fn);
+  addRoleOptions(fn) {
+    return this.addRoleOption(fn);
   }
 
-  addMentionableOption(fn) {
-    return this.addMentionableOptions(fn);
+  addMentionableOptions(fn) {
+    return this.addMentionableOption(fn);
   }
 
-  addAttachmentOption(fn) {
-    return this.addAttachmentOptions(fn);
+  addAttachmentOptions(fn) {
+    return this.addAttachmentOption(fn);
   }
 
-  addSubcommand(fn) {
-    return this.addSubcommands((sub) => fn(withSingularAliases(sub)));
+  addSubcommands(fn) {
+    return this.addSubcommand(fn);
   }
 
-  addSubcommandGroup(fn) {
-    return this.addSubcommandGroups((group) => fn(withSingularAliases(group)));
+  addSubcommandGroups(fn) {
+    return this.addSubcommandGroup(fn);
   }
-}
+} 
 
 module.exports = { SlashCommandBuilder };
