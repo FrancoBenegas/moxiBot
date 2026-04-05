@@ -1,5 +1,6 @@
 // Centraliza la construcción del help (Components V2) para cualquier página/categoría
-const { StringSelectMenuBuilder, ContainerBuilder, MessageFlags, SecondaryButtonBuilder, LinkButtonBuilder } = require('discord.js');
+const { StringSelectMenuBuilder, ContainerBuilder, MessageFlags } = require('discord.js');
+const { ButtonBuilder, ButtonStyle } = require('./compatButtonBuilder');
 const moxi = require('../i18n');
 const { EMOJIS } = require('./emojis');
 const logger = require('./logger');
@@ -294,6 +295,35 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
     return (categoriaTraducida && categoriaTraducida !== categoriaKey) ? categoriaTraducida : String(cat);
   };
 
+  const resolveCategoryEmoji = (cat) => {
+    const normalized = normalizeCategoryKey(cat);
+    const emojiMap = {
+      Admin: '🛡️',
+      Economy: '💰',
+      Fun: '🎉',
+      Games: '🎮',
+      Genshin: '🌸',
+      Giveaways: '🎁',
+      Marriage: '💍',
+      Moderation: '🧯',
+      Music: '🎵',
+      Root: '👑',
+      Security: '🔐',
+      Sistemas: '⚙️',
+      Systems: '⚙️',
+      Social: '💬',
+      Tickets: '🎫',
+      Tools: '🛠️',
+      Utiility: '🧰',
+      Utility: '🧰',
+      Verification: '✅',
+      Voice: '🎙️',
+      Welcome: '👋',
+    };
+
+    return emojiMap[normalized] || '📦';
+  };
+
   const renderGrid = (items, cols = 6, opts = {}) => {
     const values = Array.from(new Set((items || []).map(v => String(v).trim()).filter(Boolean)));
     if (!values.length) return '';
@@ -427,23 +457,7 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
   if (categoria) {
     // Estilo tipo captura: cabecera de categoría + bloque de comandos en cuadrícula.
     const categoriaLabel = resolveCategoryLabel(categoria);
-    const emoji = (categoria === 'Economy')
-      ? '💰'
-      : (categoria === 'Tools')
-        ? '🛠️'
-        : (categoria === 'Music')
-          ? '🎵'
-          : (categoria === 'Fun')
-            ? '🎉'
-            : (categoria === 'Marriage')
-              ? '💍'
-            : (categoria === 'Admin')
-              ? '🛡️'
-              : (categoria === 'Moderation')
-                ? '🧯'
-                : (categoria === 'Welcome')
-                  ? '👋'
-                  : '';
+    const emoji = resolveCategoryEmoji(categoria);
 
     const header = `${emoji ? `${emoji} ` : ''}**${categoriaLabel}**`;
 
@@ -496,7 +510,7 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
         const key = 'HELP_CATEGORY_' + catKey.replace(/\s+/g, '_').toUpperCase();
         let label = moxi.translate(key, lang);
         if (label === key) label = catKey;
-        return label;
+        return `${resolveCategoryEmoji(catKey)} ${label}`;
       });
 
       // Categorías como lista (una por línea). En RTL evitamos blockquotes/underline
@@ -560,10 +574,11 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
         const key = 'HELP_CATEGORY_' + catKey.replace(/\s+/g, '_').toUpperCase();
         let label = moxi.translate(key, lang);
         if (label === key) label = catKey;
+        const emoji = toComponentEmoji(resolveCategoryEmoji(catKey));
         return {
           label,
           value: catKey,
-          emoji: toComponentEmoji(EMOJIS.package),
+          ...(emoji ? { emoji } : {}),
           default: categoria === catKey
         };
       }));
@@ -571,8 +586,9 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
 
     // Botones
     if (!categoria) {
-      const closeButton = new SecondaryButtonBuilder()
+      const closeButton = new ButtonBuilder()
         .setCustomId('help2_close')
+        .setStyle(ButtonStyle.Secondary)
         .setEmoji(toComponentEmoji(EMOJIS.cross));
 
       const webLabel = moxi.translate('HELP_WEB_LABEL', lang);
@@ -580,7 +596,8 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
       if (!webUrl || typeof webUrl !== 'string' || !/^https?:\/\//.test(webUrl)) {
         webUrl = 'https://moxilab.net';
       }
-      const webButton = new LinkButtonBuilder()
+      const webButton = new ButtonBuilder()
+        .setStyle(ButtonStyle.Link)
         .setLabel(webLabel)
         .setURL(webUrl);
 
@@ -589,25 +606,30 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
       const stateCat = categoria || '';
       const state = `${page}:${totalPages || 1}:${stateCat}`;
 
-      const prevButton = new SecondaryButtonBuilder()
+      const prevButton = new ButtonBuilder()
         .setCustomId(`help2_prev:${state}`)
+        .setStyle(ButtonStyle.Secondary)
         .setEmoji(toComponentEmoji(EMOJIS.arrowLeft))
         .setDisabled((totalPages || 1) <= 1 || page <= 0);
 
-      const homeButton = new SecondaryButtonBuilder()
+      const homeButton = new ButtonBuilder()
         .setCustomId(`help2_home:${state}`)
+        .setStyle(ButtonStyle.Secondary)
         .setEmoji(toComponentEmoji(EMOJIS.home));
 
-      const infoButton = new SecondaryButtonBuilder()
+      const infoButton = new ButtonBuilder()
         .setCustomId(`help2_info:${state}`)
+        .setStyle(ButtonStyle.Secondary)
         .setEmoji(toComponentEmoji(EMOJIS.info));
 
-      const closeButton = new SecondaryButtonBuilder()
+      const closeButton = new ButtonBuilder()
         .setCustomId('help2_close')
+        .setStyle(ButtonStyle.Secondary)
         .setEmoji(toComponentEmoji(EMOJIS.cross));
 
-      const nextButton = new SecondaryButtonBuilder()
+      const nextButton = new ButtonBuilder()
         .setCustomId(`help2_next:${state}`)
+        .setStyle(ButtonStyle.Secondary)
         .setEmoji(toComponentEmoji(EMOJIS.arrowRight))
         .setDisabled((totalPages || 1) <= 1 || page >= (totalPages || 1) - 1);
 

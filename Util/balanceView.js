@@ -1,8 +1,8 @@
 const {
     ContainerBuilder,
-    SecondaryButtonBuilder,
     MessageFlags,
 } = require('discord.js');
+const { ButtonBuilder, ButtonStyle } = require('./compatButtonBuilder');
 
 const { ensureMongoConnection } = require('./mongoConnect');
 const moxi = require('../i18n');
@@ -24,20 +24,23 @@ function buildBalanceButtons({ lang = 'es-ES', viewerId, targetId } = {}) {
     const target = normalizeDiscordId(targetId);
     const canAct = viewer && target && viewer === target;
 
-    const deposit = new SecondaryButtonBuilder()
+    const deposit = new ButtonBuilder()
         .setCustomId(`bal:deposit:${viewer || '0'}:${target || '0'}`)
+        .setStyle(ButtonStyle.Secondary)
         .setLabel(t('BTN_DEPOSIT'))
         .setEmoji(toComponentEmoji('📥'))
         .setDisabled(!canAct);
 
-    const withdraw = new SecondaryButtonBuilder()
+    const withdraw = new ButtonBuilder()
         .setCustomId(`bal:withdraw:${viewer || '0'}:${target || '0'}`)
+        .setStyle(ButtonStyle.Secondary)
         .setLabel(t('BTN_WITHDRAW'))
         .setEmoji(toComponentEmoji('📤'))
         .setDisabled(!canAct);
 
-    const refresh = new SecondaryButtonBuilder()
+    const refresh = new ButtonBuilder()
         .setCustomId(`bal:refresh:${viewer || '0'}:${target || '0'}`)
+        .setStyle(ButtonStyle.Secondary)
         .setEmoji(toComponentEmoji('🔁'));
 
     return [deposit, withdraw, refresh];

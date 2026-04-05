@@ -44,11 +44,15 @@ class ButtonBuilder {
   setEmoji(emoji) {
     const compEmoji = toComponentEmoji(emoji);
 
-    // Acepta solo si hay nombre y cumple el mínimo exigido por builders (>= 2)
+    // Para custom emoji, la validación fuerte ya la hace toComponentEmoji.
+    // Para Unicode, Discord acepta nombres de longitud 1 (por ejemplo ℹ, ❌, ➡),
+    // así que aquí solo exigimos que haya `id` válido o `name` no vacío.
     if (
       compEmoji &&
-      typeof compEmoji.name === 'string' &&
-      compEmoji.name.length >= 2
+      (
+        typeof compEmoji.id === 'string' ||
+        (typeof compEmoji.name === 'string' && compEmoji.name.length > 0)
+      )
     ) {
       this._emoji = compEmoji;
     } else {

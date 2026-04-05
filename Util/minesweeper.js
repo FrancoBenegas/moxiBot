@@ -261,9 +261,10 @@ function buildMinesweeperMessageOptions({ userId, lang, state, disabled = false 
                         if (adj === 0) {
                             b.setLabel(BLANK).setStyle(ButtonStyle.Secondary).setCustomId(noopId);
                         } else {
-                            const b = new SecondaryButtonBuilder()
+                            const b = new ButtonBuilder()
                                 .setLabel(String(adj))
                                 .setCustomId(noopId)
+                                .setStyle(ButtonStyle.Secondary)
                                 .setDisabled(true);
                             row.addComponents(b);
                         }
@@ -271,7 +272,7 @@ function buildMinesweeperMessageOptions({ userId, lang, state, disabled = false 
                 }
                 else {
                     // Hidden
-                    const b = new SecondaryButtonBuilder();
+                    const b = new ButtonBuilder().setStyle(ButtonStyle.Secondary);
                     if (isFlagged) b.setEmoji(toEmojiObject('🚩'));
                     else b.setLabel(BLANK);
 
