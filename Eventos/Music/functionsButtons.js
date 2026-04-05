@@ -11,9 +11,9 @@ const moxi = require("../../i18n");
 const { Bot } = require("../../Config");
 const { EMOJIS } = require("../../Util/emojis");
 const ms = require("ms");
-const { buildActiveMusicSessionContainer } = require("../../Components/V2/musicControlsComponent");
 const { ButtonBuilder } = require("../../Util/compatButtonBuilder");
 const { resolveBlacklistBlock, logBlacklistHit } = require("../../Util/blacklistStorage");
+const { renderActiveMusicPanel, seekMusicPanelTimeline, setMusicPanelMessage, setMusicPanelPaused } = require('../../Util/musicPanelAutoUpdater');
 
 function v2Flags() {
     return MessageFlags.Ephemeral | MessageFlags.IsComponentsV2;
@@ -70,29 +70,8 @@ async function tryUpdateMainPanel(interaction, player, lang, extraLine) {
     try {
         if (!interaction.message) return;
         if (!player || !player.currentTrack || !player.currentTrack.info) return;
-
-        const track = player.currentTrack;
-        const solicitud = track?.info?.requester?.tag || track?.info?.requester?.username || "Moxi Autoplay";
-
-        const title = `${EMOJIS.nowPlayingAnim} ${moxi.translate('MUSIC_NOW_PLAYING', lang)} [${track.info.title}](${track.info.uri})`;
-        const infoBase = `**${moxi.translate('MUSIC_QUEUE_COUNT', lang)}** \`${player.queue.length}\`\n**${moxi.translate('MUSIC_REQUESTED_BY', lang)}** \`${solicitud}\``;
-        const info = extraLine ? `${infoBase}\n${extraLine}` : infoBase;
-
-        const imageUrl =
-            interaction.message.attachments?.first()?.url ||
-            track.info.image ||
-            undefined;
-
-        const container = buildActiveMusicSessionContainer({
-            title,
-            info,
-            imageUrl,
-        });
-
-        await interaction.message.edit({
-            components: [container],
-            flags: MessageFlags.IsComponentsV2,
-        });
+        setMusicPanelMessage(player, interaction.message);
+        await renderActiveMusicPanel({ client: Moxi, player, message: interaction.message, extraLine, force: true });
     } catch (_) {
         // Si no se puede editar el panel (permisos, mensaje antiguo, etc.), ignoramos.
     }
@@ -187,6 +166,7 @@ Moxi.on("interactionCreate", async (interaction) => {
                 return interaction.editReply({ components: [buildV2Notice(moxi.translate('MUSIC_NOT_SEEKABLE', lang))], flags: v2Flags() });
             } else {
                 await player.seekTo(0);
+                seekMusicPanelTimeline(player, 0);
                 await tryUpdateMainPanel(interaction, player, lang, moxi.translate('MUSIC_TRACK_REPEATED', lang));
                 return interaction.editReply({ components: [buildV2Notice(moxi.translate('MUSIC_TRACK_REPEATED', lang))], flags: v2Flags() });
             }
@@ -208,10 +188,12 @@ Moxi.on("interactionCreate", async (interaction) => {
                 });
             if (player.isPaused) {
                 player.pause(false)
+                setMusicPanelPaused(player, false);
                 await tryUpdateMainPanel(interaction, player, lang, moxi.translate('MUSIC_MUSIC_RESUMED', lang));
                 return safeReply(interaction, { components: [buildV2Notice(moxi.translate('MUSIC_MUSIC_RESUMED', lang))], flags: v2Flags() });
             } else {
                 player.pause(true);
+                setMusicPanelPaused(player, true);
                 await tryUpdateMainPanel(interaction, player, lang, moxi.translate('MUSIC_MUSIC_PAUSED', lang));
                 return safeReply(interaction, { components: [buildV2Notice(moxi.translate('MUSIC_MUSIC_PAUSED', lang))], flags: v2Flags() });
             }

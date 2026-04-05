@@ -2,6 +2,7 @@ const Moxi = require("../../index");
 const { MessageFlags } = require("discord.js");
 const { buildDisabledMusicSessionContainer } = require("../../Components/V2/musicControlsComponent");
 const logger = require("../../Util/logger");
+const { getMusicPanelMessage, stopMusicPanelAutoUpdate } = require('../../Util/musicPanelAutoUpdater');
 
 const SOLO_DESTROY_GRACE_MS = Number(process.env.MUSIC_SOLO_DESTROY_GRACE_MS || 15000);
 
@@ -31,8 +32,10 @@ Moxi.on('voiceStateUpdate', async (oldVoice, newVoice) => {
                 }
 
                 logger.warn(`[MUSIC] Bot solo en canal tras gracia; destruyendo player | guild=${oldVoice.guild.id} channel=${liveChannel.id}`);
+                stopMusicPanelAutoUpdate(livePlayer);
 
-                if (Moxi.previousMessage) {
+                const panelMessage = getMusicPanelMessage(livePlayer) || Moxi.previousMessage;
+                if (panelMessage) {
                     try {
                         const lastSession = await livePlayer.get("lastSessionData");
                         if (lastSession) {
@@ -42,7 +45,7 @@ Moxi.on('voiceStateUpdate', async (oldVoice, newVoice) => {
                                 imageUrl: lastSession.imageUrl,
                                 footerText: "_**Moxi Studios**_ - Sesión Finalizada",
                             });
-                            await Moxi.previousMessage.edit({
+                            await panelMessage.edit({
                                 components: [disabledContainer],
                                 flags: MessageFlags.IsComponentsV2,
                             });

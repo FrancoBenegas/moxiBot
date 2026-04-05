@@ -1,4 +1,5 @@
-const { ContainerBuilder, LinkButtonBuilder, MessageFlags } = require('discord.js');
+const { ContainerBuilder, MessageFlags } = require('discord.js');
+const { ButtonBuilder, ButtonStyle } = require('../../Util/compatButtonBuilder');
 const { EMOJIS } = require('../../Util/emojis');
 const { Bot } = require('../../Config');
 
@@ -54,9 +55,9 @@ async function panelV2({ client: Moxi, message, prefix, serverPrefix, userPrefix
         .addSeparatorComponents(s => s.setDivider(true))
         .addActionRowComponents(row =>
             row.addComponents(
-                new LinkButtonBuilder().setLabel(t(panel.invite)).setURL(inviteUrl),
-                new LinkButtonBuilder().setLabel(t(panel.support)).setURL('https://discord.gg/tu-servidor'),
-                new LinkButtonBuilder().setLabel(t(panel.web)).setURL('https://moxilab.net')
+                new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel(t(panel.invite)).setURL(inviteUrl),
+                new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel(t(panel.support)).setURL('https://discord.gg/tu-servidor'),
+                new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel(t(panel.web)).setURL('https://moxilab.net')
             )
         )
         .addSeparatorComponents(s => s.setDivider(true))
