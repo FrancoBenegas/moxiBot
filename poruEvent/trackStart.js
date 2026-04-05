@@ -15,6 +15,15 @@ const {
     buildMusicVolumeRow,
     buildDisabledMusicSessionContainer,
 } = require('../Components/V2/musicControlsComponent');
+const {
+    buildActiveMusicPanelData,
+    getMusicPanelMessage,
+    initMusicPanelTimeline,
+    renderActiveMusicPanel,
+    setMusicPanelMessage,
+    startMusicPanelAutoUpdate,
+    stopMusicPanelAutoUpdate,
+} = require('../Util/musicPanelAutoUpdater');
 
 // Sin placeholder: si no hay portada real, no mostramos imagen.
 const FALLBACK_IMG = String(process.env.MUSIC_FALLBACK_IMAGE_URL || '').trim();
@@ -92,10 +101,14 @@ module.exports = async (Moxi, player, track) => {
         const channel = Moxi.channels.cache.get(player.textChannel);
         if (!channel) return;
 
+        initMusicPanelTimeline(player, 0);
+        stopMusicPanelAutoUpdate(player);
+
         // --- 1. DESACTIVAR BOTONES ANTERIORES ---
         const lastSession = await player.get("lastSessionData");
+        const previousPanelMessage = getMusicPanelMessage(player) || Moxi.previousMessage;
 
-        if (Moxi.previousMessage && lastSession) {
+        if (previousPanelMessage && lastSession) {
             try {
                 const disabledContainer = buildDisabledMusicSessionContainer({
                     title: lastSession.title,
@@ -104,7 +117,7 @@ module.exports = async (Moxi, player, track) => {
                     footerText: "_**Moxi Studios**_ - Sesión Finalizada",
                 });
 
-                await Moxi.previousMessage.edit({
+                await previousPanelMessage.edit({
                     components: [disabledContainer],
                     flags: MessageFlags.IsComponentsV2
                 });
@@ -115,8 +128,6 @@ module.exports = async (Moxi, player, track) => {
 
         // --- 2. GENERAR NUEVA TARJETA ---
         const trackDuration = track.info.isStream ? "LIVE" : formatDuration(track.info.length);
-        const solicitud = track?.info?.requester?.tag || "Moxi Autoplay";
-        const iconURL = track?.info?.requester?.displayAvatarURL?.({ dynamic: true }) || null;
         const artworkUrl = await getBestArtworkUrl(track, null);
 
         // --- 2. GENERAR NUEVA TARJETA (musicard-quartz) ---
@@ -151,8 +162,13 @@ module.exports = async (Moxi, player, track) => {
         let guildId = player.guild?.id || player.guildId || player.options?.guildId;
         const lang = await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES');
 
-        const currentTitle = `${EMOJIS.nowPlayingAnim} ${moxi.translate('MUSIC_NOW_PLAYING', lang)} [${track.info.title}](${track.info.uri})`;
-        const currentInfo = `**${moxi.translate('MUSIC_QUEUE_COUNT', lang)}** \`${player.queue.length}\`\n**${moxi.translate('MUSIC_REQUESTED_BY', lang)}** \`${solicitud}\``;
+        const imageUrlForGallery = hasBuffer ? `attachment://${fileName}` : (artworkUrl || null);
+
+        const initialPanel = await buildActiveMusicPanelData({
+            player,
+            lang,
+            imageUrl: imageUrlForGallery,
+        });
 
         // --- 3. CONSTRUIR CONTAINER NUEVO ---
 
@@ -162,11 +178,9 @@ module.exports = async (Moxi, player, track) => {
         // Fila 2: Volumen
         const volumeRow = buildMusicVolumeRow();
 
-        const imageUrlForGallery = hasBuffer ? `attachment://${fileName}` : (artworkUrl || null);
-
         const mainContainer = new ContainerBuilder()
             .setAccentColor(Bot.AccentColor)
-            .addTextDisplayComponents(new TextDisplayBuilder().setContent(currentTitle));
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(initialPanel?.title || ''));
 
         if (imageUrlForGallery) {
             mainContainer
@@ -178,11 +192,11 @@ module.exports = async (Moxi, player, track) => {
 
         mainContainer
             .addSeparatorComponents(new SeparatorBuilder())
-            .addTextDisplayComponents(new TextDisplayBuilder().setContent(currentInfo))
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(initialPanel?.info || ''))
             .addActionRowComponents(buttonsRow)
             .addSeparatorComponents(new SeparatorBuilder()) // Separador solicitado
             .addActionRowComponents(volumeRow)
-            .addTextDisplayComponents(new TextDisplayBuilder().setContent(`> ${EMOJIS.studioAnim} _**Moxi Studios**_ `));
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(initialPanel?.footerText || `> ${EMOJIS.studioAnim} _**Moxi Studios**_ `));
 
         // --- 4. ENVIAR Y GUARDAR ---
         const sendPayload = {
@@ -195,14 +209,19 @@ module.exports = async (Moxi, player, track) => {
         const newMessage = await channel.send(sendPayload);
 
         Moxi.previousMessage = newMessage;
+        setMusicPanelMessage(player, newMessage);
 
         const finalImageUrl = newMessage.attachments.first()?.url || artworkUrl || null;
 
         await player.set("lastSessionData", {
-            title: currentTitle,
-            info: currentInfo,
-            imageUrl: finalImageUrl
+            title: initialPanel?.title || '',
+            info: initialPanel?.info || '',
+            imageUrl: finalImageUrl,
+            artworkSourceUrl: artworkUrl || finalImageUrl
         });
+
+        await renderActiveMusicPanel({ client: Moxi, player, message: newMessage, force: true });
+        startMusicPanelAutoUpdate(Moxi, player, newMessage);
 
     } catch (error) {
         console.error("Error en trackStart:", error);
