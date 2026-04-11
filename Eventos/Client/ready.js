@@ -8,6 +8,7 @@ const { syncCommandRegistry } = require('../../Util/commandRegistry');
 const { normalizeDiscordId } = require('../../Util/idGuards');
 const { startBirthdayAnnouncements } = require('../../Util/birthdayAnnouncements');
 const { startAnniversaryAnnouncements } = require('../../Util/anniversaryAnnouncements');
+const { startStreamAlerts } = require('../../Util/streamAlerts');
 
 function isPrimaryShard(client) {
     try {
@@ -160,6 +161,8 @@ module.exports = async (Moxi) => {
                 startAnniversaryAnnouncements(Moxi, {
                     timezone: Config?.TimeGates?.timezone || 'Europe/Madrid',
                 });
+
+                startStreamAlerts(Moxi);
             }
         } catch (error) {
             logger.error(`${EMOJIS.cross} Error crítico al conectar a MongoDB:`);
