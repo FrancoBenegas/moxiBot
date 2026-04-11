@@ -1,4 +1,4 @@
-const axios = require('axios');
+﻿const axios = require('axios');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const {
   AttachmentBuilder,
@@ -35,6 +35,20 @@ function formatPlatform(platform) {
   if (platform === 'youtube') return 'YouTube';
   if (platform === 'kick') return 'Kick';
   return platform;
+}
+
+function formatPlatformLabel(platform) {
+  if (platform === 'twitch') return '<:twitch:1492586396811264124> Twitch';
+  if (platform === 'youtube') return '<:youtube:1492586488083513385> YouTube';
+  if (platform === 'kick') return '<:kick:1492586549215498240> Kick';
+  return formatPlatform(platform);
+}
+
+function getPlatformAccentColor(platform) {
+  if (platform === 'twitch') return 0x9146ff;
+  if (platform === 'youtube') return 0xff0000;
+  if (platform === 'kick') return 0x53fc18;
+  return Bot.AccentColor;
 }
 
 function buildPanel({ title, body }) {
@@ -94,17 +108,18 @@ async function buildRemoteAttachment(url, baseName) {
 
 async function buildStreamCheckMessage({ platform, resolved, live }) {
   const platformName = formatPlatform(platform);
+  const platformLabel = formatPlatformLabel(platform);
   const displayName = resolved.displayName || resolved.handle;
   const targetUrl = live.url || resolved.profileUrl || null;
   const files = [];
   const container = new ContainerBuilder()
-    .setAccentColor(0x9146ff)
-    .addTextDisplayComponents((c) => c.setContent(`# ${EMOJIS.redCircle || '🔴'} ${displayName} esta en directo`))
+    .setAccentColor(getPlatformAccentColor(platform))
+    .addTextDisplayComponents((c) => c.setContent(`# ${platformLabel} ${displayName} esta en directo`))
     .addSeparatorComponents((s) => s.setDivider(true));
 
   const lines = [
     live.title ? `**Titulo:** ${live.title}` : null,
-    `**Plataforma:** ${platformName}`,
+    `**Plataforma:** ${platformLabel}`,
     `**Canal:** ${resolved.handle}`,
     live.gameName ? `**Categoria:** ${String(live.gameName).slice(0, 100)}` : null,
     live.viewerCount !== undefined && live.viewerCount !== null ? `**Viewers:** ${live.viewerCount}` : null,
@@ -305,7 +320,7 @@ async function showList(message) {
 
   const formatSubscriptionLine = (item) => {
     const errorText = item.lastError ? ` | error: ${item.lastError}` : '';
-    return `- ${formatPlatform(item.platform)} | ${item.handle}${errorText}`;
+    return `- ${formatPlatformLabel(item.platform)} | ${item.handle}${errorText}`;
   };
 
   const liveItems = refreshedSubscriptions.filter((item) => item.lastKnownLive);
@@ -468,7 +483,7 @@ function baseCommand({ name, alias = [], usage, description, execute }) {
     alias,
     usage,
     description: () => description,
-    Category: () => `${EMOJIS.redCircle || '🔴'} Streaming`,
+    Category: () => `${EMOJIS.redCircle || 'ðŸ”´'} Streaming`,
     permissions: {
       User: ['Administrator'],
       Bot: ['SendMessages', 'AttachFiles'],
@@ -496,3 +511,5 @@ module.exports = {
   removeSubscriptionCommand,
   checkSubscription,
 };
+
+
