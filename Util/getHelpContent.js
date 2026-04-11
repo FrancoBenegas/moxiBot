@@ -24,6 +24,7 @@ function normalizeCategoryKey(value) {
   if (upper.includes('CATEGORY_MODERATION') || upper.includes('MODERATION') || upper.includes('MODERACION')) return 'Moderation';
   if (upper.includes('CATEGORY_ROOT')) return 'Root';
   if (upper.includes('CATEGORY_MARRIAGE') || upper.includes('MARRIAGE') || upper.includes('MATRIMONIO')) return 'Marriage';
+  if (upper.includes('CATEGORY_STREAMING') || upper.includes('STREAMING') || upper.includes('DIRECTOS') || upper.includes('DIRECTO')) return 'Streaming';
 
   // Games / Juegos
   if (upper.includes('CATEGORY_GAMES') || upper === 'GAMES') return 'Games';
@@ -287,6 +288,8 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
       'Systems': 'HELP_CATEGORY_SYSTEMS',
       'Marriage': 'HELP_CATEGORY_MARRIAGE',
       'Matrimonio': 'HELP_CATEGORY_MARRIAGE',
+      'Streaming': 'HELP_CATEGORY_STREAMING',
+      'Directos': 'HELP_CATEGORY_STREAMING',
       'Welcome': 'HELP_CATEGORY_WELCOME',
       'Sistema de bienvenida': 'HELP_CATEGORY_WELCOME'
     };
@@ -309,6 +312,7 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
       Music: '🎵',
       Root: '👑',
       Security: '🔐',
+      Streaming: '🔴',
       Sistemas: '⚙️',
       Systems: '⚙️',
       Social: '💬',

@@ -5,6 +5,8 @@ const {
   setGuildPrefix: setGuildPrefixRaw,
   setGuildAuditChannel,
   setGuildAuditEnabled,
+  setGuildStreamAlertsChannel: setGuildStreamAlertsChannelRaw,
+  setGuildStreamAlertsEnabled: setGuildStreamAlertsEnabledRaw,
   setGuildEconomyEnabled: setGuildEconomyEnabledRaw,
   setGuildEconomyChannel: setGuildEconomyChannelRaw,
   setGuildEconomyExclusive: setGuildEconomyExclusiveRaw,
@@ -57,12 +59,26 @@ async function setGuildEconomyExclusive(guildId, exclusive) {
   return ok;
 }
 
+async function setGuildStreamAlertsChannel(guildId, channelId) {
+  const ok = await setGuildStreamAlertsChannelRaw(guildId, channelId);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
+async function setGuildStreamAlertsEnabled(guildId, enabled) {
+  const ok = await setGuildStreamAlertsEnabledRaw(guildId, enabled);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
 module.exports = {
   setGuildLanguage,
   getGuildSettings,
   setGuildPrefix,
   setGuildAuditChannel,
   setGuildAuditEnabled,
+  setGuildStreamAlertsChannel,
+  setGuildStreamAlertsEnabled,
   setGuildEconomyEnabled,
   setGuildEconomyChannel,
   setGuildEconomyExclusive,
