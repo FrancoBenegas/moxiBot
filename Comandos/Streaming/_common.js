@@ -263,12 +263,27 @@ async function showList(message) {
     }));
   }
 
-  const lines = subscriptions.slice(0, 20).map((item) => {
-    const status = item.lastKnownLive ? 'LIVE' : 'offline';
+  const formatSubscriptionLine = (item) => {
     const errorText = item.lastError ? ` | error: ${item.lastError}` : '';
-    return `- ${formatPlatform(item.platform)} | ${item.handle} | ${status}${errorText}`;
-  });
-  if (subscriptions.length > 20) lines.push(`- ...y ${subscriptions.length - 20} mas`);
+    return `- ${formatPlatform(item.platform)} | ${item.handle}${errorText}`;
+  };
+
+  const liveItems = subscriptions.filter((item) => item.lastKnownLive);
+  const offlineItems = subscriptions.filter((item) => !item.lastKnownLive);
+  const visibleLive = liveItems.slice(0, 20);
+  const remainingSlots = Math.max(0, 20 - visibleLive.length);
+  const visibleOffline = offlineItems.slice(0, remainingSlots);
+  const hiddenCount = subscriptions.length - visibleLive.length - visibleOffline.length;
+
+  const lines = [
+    `${EMOJIS.redCircle || 'LIVE'} LIVE (${liveItems.length})`,
+    ...(visibleLive.length ? visibleLive.map(formatSubscriptionLine) : ['- Ninguno']),
+    '',
+    `${EMOJIS.info || 'i'} offline (${offlineItems.length})`,
+    ...(visibleOffline.length ? visibleOffline.map(formatSubscriptionLine) : ['- Ninguno']),
+  ];
+
+  if (hiddenCount > 0) lines.push('', `- ...y ${hiddenCount} mas`);
 
   return message.reply(buildPanel({
     title: 'Directos',
