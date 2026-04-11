@@ -1,4 +1,4 @@
-const axios = require('axios');
+﻿const axios = require('axios');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const {
   AttachmentBuilder,
@@ -27,6 +27,20 @@ function formatPlatform(platform) {
   if (platform === 'youtube') return 'YouTube';
   if (platform === 'kick') return 'Kick';
   return platform;
+}
+
+function getPlatformAccentColor(platform) {
+  if (platform === 'twitch') return 0x9146ff;
+  if (platform === 'youtube') return 0xff0000;
+  if (platform === 'kick') return 0x53fc18;
+  return 0x5865f2;
+}
+
+function formatPlatformLabel(platform) {
+  if (platform === 'twitch') return '<:twitch:1492586396811264124> Twitch';
+  if (platform === 'youtube') return '<:youtube:1492586488083513385> YouTube';
+  if (platform === 'kick') return '<:kick:1492586549215498240> Kick';
+  return formatPlatform(platform);
 }
 
 function guessFileExtension(url, fallback = 'png') {
@@ -71,16 +85,17 @@ async function buildRemoteAttachment(url, baseName) {
 
 async function buildStreamAlertMessage(subscription, status, type = 'start') {
   const platformName = formatPlatform(subscription.platform);
+  const platformLabel = formatPlatformLabel(subscription.platform);
   const displayName = status.displayName || subscription.displayName || subscription.handle;
   const titleByType = {
-    start: `${EMOJIS.redCircle || '🔴'} ${displayName} esta en directo en ${platformName}`,
-    live: `${EMOJIS.redCircle || '🔴'} ${displayName} sigue en directo en ${platformName}`,
+    start: `${platformLabel} ${displayName} esta en directo`,
+    live: `${platformLabel} ${displayName} sigue en directo`,
     end: `${EMOJIS.cross || 'X'} ${displayName} ha terminado en ${platformName}`,
   };
 
   const lines = [
     status.title ? `**Titulo:** ${status.title}` : null,
-    `**Plataforma:** ${platformName}`,
+    `**Plataforma:** ${platformLabel}`,
     `**Canal:** ${subscription.handle}`,
     status.gameName ? `**Categoria:** ${String(status.gameName).slice(0, 100)}` : null,
     status.viewerCount !== undefined && status.viewerCount !== null ? `**Viewers:** ${status.viewerCount}` : null,
@@ -88,7 +103,7 @@ async function buildStreamAlertMessage(subscription, status, type = 'start') {
   ].filter(Boolean);
 
   const container = new ContainerBuilder()
-    .setAccentColor(type === 'end' ? 0xe74c3c : 0x9146ff)
+    .setAccentColor(type === 'end' ? 0xe74c3c : getPlatformAccentColor(subscription.platform))
     .addTextDisplayComponents((c) => c.setContent(`# ${titleByType[type] || titleByType.start}`))
     .addSeparatorComponents((s) => s.setDivider(true))
     .addTextDisplayComponents((c) => c.setContent(lines.join('\n')));

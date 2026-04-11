@@ -1,4 +1,4 @@
-const { ContainerBuilder, ButtonStyle, MessageFlags } = require('discord.js');
+const { ContainerBuilder, ButtonStyle, MessageFlags, ThumbnailBuilder } = require('discord.js');
 const { ButtonBuilder } = require('./compatButtonBuilder');
 
 const crypto = require('node:crypto');
@@ -6,7 +6,7 @@ const crypto = require('node:crypto');
 const { Bot } = require('../Config');
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
-const cache = new Map(); // token -> { userId, search, limit, pageSize, createdAt }
+const cache = new Map();
 
 function now() {
     return Date.now();
@@ -22,7 +22,7 @@ function cleanupCache() {
 }
 
 function createToken() {
-    return crypto.randomBytes(6).toString('hex'); // 12 chars
+    return crypto.randomBytes(6).toString('hex');
 }
 
 function setSession({ userId, search, limit, pageSize }) {
@@ -42,7 +42,6 @@ function getSession(token) {
     cleanupCache();
     const entry = cache.get(String(token));
     if (!entry) return null;
-    // touch
     entry.createdAt = now();
     return entry;
 }
@@ -54,7 +53,7 @@ function safeLower(s) {
 function truncate(str, max = 60) {
     const s = String(str ?? '');
     if (s.length <= max) return s;
-    return `${s.slice(0, Math.max(0, max - 1))}…`;
+    return `${s.slice(0, Math.max(0, max - 1))}...`;
 }
 
 async function fetchAllGuilds(client) {
@@ -66,6 +65,7 @@ async function fetchAllGuilds(client) {
             name: g.name,
             memberCount: g.memberCount ?? 0,
             shardId: localShardId,
+            iconUrl: typeof g.iconURL === 'function' ? (g.iconURL({ size: 256, extension: 'png' }) || null) : null,
         }));
     }
 
@@ -76,6 +76,7 @@ async function fetchAllGuilds(client) {
             name: g.name,
             memberCount: g.memberCount ?? 0,
             shardId,
+            iconUrl: typeof g.iconURL === 'function' ? (g.iconURL({ size: 256, extension: 'png' }) || null) : null,
         }));
     });
 
@@ -101,13 +102,25 @@ function addGuildBlock(container, guild, idx) {
     const shardNumber = Number.isFinite(guild?.shardId) ? Number(guild.shardId) + 1 : null;
     const shardText = shardNumber ? String(shardNumber) : 'n/a';
     const id = String(guild?.id ?? '');
+    const iconUrl = typeof guild?.iconUrl === 'string' && /^https?:\/\//i.test(guild.iconUrl) ? guild.iconUrl : null;
 
-    container.addTextDisplayComponents((c) => c.setContent(`**🏰 ${number}. ${name}**`));
-    container.addTextDisplayComponents((c) => c.setContent([
-        `• 👥 Miembros: **${members.toLocaleString()}**`,
-        `• 🧩 Shard: **${shardText}**`,
-        `• 🆔 ID: \`${id}\``,
-    ].join('\n')));
+    const blockText = [
+        `**Server ${number}. ${name}**`,
+        `- Members: **${members.toLocaleString()}**`,
+        `- Shard: **${shardText}**`,
+        `- ID: \`${id}\``,
+    ].join('\n');
+
+    if (iconUrl) {
+        container.addSectionComponents((section) =>
+            section
+                .addTextDisplayComponents((c) => c.setContent(blockText))
+                .setThumbnailAccessory(new ThumbnailBuilder().setURL(iconUrl))
+        );
+        return;
+    }
+
+    container.addTextDisplayComponents((c) => c.setContent(blockText));
 }
 
 function buildNavButtons({ token, userId, page, totalPages }) {
@@ -116,13 +129,13 @@ function buildNavButtons({ token, userId, page, totalPages }) {
 
     const prev = new ButtonBuilder()
         .setCustomId(`servers:nav:${token}:${userId}:prev`)
-        .setLabel('◀')
+        .setLabel('Prev')
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(prevDisabled);
 
     const next = new ButtonBuilder()
         .setCustomId(`servers:nav:${token}:${userId}:next`)
-        .setLabel('▶')
+        .setLabel('Next')
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(nextDisabled);
 
@@ -155,10 +168,10 @@ async function buildServersPanel({ client, userId, token, search, limit = 25, pa
     const start = safePage * safePageSize;
     const pageItems = candidates.slice(start, start + safePageSize);
 
-    const title = (t && t('SERVERS_TITLE', '🏰 Servidores del bot')) || '🏰 Servidores del bot';
-    const summary = `${(t && t('SERVERS_TOTAL', 'Total')) || 'Total'}: **${totalGuilds.toLocaleString()}**  •  ${(t && t('SERVERS_USERS', 'Usuarios (suma memberCount)')) || 'Usuarios (suma memberCount)'}: **${totalUsers.toLocaleString()}**`;
-    const filterLine = search ? `🔎 ${(t && t('SERVERS_FILTER', 'Filtro')) || 'Filtro'}: **${search}**  •  ${(t && t('SERVERS_MATCHES', 'Coincidencias')) || 'Coincidencias'}: **${filtered.length.toLocaleString()}**` : null;
-    const pageLine = `📄 Página **${safePage + 1}/${totalPages}**  •  Mostrando **${pageItems.length}** de **${candidates.length}**`;
+    const title = (t && t('SERVERS_TITLE', 'Servidores del bot')) || 'Servidores del bot';
+    const summary = `${(t && t('SERVERS_TOTAL', 'Total')) || 'Total'}: **${totalGuilds.toLocaleString()}**  |  ${(t && t('SERVERS_USERS', 'Usuarios')) || 'Usuarios'}: **${totalUsers.toLocaleString()}**`;
+    const filterLine = search ? `${(t && t('SERVERS_FILTER', 'Filtro')) || 'Filtro'}: **${search}**  |  ${(t && t('SERVERS_MATCHES', 'Coincidencias')) || 'Coincidencias'}: **${filtered.length.toLocaleString()}**` : null;
+    const pageLine = `Pagina **${safePage + 1}/${totalPages}**  |  Mostrando **${pageItems.length}** de **${candidates.length}**`;
 
     const container = buildContainerHeader({ title, summary, filterLine, pageLine });
 
@@ -175,6 +188,7 @@ async function buildServersPanel({ client, userId, token, search, limit = 25, pa
         });
     }
 
+    container.addSeparatorComponents((s) => s.setDivider(true));
     container.addActionRowComponents((row) =>
         row.addComponents(...buildNavButtons({ token, userId, page: safePage, totalPages }))
     );
