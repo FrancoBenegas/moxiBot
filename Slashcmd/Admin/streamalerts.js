@@ -176,7 +176,7 @@ module.exports = {
           `${EMOJIS.channel || '#'} Canal: ${channelText}`,
           `${EMOJIS.folder || '📁'} Suscripciones: **${subscriptions.length}**`,
           '',
-          'Plataformas soportadas: Twitch, YouTube, Kick.',
+          'Plataformas soportadas: Twitch, YouTube y Kick.',
         ].join('\n'),
       }));
     }
