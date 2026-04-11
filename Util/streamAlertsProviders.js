@@ -78,7 +78,7 @@ async function resolveTwitch(handleInput) {
   const handle = normalizeHandle(handleInput, 'twitch');
   const data = await twitchApiGet('users', { login: handle });
   const user = Array.isArray(data?.data) ? data.data[0] : null;
-  if (!user) throw new Error('No encontré ese canal de Twitch.');
+  if (!user) throw new Error('No encontre ese canal de Twitch.');
   return {
     handle: String(user.login || handle).toLowerCase(),
     externalId: String(user.id),
@@ -91,9 +91,7 @@ async function getTwitchLiveStatus(subscription) {
   const externalId = subscription.externalId || (await resolveTwitch(subscription.handle)).externalId;
   const data = await twitchApiGet('streams', { user_id: externalId });
   const stream = Array.isArray(data?.data) ? data.data[0] : null;
-  if (!stream) {
-    return { isLive: false };
-  }
+  if (!stream) return { isLive: false };
 
   const handle = normalizeHandle(subscription.handle, 'twitch');
   const thumbnailUrl = String(stream.thumbnail_url || '')
@@ -224,45 +222,72 @@ async function getYouTubeLiveStatus(subscription) {
 
 async function resolveKick(handleInput) {
   const handle = normalizeHandle(handleInput, 'kick');
-  return {
-    handle,
-    externalId: handle,
-    displayName: handle,
-    profileUrl: `https://kick.com/${handle}`,
-  };
-}
-
-async function getKickLiveStatus(subscription) {
-  const handle = normalizeHandle(subscription.handle, 'kick');
-  const response = await axios.get(`https://kick.com/${handle}`, {
-    headers: DEFAULT_HEADERS,
+  const response = await axios.get(`https://kick.com/api/v2/channels/${handle}`, {
+    headers: {
+      ...DEFAULT_HEADERS,
+      Accept: 'application/json,text/plain,*/*',
+    },
     timeout: 20_000,
     validateStatus: () => true,
   });
 
   if (response.status === 403) {
-    throw new Error('Kick bloqueó la comprobación desde este entorno (403).');
+    throw new Error('Kick bloqueo la consulta desde este entorno (403).');
   }
   if (response.status >= 400) {
-    throw new Error(`Kick devolvió ${response.status}.`);
+    throw new Error(`Kick devolvio ${response.status}.`);
   }
 
-  const body = String(response.data || '');
-  const isLive = body.includes('"is_live":true') || body.includes('"livestream":{');
-  const title = decodeHtml(body.match(/"livestream_title":"([^"]+)"/)?.[1] || '') || null;
-  const sessionId = body.match(/"session_title":"([^"]+)"/)?.[1]
-    || body.match(/"slug":"([^"]+)"/)?.[1]
-    || (isLive ? `${handle}:${Date.now()}` : null);
-  const thumbnailUrl = body.match(/"thumbnail":"([^"]+)"/)?.[1] || null;
+  const data = response.data || {};
+  const slug = normalizeHandle(data.slug || handle, 'kick');
+  return {
+    handle: slug,
+    externalId: String(data.id || data.user_id || slug),
+    displayName: normalizeDbText(data.user?.username || data.slug || slug, { maxLen: 120, fallback: slug }),
+    profileUrl: `https://kick.com/${slug}`,
+  };
+}
+
+async function getKickLiveStatus(subscription) {
+  const handle = normalizeHandle(subscription.handle, 'kick');
+  const response = await axios.get(`https://kick.com/api/v2/channels/${handle}`, {
+    headers: {
+      ...DEFAULT_HEADERS,
+      Accept: 'application/json,text/plain,*/*',
+    },
+    timeout: 20_000,
+    validateStatus: () => true,
+  });
+
+  if (response.status === 403) {
+    throw new Error('Kick bloqueo la consulta desde este entorno (403).');
+  }
+  if (response.status >= 400) {
+    throw new Error(`Kick devolvio ${response.status}.`);
+  }
+
+  const data = response.data || {};
+  const livestream = data.livestream || null;
+  const avatarUrl = normalizeDbText(data.user?.profile_pic, { maxLen: 500, fallback: null });
+  if (!livestream || !livestream.is_live) {
+    return {
+      isLive: false,
+      avatarUrl,
+      displayName: normalizeDbText(data.user?.username || data.slug || subscription.displayName || handle, { maxLen: 120, fallback: handle }),
+    };
+  }
 
   return {
-    isLive,
-    sessionId,
-    title,
+    isLive: true,
+    sessionId: String(livestream.id || livestream.slug || `${handle}:${livestream.start_time || Date.now()}`),
+    title: normalizeDbText(livestream.session_title || livestream.slug, { maxLen: 300, fallback: null }),
     url: `https://kick.com/${handle}`,
-    thumbnailUrl,
-    startedAt: null,
-    displayName: subscription.displayName || handle,
+    thumbnailUrl: normalizeDbText(livestream.thumbnail || avatarUrl, { maxLen: 500, fallback: null }),
+    avatarUrl,
+    startedAt: parseIsoDate(livestream.start_time || livestream.created_at),
+    gameName: normalizeDbText(livestream.categories?.[0]?.name || livestream.categories?.[0]?.category?.name, { maxLen: 120, fallback: null }),
+    viewerCount: Number(livestream.viewer_count || 0) || null,
+    displayName: normalizeDbText(data.user?.username || data.slug || subscription.displayName || handle, { maxLen: 120, fallback: handle }),
   };
 }
 

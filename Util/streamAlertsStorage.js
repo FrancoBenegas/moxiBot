@@ -1,6 +1,8 @@
 const StreamAlertSubscription = require('../Models/StreamAlertSubscriptionSchema');
 const { normalizeDiscordId, normalizeDbText } = require('./idGuards');
 
+const SUPPORTED_PLATFORMS = new Set(['twitch', 'youtube', 'kick']);
+
 function normalizePlatform(value) {
   const raw = String(value || '').trim().toLowerCase();
   if (raw === 'yt') return 'youtube';
@@ -39,6 +41,13 @@ function normalizeHandle(value, platform) {
     return raw.toLowerCase();
   }
 
+  if (platform === 'kick') {
+    raw = raw.replace(/^https?:\/\/(www\.)?kick\.com\//i, '');
+    raw = raw.split('/')[0] || raw;
+    raw = raw.replace(/^@/, '');
+    return raw.toLowerCase();
+  }
+
   return raw.toLowerCase();
 }
 
@@ -54,30 +63,39 @@ async function upsertSubscription(input) {
     throw new Error('Datos incompletos para guardar la suscripcion.');
   }
 
-  const query = externalId
+  const identityQuery = externalId
     ? { guildId, platform, externalId }
     : { guildId, platform, handle };
 
-  const update = {
-    $set: {
-      handle,
-      channelId,
-      enabled: input.enabled !== false,
-      displayName: normalizeDbText(input.displayName, { maxLen: 120, fallback: null }),
-      externalId,
-      profileUrl: normalizeDbText(input.profileUrl, { maxLen: 300, fallback: null }),
-      lastError: null,
-    },
-    $setOnInsert: {
-      guildId,
-      platform,
-      handle,
-      createdBy: createdBy || null,
-    },
+  const payload = {
+    guildId,
+    platform,
+    handle,
+    channelId,
+    enabled: input.enabled !== false,
+    displayName: normalizeDbText(input.displayName, { maxLen: 120, fallback: null }),
+    externalId,
+    profileUrl: normalizeDbText(input.profileUrl, { maxLen: 300, fallback: null }),
+    lastError: null,
+    createdBy: createdBy || null,
   };
 
-  await StreamAlertSubscription.updateOne(query, update, { upsert: true });
-  return StreamAlertSubscription.findOne(query).lean();
+  const existing = await StreamAlertSubscription.findOne(identityQuery);
+  if (existing) {
+    existing.handle = payload.handle;
+    existing.channelId = payload.channelId;
+    existing.enabled = payload.enabled;
+    existing.displayName = payload.displayName;
+    existing.externalId = payload.externalId;
+    existing.profileUrl = payload.profileUrl;
+    existing.lastError = null;
+    if (!existing.createdBy && payload.createdBy) existing.createdBy = payload.createdBy;
+    await existing.save();
+    return existing.toObject();
+  }
+
+  const created = await StreamAlertSubscription.create(payload);
+  return created.toObject();
 }
 
 async function removeSubscription({ guildId, platform, handle, externalId }) {
@@ -93,11 +111,17 @@ async function removeSubscription({ guildId, platform, handle, externalId }) {
 }
 
 async function listGuildSubscriptions(guildId) {
-  return StreamAlertSubscription.find({ guildId: normalizeDiscordId(guildId) }).sort({ platform: 1, handle: 1 }).lean();
+  const docs = await StreamAlertSubscription.find({
+    guildId: normalizeDiscordId(guildId),
+  }).sort({ platform: 1, handle: 1 }).lean();
+  return docs.filter((item) => SUPPORTED_PLATFORMS.has(String(item?.platform || '').toLowerCase()));
 }
 
 async function listEnabledSubscriptions() {
-  return StreamAlertSubscription.find({ enabled: true }).lean();
+  const docs = await StreamAlertSubscription.find({
+    enabled: true,
+  }).lean();
+  return docs.filter((item) => SUPPORTED_PLATFORMS.has(String(item?.platform || '').toLowerCase()));
 }
 
 async function setGuildSubscriptionChannel(guildId, channelId) {
@@ -116,6 +140,7 @@ async function setSubscriptionLiveState(subscriptionId, nextState) {
       lastTitle: normalizeDbText(nextState.lastTitle, { maxLen: 300, fallback: null }),
       lastStartedAt: nextState.lastStartedAt || null,
       lastNotifiedAt: nextState.lastNotifiedAt || null,
+      lastLiveReminderAt: nextState.lastLiveReminderAt || null,
       lastCheckedAt: nextState.lastCheckedAt || new Date(),
       lastError: normalizeDbText(nextState.lastError, { maxLen: 300, fallback: null }),
     },

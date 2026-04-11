@@ -7,6 +7,8 @@ const {
   setGuildAuditEnabled,
   setGuildStreamAlertsChannel: setGuildStreamAlertsChannelRaw,
   setGuildStreamAlertsEnabled: setGuildStreamAlertsEnabledRaw,
+  setGuildStreamAlertEventEnabled: setGuildStreamAlertEventEnabledRaw,
+  setGuildStreamLiveReminderMinutes: setGuildStreamLiveReminderMinutesRaw,
   setGuildEconomyEnabled: setGuildEconomyEnabledRaw,
   setGuildEconomyChannel: setGuildEconomyChannelRaw,
   setGuildEconomyExclusive: setGuildEconomyExclusiveRaw,
@@ -71,6 +73,18 @@ async function setGuildStreamAlertsEnabled(guildId, enabled) {
   return ok;
 }
 
+async function setGuildStreamAlertEventEnabled(guildId, eventName, enabled) {
+  const ok = await setGuildStreamAlertEventEnabledRaw(guildId, eventName, enabled);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
+async function setGuildStreamLiveReminderMinutes(guildId, minutes) {
+  const ok = await setGuildStreamLiveReminderMinutesRaw(guildId, minutes);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
 module.exports = {
   setGuildLanguage,
   getGuildSettings,
@@ -79,6 +93,8 @@ module.exports = {
   setGuildAuditEnabled,
   setGuildStreamAlertsChannel,
   setGuildStreamAlertsEnabled,
+  setGuildStreamAlertEventEnabled,
+  setGuildStreamLiveReminderMinutes,
   setGuildEconomyEnabled,
   setGuildEconomyChannel,
   setGuildEconomyExclusive,
