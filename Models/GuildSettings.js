@@ -240,12 +240,48 @@ async function setGuildAuditEnabled(guildId, enabled) {
   return setAuditEnabled(guildId, enabled);
 }
 
+async function setGuildStreamAlertsChannel(guildId, channelId) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const cleanId = normalizeDiscordId(channelId);
+  const update = cleanId
+    ? {
+      $set: { StreamAlertsChannelId: cleanId },
+      $setOnInsert: { guildID: guildId, id: guildId },
+    }
+    : {
+      $unset: { StreamAlertsChannelId: '' },
+      $setOnInsert: { guildID: guildId, id: guildId },
+    };
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function setGuildStreamAlertsEnabled(guildId, enabled) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { StreamAlertsEnabled: !!enabled },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
 module.exports = {
   setGuildLanguage,
   getGuildSettings,
   setGuildPrefix,
   setGuildAuditChannel,
   setGuildAuditEnabled,
+  setGuildStreamAlertsChannel,
+  setGuildStreamAlertsEnabled,
   setGuildEconomyEnabled,
   setGuildEconomyChannel,
   setGuildEconomyExclusive,
