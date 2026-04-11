@@ -1,9 +1,9 @@
-const { baseCommand, setChannel } = require('./common');
+const { baseCommand, setChannel } = require('./_common');
 
 module.exports = baseCommand({
-  name: 'livecanal',
-  alias: ['directocanal', 'directoscanal'],
-  usage: 'livecanal #canal',
+  name: 'streamcanal',
+  alias: ['livecanal', 'directocanal', 'directoscanal'],
+  usage: 'streamcanal #canal',
   description: 'Configura el canal donde se enviarán las alertas de directos.',
   execute: async (_Moxi, message, args) => setChannel(message, args[0]),
 });

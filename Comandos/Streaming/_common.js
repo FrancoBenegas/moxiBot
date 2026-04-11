@@ -1,4 +1,15 @@
-const moxi = require('../../i18n');
+const axios = require('axios');
+const { createCanvas, loadImage } = require('@napi-rs/canvas');
+const {
+  AttachmentBuilder,
+  ButtonStyle,
+  ContainerBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
+  MessageFlags,
+} = require('discord.js');
+const { ButtonBuilder } = require('../../Util/compatButtonBuilder');
+
 const { Bot } = require('../../Config');
 const { EMOJIS } = require('../../Util/emojis');
 const { ensureMongoConnection } = require('../../Util/mongoConnect');
@@ -18,22 +29,142 @@ const {
 } = require('../../Util/streamAlertsStorage');
 const { getStreamProvider } = require('../../Util/streamAlertsProviders');
 
-const { ContainerBuilder, MessageFlags } = require('discord.js');
-
-function buildPanel({ title, body }) {
-  const container = new ContainerBuilder()
-    .setAccentColor(Bot.AccentColor)
-    .addTextDisplayComponents(c => c.setContent(`# ${title}`))
-    .addSeparatorComponents(s => s.setDivider(true))
-    .addTextDisplayComponents(c => c.setContent(body));
-  return { content: '', components: [container], flags: MessageFlags.IsComponentsV2 };
-}
-
 function formatPlatform(platform) {
   if (platform === 'twitch') return 'Twitch';
   if (platform === 'youtube') return 'YouTube';
   if (platform === 'kick') return 'Kick';
   return platform;
+}
+
+function buildPanel({ title, body }) {
+  const container = new ContainerBuilder()
+    .setAccentColor(Bot.AccentColor)
+    .addTextDisplayComponents((c) => c.setContent(`# ${title}`))
+    .addSeparatorComponents((s) => s.setDivider(true))
+    .addTextDisplayComponents((c) => c.setContent(String(body || '-')));
+
+  return {
+    content: '',
+    components: [container],
+    flags: MessageFlags.IsComponentsV2,
+    allowedMentions: { repliedUser: false },
+  };
+}
+
+function guessFileExtension(url, fallback = 'png') {
+  try {
+    const pathname = new URL(url).pathname || '';
+    const match = pathname.match(/\.([a-zA-Z0-9]+)$/);
+    return match ? match[1].toLowerCase() : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+async function buildRemoteAttachment(url, baseName) {
+  if (!url) return null;
+  try {
+    const response = await axios.get(url, {
+      responseType: 'arraybuffer',
+      timeout: 15_000,
+    });
+    let buffer = Buffer.from(response.data);
+    let ext = guessFileExtension(url, 'png');
+    const contentType = String(response.headers?.['content-type'] || '').toLowerCase();
+
+    if (ext === 'webp' || contentType.includes('image/webp')) {
+      const image = await loadImage(buffer);
+      const canvas = createCanvas(image.width, image.height);
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(image, 0, 0);
+      buffer = await canvas.encode('png');
+      ext = 'png';
+    }
+
+    const name = `${baseName}.${ext}`;
+    return {
+      file: new AttachmentBuilder(buffer, { name }),
+      attachmentUrl: `attachment://${name}`,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function buildStreamCheckMessage({ platform, resolved, live }) {
+  const platformName = formatPlatform(platform);
+  const displayName = resolved.displayName || resolved.handle;
+  const targetUrl = live.url || resolved.profileUrl || null;
+  const files = [];
+  const container = new ContainerBuilder()
+    .setAccentColor(0x9146ff)
+    .addTextDisplayComponents((c) => c.setContent(`# ${EMOJIS.redCircle || '🔴'} ${displayName} esta en directo`))
+    .addSeparatorComponents((s) => s.setDivider(true));
+
+  const lines = [
+    live.title ? `**Titulo:** ${live.title}` : null,
+    `**Plataforma:** ${platformName}`,
+    `**Canal:** ${resolved.handle}`,
+    live.gameName ? `**Categoria:** ${String(live.gameName).slice(0, 100)}` : null,
+    live.viewerCount !== undefined && live.viewerCount !== null ? `**Viewers:** ${live.viewerCount}` : null,
+    live.startedAt ? `**Inicio:** <t:${Math.floor(new Date(live.startedAt).getTime() / 1000)}:R>` : null,
+  ].filter(Boolean);
+
+  container.addTextDisplayComponents((c) => c.setContent(lines.join('\n')));
+
+  const mediaItems = [];
+  const sameVisualSource = !!(live.avatarUrl && live.thumbnailUrl && live.avatarUrl === live.thumbnailUrl);
+  const avatarAttachment = await buildRemoteAttachment(live.avatarUrl, `stream-avatar-${resolved.handle}`);
+  const imageAttachment = sameVisualSource ? null : await buildRemoteAttachment(live.thumbnailUrl, `stream-image-${resolved.handle}`);
+
+  if (avatarAttachment) {
+    files.push(avatarAttachment.file);
+    mediaItems.push(new MediaGalleryItemBuilder().setURL(avatarAttachment.attachmentUrl));
+  } else if (live.avatarUrl) {
+    mediaItems.push(new MediaGalleryItemBuilder().setURL(live.avatarUrl));
+  }
+
+  if (imageAttachment) {
+    files.push(imageAttachment.file);
+    mediaItems.push(new MediaGalleryItemBuilder().setURL(imageAttachment.attachmentUrl));
+  } else if (live.thumbnailUrl && !sameVisualSource) {
+    mediaItems.push(new MediaGalleryItemBuilder().setURL(live.thumbnailUrl));
+  }
+
+  if (mediaItems.length) {
+    container.addSeparatorComponents((s) => s.setDivider(true));
+    container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(...mediaItems));
+  }
+
+  const buttons = [];
+  if (targetUrl) {
+    buttons.push(
+      new ButtonBuilder()
+        .setLabel('Abrir directo')
+        .setStyle(ButtonStyle.Link)
+        .setURL(targetUrl)
+    );
+  }
+  if (resolved.profileUrl && resolved.profileUrl !== targetUrl) {
+    buttons.push(
+      new ButtonBuilder()
+        .setLabel('Ver canal')
+        .setStyle(ButtonStyle.Link)
+        .setURL(resolved.profileUrl)
+    );
+  }
+  if (buttons.length) {
+    container.addSeparatorComponents((s) => s.setDivider(true));
+    container.addActionRowComponents((row) => row.addComponents(...buttons));
+  }
+
+  return {
+    content: '',
+    components: [container],
+    files,
+    flags: MessageFlags.IsComponentsV2,
+    allowedMentions: { repliedUser: false },
+  };
 }
 
 function parseChannelId(message, raw) {
@@ -51,7 +182,7 @@ async function ensureMongoForMessage(message) {
   } catch (error) {
     return message.reply(buildPanel({
       title: 'Directos',
-      body: `${EMOJIS.cross} MongoDB no está disponible: ${error?.message || error}`,
+      body: `${EMOJIS.cross} MongoDB no esta disponible: ${error?.message || error}`,
     }));
   }
 }
@@ -69,7 +200,7 @@ async function setChannel(message, rawChannel) {
   if (!channel) {
     return message.reply(buildPanel({
       title: 'Directos',
-      body: `${EMOJIS.cross} Uso: \`.livecanal #canal\``,
+      body: `${EMOJIS.cross} Uso: \`.streamcanal #canal\``,
     }));
   }
 
@@ -106,14 +237,15 @@ async function showStatus(message) {
   const channelText = settings?.StreamAlertsChannelId ? `<#${settings.StreamAlertsChannelId}>` : '-';
   const enabled = typeof settings?.StreamAlertsEnabled === 'boolean' ? settings.StreamAlertsEnabled : true;
   const subscriptions = await listGuildSubscriptions(guildId);
+
   return message.reply(buildPanel({
     title: 'Directos',
     body: [
-      `${EMOJIS.info || 'ℹ️'} Estado: **${enabled ? 'activo' : 'apagado'}**`,
+      `${EMOJIS.info || 'i'} Estado: **${enabled ? 'activo' : 'apagado'}**`,
       `${EMOJIS.channel || '#'} Canal: ${channelText}`,
-      `${EMOJIS.folder || '📁'} Suscripciones: **${subscriptions.length}**`,
+      `${EMOJIS.folder || '[]'} Suscripciones: **${subscriptions.length}**`,
       '',
-      'Plataformas soportadas: Twitch, YouTube, Kick.',
+      'Plataformas soportadas: Twitch, YouTube y Kick.',
     ].join('\n'),
   }));
 }
@@ -136,7 +268,7 @@ async function showList(message) {
     const errorText = item.lastError ? ` | error: ${item.lastError}` : '';
     return `- ${formatPlatform(item.platform)} | ${item.handle} | ${status}${errorText}`;
   });
-  if (subscriptions.length > 20) lines.push(`- ...y ${subscriptions.length - 20} más`);
+  if (subscriptions.length > 20) lines.push(`- ...y ${subscriptions.length - 20} mas`);
 
   return message.reply(buildPanel({
     title: 'Directos',
@@ -155,7 +287,7 @@ async function addSubscription(message, platformInput, userInput) {
   if (!platform || !rawUser) {
     return message.reply(buildPanel({
       title: 'Directos',
-      body: `${EMOJIS.cross} Uso: \`.liveadd <twitch|youtube|kick> <usuario>\``,
+      body: `${EMOJIS.cross} Uso: \`.streamadd <twitch|youtube|kick> <usuario>\``,
     }));
   }
 
@@ -164,7 +296,7 @@ async function addSubscription(message, platformInput, userInput) {
   if (!channelId) {
     return message.reply(buildPanel({
       title: 'Directos',
-      body: `${EMOJIS.cross} Primero configura el canal con \`.livecanal #canal\`.`,
+      body: `${EMOJIS.cross} Primero configura el canal con \`.streamcanal #canal\`.`,
     }));
   }
 
@@ -205,7 +337,7 @@ async function removeSubscriptionCommand(message, platformInput, userInput) {
   if (!platform || !rawUser) {
     return message.reply(buildPanel({
       title: 'Directos',
-      body: `${EMOJIS.cross} Uso: \`.liveremove <twitch|youtube|kick> <usuario>\``,
+      body: `${EMOJIS.cross} Uso: \`.streamremove <twitch|youtube|kick> <usuario>\``,
     }));
   }
 
@@ -223,8 +355,8 @@ async function removeSubscriptionCommand(message, platformInput, userInput) {
     return message.reply(buildPanel({
       title: 'Directos',
       body: removed
-        ? `${EMOJIS.tick} Suscripción eliminada: ${formatPlatform(platform)} / ${normalizedUser}`
-        : `${EMOJIS.cross} No encontré esa suscripción.`,
+        ? `${EMOJIS.tick} Suscripcion eliminada: ${formatPlatform(platform)} / ${normalizedUser}`
+        : `${EMOJIS.cross} No encontre esa suscripcion.`,
     }));
   } catch (error) {
     return message.reply(buildPanel({
@@ -244,7 +376,7 @@ async function checkSubscription(message, platformInput, userInput) {
   if (!platform || !rawUser) {
     return message.reply(buildPanel({
       title: 'Directos',
-      body: `${EMOJIS.cross} Uso: \`.livecheck <twitch|youtube|kick> <usuario>\``,
+      body: `${EMOJIS.cross} Uso: \`.streamcheck <twitch|youtube|kick> <usuario>\``,
     }));
   }
 
@@ -259,11 +391,13 @@ async function checkSubscription(message, platformInput, userInput) {
       profileUrl: resolved.profileUrl,
     });
 
+    if (live.isLive) {
+      return message.reply(await buildStreamCheckMessage({ platform, resolved, live }));
+    }
+
     return message.reply(buildPanel({
       title: 'Directos',
-      body: live.isLive
-        ? `${EMOJIS.live || '🔴'} **LIVE** ${resolved.displayName || resolved.handle}\n${live.url || resolved.profileUrl}\n${live.title || 'Sin título'}`
-        : `${EMOJIS.tick} ${resolved.displayName || resolved.handle} está offline ahora mismo.`,
+      body: `${EMOJIS.tick} ${resolved.displayName || resolved.handle} esta offline ahora mismo.`,
     }));
   } catch (error) {
     return message.reply(buildPanel({
@@ -280,7 +414,10 @@ function baseCommand({ name, alias = [], usage, description, execute }) {
     usage,
     description: () => description,
     Category: () => `${EMOJIS.redCircle || '🔴'} Streaming`,
-    permissions: { User: ['Administrator'] },
+    permissions: {
+      User: ['Administrator'],
+      Bot: ['SendMessages', 'AttachFiles'],
+    },
     cooldown: 5,
     async execute(Moxi, message, args) {
       if (!message.guild) {

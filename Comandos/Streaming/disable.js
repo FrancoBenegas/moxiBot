@@ -1,9 +1,9 @@
-const { baseCommand, setEnabled } = require('./common');
+const { baseCommand, setEnabled } = require('./_common');
 
 module.exports = baseCommand({
-  name: 'liveoff',
-  alias: ['directooff', 'directosoff'],
-  usage: 'liveoff',
+  name: 'streamoff',
+  alias: ['liveoff', 'directooff', 'directosoff'],
+  usage: 'streamoff',
   description: 'Desactiva las alertas de directos.',
   execute: async (_Moxi, message) => setEnabled(message, false),
 });
