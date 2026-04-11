@@ -12,16 +12,29 @@ function normalizePlatform(value) {
 function normalizeHandle(value, platform) {
   let raw = normalizeDbText(value, { maxLen: 120, fallback: '' }).trim();
   if (!raw) return '';
+  raw = raw.split(/\s+/)[0] || raw;
   raw = raw.replace(/[?#].*$/, '');
 
   if (platform === 'twitch') {
-    raw = raw.replace(/^https?:\/\/(www\.)?twitch\.tv\//i, '');
+    try {
+      const parsed = new URL(raw);
+      const host = String(parsed.hostname || '').toLowerCase();
+      if (host === 'twitch.tv' || host === 'www.twitch.tv' || host === 'm.twitch.tv') {
+        raw = parsed.pathname || raw;
+      }
+    } catch {
+      // No es URL; seguimos con limpieza por texto.
+    }
+    raw = raw.replace(/^\/+/, '');
+    raw = raw.replace(/^https?:\/\/([a-z0-9-]+\.)?twitch\.tv\//i, '');
+    raw = raw.replace(/\/(about|schedule|videos|clips)$/i, '');
     raw = raw.split('/')[0] || raw;
     raw = raw.replace(/^@/, '');
     return raw.toLowerCase();
   }
 
   if (platform === 'youtube') {
+    raw = raw.replace(/^\/+/, '');
     raw = raw.replace(/^https?:\/\/(www\.)?youtube\.com\//i, '');
     raw = raw.replace(/^channel\//i, '');
     raw = raw.replace(/^c\//i, '@');

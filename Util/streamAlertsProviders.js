@@ -70,7 +70,18 @@ async function twitchApiGet(path, params) {
       'Authorization': `Bearer ${token}`,
     },
     timeout: 15_000,
+    validateStatus: () => true,
   });
+  if (response.status >= 400) {
+    const apiMessage = String(response.data?.message || '').trim();
+    if (response.status === 400) {
+      throw new Error(apiMessage || 'Twitch rechazo la solicitud (400). Revisa el nombre o URL del canal.');
+    }
+    if (response.status === 401) {
+      throw new Error('Twitch rechazo las credenciales (401). Revisa TWITCH_CLIENT_ID y TWITCH_CLIENT_SECRET.');
+    }
+    throw new Error(apiMessage || `Twitch devolvio ${response.status}.`);
+  }
   return response.data;
 }
 
@@ -120,6 +131,65 @@ async function fetchYouTubePage(path, options = {}) {
   });
 }
 
+function trimYouTubePath(rawPath) {
+  return String(rawPath || '')
+    .replace(/^\/+/, '')
+    .replace(/[?#].*$/, '')
+    .replace(/\/(featured|videos|streams|live|about)$/i, '')
+    .replace(/\/+$/, '');
+}
+
+function buildYouTubeResolveCandidates(handleInput) {
+  const raw = String(handleInput || '').trim();
+  if (!raw) return [];
+
+  const candidates = [];
+  const seen = new Set();
+  const push = (value) => {
+    const next = trimYouTubePath(value);
+    if (!next) return;
+    const key = next.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push(next);
+  };
+
+  const normalized = normalizeHandle(raw, 'youtube');
+
+  if (/^UC[\w-]{20,}$/i.test(normalized)) {
+    push(`channel/${normalized}`);
+    return candidates;
+  }
+
+  try {
+    const parsed = new URL(raw);
+    const host = String(parsed.hostname || '').toLowerCase();
+    if (host === 'youtube.com' || host === 'www.youtube.com' || host === 'm.youtube.com') {
+      push(parsed.pathname);
+    }
+  } catch {
+    // No es URL; seguimos con formatos derivados.
+  }
+
+  if (/^@/.test(raw)) push(raw);
+  if (/^@/.test(normalized)) push(normalized);
+
+  const plain = raw
+    .replace(/^https?:\/\/(www\.)?youtube\.com\//i, '')
+    .replace(/^@/, '')
+    .replace(/^c\//i, '')
+    .replace(/^user\//i, '')
+    .trim();
+
+  if (plain) {
+    push(`@${plain}`);
+    push(`c/${plain}`);
+    push(`user/${plain}`);
+  }
+
+  return candidates;
+}
+
 function extractYouTubeMetadata(html) {
   const body = String(html || '');
   const channelId = body.match(/\"externalId\":\"(UC[^\"]+)\"/)?.[1]
@@ -149,17 +219,29 @@ async function resolveYouTube(handleInput) {
     };
   }
 
-  const page = await fetchYouTubePage(normalized);
-  if (page.status >= 400) throw new Error('No pude abrir ese canal de YouTube.');
-  const meta = extractYouTubeMetadata(page.data);
-  if (!meta.channelId) throw new Error('No pude resolver el channel ID de YouTube.');
+  const candidates = buildYouTubeResolveCandidates(handleInput);
+  let lastStatus = 0;
 
-  return {
-    handle: meta.canonicalPath || normalized,
-    externalId: meta.channelId,
-    displayName: meta.displayName || normalized,
-    profileUrl: `https://www.youtube.com/channel/${meta.channelId}`,
-  };
+  for (const candidate of candidates) {
+    const page = await fetchYouTubePage(candidate);
+    lastStatus = page.status;
+    if (page.status >= 400) continue;
+
+    const meta = extractYouTubeMetadata(page.data);
+    if (!meta.channelId) continue;
+
+    const canonicalHandle = normalizeHandle(meta.canonicalPath || candidate, 'youtube');
+
+    return {
+      handle: canonicalHandle,
+      externalId: meta.channelId,
+      displayName: meta.displayName || canonicalHandle,
+      profileUrl: `https://www.youtube.com/channel/${meta.channelId}`,
+    };
+  }
+
+  if (lastStatus >= 400) throw new Error('No pude abrir ese canal de YouTube.');
+  throw new Error('No pude resolver el channel ID de YouTube.');
 }
 
 function extractYouTubeVideoId(rawUrl) {
