@@ -168,6 +168,11 @@ function normalizeCategoryQuery(input) {
     // Fun / Diversión
     if (raw === 'fun' || raw.includes('diver') || raw.includes('entreten') || raw.includes('divert')) return 'Fun';
 
+    // Streaming / Directos
+    if (raw.includes('stream')) return 'Streaming';
+    if (raw.includes('direct')) return 'Streaming';
+    if (raw.includes('live')) return 'Streaming';
+
     return null;
 }
 
