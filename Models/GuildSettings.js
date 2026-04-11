@@ -274,6 +274,43 @@ async function setGuildStreamAlertsEnabled(guildId, enabled) {
   return result.matchedCount > 0 || result.upsertedCount > 0;
 }
 
+async function setGuildStreamAlertEventEnabled(guildId, eventName, enabled) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const eventKeyMap = {
+    start: 'StreamAlertsNotifyStart',
+    live: 'StreamAlertsNotifyLive',
+    end: 'StreamAlertsNotifyEnd',
+  };
+  const field = eventKeyMap[String(eventName || '').trim().toLowerCase()];
+  if (!field) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { [field]: !!enabled },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function setGuildStreamLiveReminderMinutes(guildId, minutes) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const parsed = Number.parseInt(String(minutes || '').trim(), 10);
+  if (!Number.isFinite(parsed) || parsed < 5) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { StreamAlertsLiveReminderMinutes: parsed },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
 module.exports = {
   setGuildLanguage,
   getGuildSettings,
@@ -282,6 +319,8 @@ module.exports = {
   setGuildAuditEnabled,
   setGuildStreamAlertsChannel,
   setGuildStreamAlertsEnabled,
+  setGuildStreamAlertEventEnabled,
+  setGuildStreamLiveReminderMinutes,
   setGuildEconomyEnabled,
   setGuildEconomyChannel,
   setGuildEconomyExclusive,

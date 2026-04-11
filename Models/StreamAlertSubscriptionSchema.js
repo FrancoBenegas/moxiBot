@@ -14,6 +14,7 @@ const StreamAlertSubscriptionSchema = new mongoose.Schema({
   lastTitle: { type: String, default: null },
   lastStartedAt: { type: Date, default: null },
   lastNotifiedAt: { type: Date, default: null },
+  lastLiveReminderAt: { type: Date, default: null },
   lastCheckedAt: { type: Date, default: null },
   lastError: { type: String, default: null },
   createdBy: { type: String, default: null },
