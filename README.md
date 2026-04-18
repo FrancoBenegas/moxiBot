@@ -1,148 +1,162 @@
-# 🤖 Comandos de MoXi
+# Moxi Bot
 
-Este README documenta únicamente los comandos que el bot expone hoy, separados por tipo y utilidad.
+Bot multiproposito para Discord con enfoque en musica, moderacion, utilidades de comunidad, personalizacion y funciones sociales.
 
-## Comandos con prefijo
+## Estado actual
 
-### Administrador
+- Version del proyecto: 1.10.0
+- Runtime: Node.js
+- Libreria principal: discord.js v14
+- Base de datos: MongoDB (Mongoose)
+- Idiomas: sistema i18n multi-locale
 
-- `prefix`: muestra o cambia el prefijo del servidor.
-- `language`: fija el idioma del servidor.
-- `welcome` / `byes`: administran mensajes e imágenes de bienvenida y despedida.
-- `audit`: exporta registros de auditoría y consulta eventos recientes.
-- `AddEmoji`: agrega emojis al servidor.
-- `SetLevel`, `ResetLevels`, `LevelConfig`: ajustan y reinician experiencia de niveles.
-- `RankSetup`: define canales y estilos para tarjetas de nivel.
-- `channel`, `leave`, `permiso`, `perms`, `rol`: utilidades administrativas varias.
+## Funcionalidades principales
 
-### Moderación (Prefijo)
+### Musica (Poru + Lavalink)
 
-- `AutoRuleCreate`, `AutoRuleEdit`, `AutoRuleList`, `AutoRuleDelete`: gestionan reglas automáticas.
-- `ban`, `kick`, `timeout`, `warn`, `mute`, `unban`, `unmute`: sanciones y moderación básica.
+- Reproduccion y control completo de cola.
+- Panel de musica fijo por servidor/canal.
+- Botones de control (playback, volumen, stop, etc.).
+- Auto-actualizacion del panel durante la sesion.
+- Integraciones de busqueda con Spotify y soporte de fuentes adicionales.
 
-### Música (Prefijo)
+### Perfil del bot (owner tools)
 
-- `play`, `queue`, `pause`, `resume`, `skip`, `stop`, `volume`, `add`, `autoplay`: control total de la música.
+- Comando botperfil con panel interactivo.
+- Edicion por botones + modales.
+- Soporte de avatar/banner por servidor.
+- Soporte de carga de imagen por attachment (flujo guiado).
+- Vista de datos actuales del bot en el panel.
 
-### Herramientas y utilidades
+### Imagenes y utilidades
 
-- `help`, `ping`, `bug`, `afk`, `starboard`, `autonuke`, `user`, `cls`, `rules`, `timer`, `uptime`, `invite`, `portal`, `botstats`: utilidades generales y de soporte.
+- Comando quitarfondo (remove.bg) con soporte URL y attachment.
+- Respuestas con Components V2.
+- Vista del resultado en panel visual.
 
-### Funciones de experiencia gamificada
+### Moderacion y administracion
 
-- `Feedback`, `Prestige`, `Levels`, `Rank`, `Stats`, `emojiinfo`: experiencia, estadísticas y feedback de la comunidad.
+- Comandos de sancion (ban, kick, timeout, warn, mute, etc.).
+- Reglas automaticas y herramientas de control.
+- Auditoria y soporte para configuracion de servidor.
 
-### Comandos raíz
+### Comunidad y sistemas sociales
 
-- `mongo`, `lava`: diagnósticos y control de nodos.
+- Niveles, rangos y economia.
+- Sistema de cumpleaños/aniversarios.
+- Modulo de relaciones/marriage.
+- Sistema de alertas de streaming.
 
-## Comandos slash
+### Invitaciones y portal
 
-### Administración
+- Invitacion permanente reutilizable por servidor.
+- Portal con acceso centralizado.
+- Tracking best-effort de invitacion usada.
 
-- `audit`: consulta registros de auditoría.
+### IA y clima
 
-### Moderación
+- Modo IA por canal (configurable).
+- Ejecucion opcional de comandos sin prefijo en canales IA.
+- Respuestas de clima en tiempo real (WeatherAPI/Open-Meteo).
 
-- `mod`: acciones clave de moderación (ban, kick, mute, timeout, warn, unban).
+## Arquitectura de comandos
 
-### Música (Slash)
+El proyecto organiza comandos y handlers por carpetas:
 
-- `musica`: reproducción, control de cola y volumen.
+- Comandos con prefijo en Comandos
+- Comandos slash en Slashcmd
+- Eventos en Eventos
+- Componentes V2 en Components y Util
+- Modelos en Models
+- Handlers centrales en Handlers
 
-### Herramientas
+Categorias activas (prefijo y/o slash):
 
-- `help`, `bug`, `afk`, `cls`, `rules`, `starboard`, `timer`, `invite`, `portal`, `botstats`: utilidades y soporte.
+- Admin
+- Moderation
+- Music
+- Tools
+- Economy
+- Fun
+- Games
+- Social
+- Streaming
+- Root
+- Security
+- Voice
+- Verification
 
-## Sistema de invitaciones (permanentes + anti-manual + tracking)
+## Comandos destacados
 
-El bot incluye un sistema para **tener siempre una única invitación permanente** por servidor y evitar que se creen invitaciones adicionales.
+- musicpanel: crea/administra panel de musica fijo.
+- botperfil: panel para gestionar perfil del bot.
+- quitarfondo: elimina fondos de imagen por URL o archivo.
+- invite / portal: gestion de invitaciones del servidor.
 
-### Qué hace
+## Instalacion rapida
 
-- **Invitación permanente única**: el comando `/invite` (slash) o `invite` (prefijo) devuelve siempre la misma invitación.
-- **Portal del servidor**: el comando `/portal` (slash) o `portal` (prefijo) muestra un panel con botón y el enlace oficial.
-- **Sin crear más invitaciones**: si ya existe una invitación guardada, no se crean nuevas aunque se pida otro canal.
-- **Anti-invitaciones manuales (best-effort)**: si alguien crea una invitación manual, el bot intenta borrarla automáticamente.
-- **Tracking de invitación usada (best-effort)**: cuando entra un usuario, el bot intenta detectar qué invitación subió de usos y lo añade al log de auditoría.
+1. Instalar dependencias.
 
-### Requisitos de permisos
+```bash
+npm install
+```
 
-- Para crear la invitación oficial: el bot necesita **Crear invitación** (`CreateInstantInvite`) en el canal.
-- Para borrar invitaciones manuales y hacer tracking completo: el bot necesita **Gestionar servidor** (`ManageGuild`).
+2. Configurar variables de entorno (.env).
 
-### Persistencia (MongoDB)
+Minimas recomendadas:
 
-Si `MONGODB` está configurado, el bot guarda el código de la invitación oficial en la colección `permanent_invites` para reutilizarla siempre (aunque reinicie).
+- TOKEN o DISCORD_TOKEN
+- MONGODB
+- Lavalink (host, puerto, password)
 
-### Variables de entorno
+Opcionales importantes:
 
-- `INVITE_GUARD_ENABLED=true|false` (por defecto `true`): habilita/deshabilita el borrado de invitaciones manuales.
-- `INVITE_TRACK_ENABLED=true|false` (por defecto `true`): habilita/deshabilita el tracking de invitación usada en `guildMemberAdd`.
+- REMOVEBG_API_KEY
+- WEATHERAPI_KEY
+- PRIVACY_POLICY_URL
+- DATA_DELETE_CONTACT
 
-## Modo IA (auto-reply por canal)
+3. Iniciar bot.
 
-El bot puede responder automáticamente en canales donde el **modo IA** esté activado (sin necesidad de mención).
+```bash
+npm run dev
+```
 
-- Activar/desactivar/estado: usa el comando de prefijo `ia` (owners-only).
-- Personalización (por canal): se puede ajustar mientras conversas (owners-only) usando mensajes tipo `prompt: ...`, `modelo: ...`, `temperatura: ...`, etc.
+o
 
-### Comandos sin prefijo (en canal IA)
+```bash
+npm run start:clean
+```
 
-En canales con IA activada, el bot puede ejecutar **comandos de prefijo** aunque no escribas el prefijo.
+## Versionado y releases
 
-- Ejemplo: escribir `help` en vez de `.help`.
-- También acepta frases tipo: `ejecuta help`, `usa ping`, `haz afk estoy comiendo`.
+Se usa SemVer: MAJOR.MINOR.PATCH.
 
-Por seguridad, esto está pensado para **owners** por defecto.
+- PATCH: fixes y ajustes pequenos.
+- MINOR: nuevas funciones compatibles.
+- MAJOR: cambios incompatibles.
 
-Variables (opcional):
+Scripts disponibles:
 
-- `AI_COMMANDS_WITHOUT_PREFIX=0` (por defecto `0`): habilita/deshabilita esta función.
-- `AI_COMMANDS_ALLOW_NON_OWNERS=0` (por defecto `0`): si lo pones en `1`, cualquier usuario podrá disparar comandos sin prefijo en canales IA (no recomendado).
+- npm run release:patch
+- npm run release:minor
+- npm run release:major
 
-## Privacidad y cumplimiento Discord
+Historial de releases de la serie 1.x documentado en RELEASE_NOTES.md.
 
-- Comando prefijo: `privacy`
-- Comando slash: `/privacy`
+## Seguridad y buenas practicas
 
-Ambos comandos muestran qué datos mínimos usa el bot y cómo pedir borrado.
+- No subas tokens ni API keys al repositorio.
+- Rota cualquier credencial expuesta.
+- Revisa permisos del bot por servidor antes de habilitar funciones sensibles.
 
-Variables recomendadas:
+## Documentos relacionados
 
-- `PRIVACY_POLICY_URL=https://tu-dominio/politica-de-privacidad`
-- `DATA_DELETE_CONTACT=correo_o_forma_de_contacto`
+- PRIVACY.md
+- DEBUGGING.md
+- RELEASE_NOTES.md
+- SPOTIFY_MARKETS.md
 
-## Comando `sayu` (seguridad)
+## Nota
 
-`/sayu` queda deshabilitado por defecto para reducir riesgo de suplantación/uso engañoso.
-
-- Para habilitarlo explícitamente: `ENABLE_SAYU=1`
-- Además, exige permiso `Manage Messages`.
-
-## Clima/tiempo en tiempo real
-
-Cuando el modo IA está activo en un canal, el bot intercepta preguntas de clima y responde con datos reales (sin llamar a OpenAI).
-
-- Ejemplos: "tiempo en Madrid", "clima mañana en Toronto", "pronóstico en Barcelona".
-- Proveedor preferido: WeatherAPI.com (si hay key configurada).
-- Fallback: Open-Meteo (si no hay key o falla WeatherAPI).
-
-### Variables de entorno (clima)
-
-- `WEATHERAPI_KEY=...` (opcional): habilita WeatherAPI.
-- `WEATHER_CACHE_TTL_MS=60000` (opcional): TTL del caché de respuestas de clima.
-
-### Variables de entorno (Discord)
-
-- `TOKEN=...` (recomendado): token del bot (valor que usa el proyecto hoy).
-- `DISCORD_TOKEN=...` (alternativa): también se acepta por compatibilidad con tutoriales.
-- `GUILD_ACTIVITY_WEBHOOK_URL=https://discord.com/api/webhooks/...` (opcional): webhook para avisos cuando el bot entra/sale de servidores.
-- `GUILD_ACTIVITY_LOG_CHANNEL_ID=...` (opcional): canal fallback para esos avisos si no hay webhook.
-- `GUILD_ACTIVITY_WEBHOOK_NAME=Invitaciones Bot` (opcional): nombre visible del webhook.
-- `GUILD_ACTIVITY_WEBHOOK_AVATAR_URL=https://...` (opcional): avatar del webhook.
-- `GUILD_ACTIVITY_WEBHOOK_MENTION=@GOKU ULTRA` (opcional): texto/mención encima del embed.
-
-No compartas ni subas tus keys (si se filtraron, rótalas/regénéralas).
-
-Mantén este README actualizado cada vez que se agregue o retire un comando para reflejar los cambios reales en `Comandos/` y `Slashcmd/`.
+Este README refleja el estado actual del proyecto y sus sistemas principales. Para ver implementaciones exactas, revisa las carpetas Comandos, Slashcmd, Eventos y Util.
