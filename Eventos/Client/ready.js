@@ -9,6 +9,7 @@ const { normalizeDiscordId } = require('../../Util/idGuards');
 const { startBirthdayAnnouncements } = require('../../Util/birthdayAnnouncements');
 const { startAnniversaryAnnouncements } = require('../../Util/anniversaryAnnouncements');
 const { startStreamAlerts } = require('../../Util/streamAlerts');
+const { refreshSeasonStyle } = require('../../Util/seasonStyle');
 
 function isPrimaryShard(client) {
     try {
@@ -70,6 +71,9 @@ module.exports = async (Moxi) => {
     }
 
     const moxi = require("../../i18n");
+
+    // Aplica estilo estacional global al arrancar (best-effort).
+    await refreshSeasonStyle().catch(() => null);
     const globalPrefix = (Array.isArray(Config?.Bot?.Prefix) && Config.Bot.Prefix[0])
         ? Config.Bot.Prefix[0]
         : (process.env.PREFIX || '.');
@@ -215,6 +219,14 @@ module.exports = async (Moxi) => {
         try { clearInterval(Moxi.__statusInterval); } catch { }
     }
     Moxi.__statusInterval = setInterval(updateStatus, 5000);
+
+    // Recalcula el estilo estacional cada 6h para capturar cambios de fecha/estación.
+    if (Moxi.__seasonStyleInterval) {
+        try { clearInterval(Moxi.__seasonStyleInterval); } catch { }
+    }
+    Moxi.__seasonStyleInterval = setInterval(() => {
+        refreshSeasonStyle().catch(() => null);
+    }, 6 * 60 * 60 * 1000);
 
     logger.startup(`${EMOJIS.butter} Conectado como ${Moxi.user.tag}`);
     logger.divider();

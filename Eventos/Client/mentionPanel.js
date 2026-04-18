@@ -2,6 +2,7 @@ const { ContainerBuilder, MessageFlags } = require('discord.js');
 const { ButtonBuilder, ButtonStyle } = require('../../Util/compatButtonBuilder');
 const { EMOJIS } = require('../../Util/emojis');
 const { Bot } = require('../../Config');
+const { getSeasonBadge } = require('../../Util/seasonBrand');
 
 async function panelV2({ client: Moxi, message, prefix, serverPrefix, userPrefix }) {
     const moxi = require('../../i18n');
@@ -33,6 +34,9 @@ async function panelV2({ client: Moxi, message, prefix, serverPrefix, userPrefix
         .setAccentColor(Bot.AccentColor)
         .addTextDisplayComponents(c =>
             c.setContent(t(panel.greeting))
+        )
+        .addTextDisplayComponents(c =>
+            c.setContent(`> Estación activa: **${getSeasonBadge()}**`)
         )
         .addTextDisplayComponents(c =>
             c.setContent(t(panel.lang_label))
