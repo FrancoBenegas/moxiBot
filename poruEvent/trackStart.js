@@ -7,14 +7,16 @@ const {
     MessageFlags,
 } = require('discord.js');
 const formatDuration = require("../Util/formate.js");
-const { musicCard } = require("musicard-quartz");
 const { Bot } = require("../Config");
 const { EMOJIS } = require("../Util/emojis");
+const { formatSessionEndedFooter, formatStudioFooter } = require('../Util/seasonBrand');
+const { getDisplaySongName, renderMusicCard } = require('../Util/musicCardRenderer');
 const {
     buildMusicControlsRow,
     buildMusicVolumeRow,
     buildDisabledMusicSessionContainer,
 } = require('../Components/V2/musicControlsComponent');
+const { getGuildSettingsCached, setGuildMusicPanelActive, setGuildMusicPanelConfig } = require('../Util/guildSettings');
 const {
     buildActiveMusicPanelData,
     getMusicPanelMessage,
@@ -90,19 +92,89 @@ function getEnvNumber(key, fallback) {
     return Number.isFinite(n) ? n : fallback;
 }
 
-// Temas conocidos en musicard-quartz: quartz+, onepiece+, vector+
-// Por defecto usamos vector+ (el estilo de la card que buscabas).
-const MUSIC_CARD_THEME = String(process.env.MUSIC_CARD_THEME || 'vector+');
-const MUSIC_CARD_COLOR = String(process.env.MUSIC_CARD_COLOR || 'auto');
-const MUSIC_CARD_BRIGHTNESS = getEnvNumber('MUSIC_CARD_BRIGHTNESS', 50);
+function clampNumber(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
+function getPlayerVolumePercent(player) {
+    const candidates = [player?.volume, player?.filters?.volume, player?.currentVolume];
+    const found = candidates.find((v) => Number.isFinite(Number(v)));
+    if (!Number.isFinite(Number(found))) return 100;
+    return clampNumber(Math.round(Number(found)), 0, 100);
+}
+
+function toBooleanFlag(value) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value > 0;
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        return ['1', 'true', 'yes', 'si', 'explicit', 'clean=false'].includes(normalized);
+    }
+    return false;
+}
+
+function hasExplicitMarkerInTitle(title) {
+    const t = String(title || '').trim().toLowerCase();
+    if (!t) return false;
+
+    // Modo estricto: solo marcadores explícitos canónicos.
+    if (/\[e\]|\(e\)|🅴/.test(t)) return true;
+    return false;
+}
+
+function isTrackExplicit(track) {
+    const candidates = [
+        track?.info?.isExplicit,
+        track?.info?.explicit,
+        track?.pluginInfo?.isExplicit,
+        track?.pluginInfo?.explicit,
+    ];
+    if (candidates.some((value) => toBooleanFlag(value))) return true;
+    return hasExplicitMarkerInTitle(track?.info?.title);
+}
 
 module.exports = async (Moxi, player, track) => {
     try {
         const channel = Moxi.channels.cache.get(player.textChannel);
         if (!channel) return;
+        let guildId = player.guild?.id || player.guildId || player.options?.guildId;
 
-        initMusicPanelTimeline(player, 0);
+        const startPos = Number(track?.info?.position);
+        initMusicPanelTimeline(player, Number.isFinite(startPos) ? startPos : 0);
         stopMusicPanelAutoUpdate(player);
+
+        const guildSettings = await getGuildSettingsCached(guildId).catch(() => null);
+        const fixedPanelEnabled = !!guildSettings?.MusicFixedPanelEnabled;
+        const fixedPanelChannelId = String(guildSettings?.MusicFixedPanelChannelId || '');
+        const fixedPanelMessageId = String(guildSettings?.MusicFixedPanelMessageId || '');
+        const configuredPanelImage = String(guildSettings?.MusicFixedPanelImageUrl || '').trim();
+
+        if (fixedPanelEnabled && fixedPanelChannelId && fixedPanelChannelId === String(channel.id) && fixedPanelMessageId) {
+            const fixedMessage = await channel.messages.fetch(fixedPanelMessageId).catch(() => null);
+            if (fixedMessage) {
+                setMusicPanelMessage(player, fixedMessage);
+                Moxi.previousMessage = fixedMessage;
+
+                const defaultPanelImage = configuredPanelImage
+                    || String(process.env.MUSIC_FALLBACK_IMAGE_URL || '').trim()
+                    || Moxi?.user?.displayAvatarURL?.({ extension: 'png', size: 1024 })
+                    || null;
+
+                // En panel fijo activo priorizamos portada real; si no existe, usamos fallback configurado.
+                const artworkUrl = await getBestArtworkUrl(track, defaultPanelImage);
+                await player.set('lastSessionData', {
+                    title: '',
+                    info: '',
+                    imageUrl: artworkUrl || null,
+                    artworkSourceUrl: artworkUrl || null,
+                });
+
+                await renderActiveMusicPanel({ client: Moxi, player, message: fixedMessage, force: true });
+                startMusicPanelAutoUpdate(Moxi, player, fixedMessage);
+                await setGuildMusicPanelActive(guildId, true).catch(() => null);
+                return;
+            }
+        }
 
         // --- 1. DESACTIVAR BOTONES ANTERIORES ---
         const lastSession = await player.get("lastSessionData");
@@ -114,7 +186,7 @@ module.exports = async (Moxi, player, track) => {
                     title: lastSession.title,
                     info: lastSession.info,
                     imageUrl: lastSession.imageUrl,
-                    footerText: "_**Moxi Studios**_ - Sesión Finalizada",
+                    footerText: formatSessionEndedFooter(),
                 });
 
                 await previousPanelMessage.edit({
@@ -130,24 +202,22 @@ module.exports = async (Moxi, player, track) => {
         const trackDuration = track.info.isStream ? "LIVE" : formatDuration(track.info.length);
         const artworkUrl = await getBestArtworkUrl(track, null);
 
-        // --- 2. GENERAR NUEVA TARJETA (musicard-quartz) ---
+        // --- 2. GENERAR NUEVA TARJETA (musicard -> Melt) ---
         // Nota: progress/tiempos reales se verán mejor en updates; en trackStart normalmente estamos en 0:00.
         let buffer = null;
         if (artworkUrl) {
-            const quartzCard = new musicCard()
-                .setName(track.info.title)
-                .setAuthor(track.info.author)
-                // Puede ser "auto" o un color (por ejemplo: #FFB6E6)
-                .setColor(MUSIC_CARD_COLOR)
-                .setTheme(MUSIC_CARD_THEME)
-                .setBrightness(MUSIC_CARD_BRIGHTNESS)
-                .setProgress(2)
-                .setStartTime("0:00")
-                .setEndTime(trackDuration)
-                .setThumbnail(artworkUrl);
-
             try {
-                buffer = await quartzCard.build();
+                buffer = await renderMusicCard({
+                    trackName: getDisplaySongName(track?.info?.title, track?.info?.author),
+                    artistName: String(track?.info?.author || 'Unknown Artist'),
+                    albumArt: artworkUrl,
+                    fallbackArt: FALLBACK_IMG || artworkUrl,
+                    timeStart: '0:00',
+                    timeEnd: String(trackDuration || '0:00'),
+                    progressBar: 2,
+                    volumeBar: getPlayerVolumePercent(player),
+                    isExplicit: isTrackExplicit(track),
+                });
             } catch {
                 buffer = null;
             }
@@ -159,7 +229,7 @@ module.exports = async (Moxi, player, track) => {
 
         // Traducción internacionalizada con idioma de la base de datos
         const moxi = require("../i18n");
-        let guildId = player.guild?.id || player.guildId || player.options?.guildId;
+        guildId = player.guild?.id || player.guildId || player.options?.guildId;
         const lang = await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES');
 
         const imageUrlForGallery = hasBuffer ? `attachment://${fileName}` : (artworkUrl || null);
@@ -196,7 +266,7 @@ module.exports = async (Moxi, player, track) => {
             .addActionRowComponents(buttonsRow)
             .addSeparatorComponents(new SeparatorBuilder()) // Separador solicitado
             .addActionRowComponents(volumeRow)
-            .addTextDisplayComponents(new TextDisplayBuilder().setContent(initialPanel?.footerText || `> ${EMOJIS.studioAnim} _**Moxi Studios**_ `));
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(initialPanel?.footerText || formatStudioFooter()));
 
         // --- 4. ENVIAR Y GUARDAR ---
         const sendPayload = {
@@ -219,6 +289,17 @@ module.exports = async (Moxi, player, track) => {
             imageUrl: finalImageUrl,
             artworkSourceUrl: artworkUrl || finalImageUrl
         });
+
+        if (fixedPanelEnabled) {
+            await setGuildMusicPanelConfig(guildId, {
+                channelId: channel.id,
+                messageId: newMessage.id,
+                active: true,
+                lastActiveAt: new Date(),
+            }).catch(() => null);
+        } else {
+            await setGuildMusicPanelActive(guildId, true).catch(() => null);
+        }
 
         await renderActiveMusicPanel({ client: Moxi, player, message: newMessage, force: true });
         startMusicPanelAutoUpdate(Moxi, player, newMessage);
