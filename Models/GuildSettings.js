@@ -72,6 +72,89 @@ async function setGuildEconomyExclusive(guildId, exclusive) {
   return result.matchedCount > 0 || result.upsertedCount > 0;
 }
 
+async function setGuildMusicPanelConfig(guildId, patch = {}) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+
+  const safePatch = {};
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'enabled')) {
+    safePatch.MusicFixedPanelEnabled = !!patch.enabled;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'channelId')) {
+    const clean = normalizeDiscordId(patch.channelId);
+    if (clean) safePatch.MusicFixedPanelChannelId = clean;
+    else safePatch.MusicFixedPanelChannelId = null;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'messageId')) {
+    const clean = normalizeDiscordId(patch.messageId);
+    if (clean) safePatch.MusicFixedPanelMessageId = clean;
+    else safePatch.MusicFixedPanelMessageId = null;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'active')) {
+    safePatch.MusicFixedPanelActive = !!patch.active;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'imageUrl')) {
+    const raw = normalizeDbText(patch.imageUrl, { maxLen: 2000, fallback: '' }) || null;
+    safePatch.MusicFixedPanelImageUrl = raw;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'lastActiveAt')) {
+    const dateValue = patch.lastActiveAt ? new Date(patch.lastActiveAt) : null;
+    safePatch.MusicFixedPanelLastActiveAt = dateValue;
+  }
+
+  const update = {
+    $set: safePatch,
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function touchGuildMusicPanelActivity(guildId, { active = true } = {}) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+
+  const update = {
+    $set: {
+      MusicFixedPanelLastActiveAt: new Date(),
+      MusicFixedPanelActive: !!active,
+    },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function setGuildMusicPanelActive(guildId, active) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: {
+      MusicFixedPanelActive: !!active,
+      MusicFixedPanelLastActiveAt: new Date(),
+    },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
 async function setGuildPrefix(guildId, prefix) {
   guildId = safeGuildId(guildId);
   if (!guildId) return false;
@@ -324,4 +407,7 @@ module.exports = {
   setGuildEconomyEnabled,
   setGuildEconomyChannel,
   setGuildEconomyExclusive,
+  setGuildMusicPanelConfig,
+  touchGuildMusicPanelActivity,
+  setGuildMusicPanelActive,
 };
