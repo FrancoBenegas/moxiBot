@@ -4,6 +4,7 @@ const { SlashCommandBuilder } = require('../../Util/slashCommandBuilder');
 const moxi = require('../../i18n');
 const { EMOJIS } = require('../../Util/emojis');
 const { Bot } = require('../../Config');
+const { withSeasonTitle, getSeasonBadge, formatGlobalFooter } = require('../../Util/seasonBrand');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -67,7 +68,9 @@ module.exports = {
 
         const container = new ContainerBuilder()
             .setAccentColor(Bot.AccentColor)
-            .addTextDisplayComponents((c) => c.setContent(`# ${EMOJIS.pingPong} ${safePingTitle}`))
+            .addTextDisplayComponents((c) => c.setContent(withSeasonTitle(`${EMOJIS.pingPong} ${safePingTitle}`)))
+            .addSeparatorComponents((s) => s.setDivider(true))
+            .addTextDisplayComponents((c) => c.setContent(`> Estación activa: **${getSeasonBadge()}**`))
             .addSeparatorComponents((s) => s.setDivider(true))
             .addTextDisplayComponents((c) => {
                 let content = `${EMOJIS.mail} ${moxi.translate('PING_MESSAGE_LATENCY', lang)}: **${msgPing}ms**\n`;
@@ -102,7 +105,7 @@ module.exports = {
                 )
             )
             .addSeparatorComponents((s) => s.setDivider(true))
-            .addTextDisplayComponents((c) => c.setContent(`${EMOJIS.copyright} ${Moxi.user.username} • ${new Date().getFullYear()}`));
+            .addTextDisplayComponents((c) => c.setContent(formatGlobalFooter(Moxi.user.username, new Date().getFullYear())));
 
         return interaction.reply({
             content: '',
