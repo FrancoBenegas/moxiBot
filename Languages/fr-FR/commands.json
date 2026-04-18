@@ -116,5 +116,15 @@
     "CMD_COINFLIP_DESC": "Lance une pièce (pile ou face).",
     "CMD_DICE_DESC": "Lance un dé (nombre de faces optionnel).",
     "CMD_8BALL_DESC": "Pose une question à la boule magique 8.",
-    "CMD_SHIP_DESC": "Calcule la compatibilité entre deux personnes."
+    "CMD_SHIP_DESC": "Calcule la compatibilité entre deux personnes.",
+    "CMD_QUITARFONDO_DESC": "Supprime l'arrière-plan d'une image (PNG transparent).",
+    "CMD_QUITARFONDO_TITLE": "Retirer l'arrière-plan",
+    "CMD_QUITARFONDO_UNSUPPORTED": "Votre environnement actuel ne prend pas en charge fetch/FormData pour cette commande.",
+    "CMD_QUITARFONDO_MISSING_KEY": "La variable d'environnement REMOVEBG_API_KEY est manquante pour cette commande.",
+    "CMD_QUITARFONDO_USAGE": "Utilisation : quitarfondo <url> ou joignez une image avec la commande.",
+    "CMD_QUITARFONDO_PROCESSING": "Traitement de l'image, veuillez patienter...",
+    "CMD_QUITARFONDO_DEFAULT_API_ERROR": "Impossible de traiter l'image.",
+    "CMD_QUITARFONDO_API_ERROR": "Impossible de supprimer l'arrière-plan : {{reason}}",
+    "CMD_QUITARFONDO_SUCCESS": "C'est fait, voici ton image sans arrière-plan :",
+    "CMD_QUITARFONDO_RUNTIME_ERROR": "Erreur lors de la suppression de l'arrière-plan : {{reason}}"
 }

@@ -129,6 +129,16 @@
     "CMD_COINFLIP_DESC": "Flip a coin (heads or tails).",
     "CMD_DICE_DESC": "Roll a dice (optionally choose sides).",
     "CMD_8BALL_DESC": "Ask the Magic 8-Ball a question.",
-    "CMD_SHIP_DESC": "Calculates compatibility between two people."
-    ,"CMD_BIRTHDAY_DESC": "Profile birthday module."
+    "CMD_SHIP_DESC": "Calculates compatibility between two people.",
+    "CMD_BIRTHDAY_DESC": "Profile birthday module.",
+    "CMD_QUITARFONDO_DESC": "Removes image background (transparent PNG).",
+    "CMD_QUITARFONDO_TITLE": "Remove Background",
+    "CMD_QUITARFONDO_UNSUPPORTED": "Your current runtime does not support fetch/FormData for this command.",
+    "CMD_QUITARFONDO_MISSING_KEY": "Missing REMOVEBG_API_KEY environment variable for this command.",
+    "CMD_QUITARFONDO_USAGE": "Usage: quitarfondo <url> or attach an image with the command.",
+    "CMD_QUITARFONDO_PROCESSING": "Processing image, please wait...",
+    "CMD_QUITARFONDO_DEFAULT_API_ERROR": "Could not process the image.",
+    "CMD_QUITARFONDO_API_ERROR": "Could not remove background: {{reason}}",
+    "CMD_QUITARFONDO_SUCCESS": "Done, here is your image without background:",
+    "CMD_QUITARFONDO_RUNTIME_ERROR": "Error removing background: {{reason}}"
 }

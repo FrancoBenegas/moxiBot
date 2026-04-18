@@ -116,5 +116,15 @@
     "CMD_COINFLIP_DESC": "Wirf eine Münze (Kopf oder Zahl).",
     "CMD_DICE_DESC": "Würfle (optional Seiten wählen).",
     "CMD_8BALL_DESC": "Stelle dem magischen 8-Ball eine Frage.",
-    "CMD_SHIP_DESC": "Berechnet die Kompatibilität zwischen zwei Personen."
+    "CMD_SHIP_DESC": "Berechnet die Kompatibilität zwischen zwei Personen.",
+    "CMD_QUITARFONDO_DESC": "Entfernt den Bildhintergrund (transparentes PNG).",
+    "CMD_QUITARFONDO_TITLE": "Hintergrund entfernen",
+    "CMD_QUITARFONDO_UNSUPPORTED": "Deine aktuelle Laufzeit unterstützt fetch/FormData für diesen Befehl nicht.",
+    "CMD_QUITARFONDO_MISSING_KEY": "Die Umgebungsvariable REMOVEBG_API_KEY fehlt für diesen Befehl.",
+    "CMD_QUITARFONDO_USAGE": "Nutzung: quitarfondo <url> oder hänge ein Bild an den Befehl an.",
+    "CMD_QUITARFONDO_PROCESSING": "Bild wird verarbeitet, bitte warte...",
+    "CMD_QUITARFONDO_DEFAULT_API_ERROR": "Das Bild konnte nicht verarbeitet werden.",
+    "CMD_QUITARFONDO_API_ERROR": "Hintergrund konnte nicht entfernt werden: {{reason}}",
+    "CMD_QUITARFONDO_SUCCESS": "Fertig, hier ist dein Bild ohne Hintergrund:",
+    "CMD_QUITARFONDO_RUNTIME_ERROR": "Fehler beim Entfernen des Hintergrunds: {{reason}}"
 }

@@ -116,5 +116,15 @@
     "CMD_COINFLIP_DESC": "Lempar koin (kepala atau ekor).",
     "CMD_DICE_DESC": "Lempar dadu (opsional pilih sisi).",
     "CMD_8BALL_DESC": "Tanya sesuatu ke Bola 8 ajaib.",
-    "CMD_SHIP_DESC": "Menghitung kecocokan antara dua orang."
+    "CMD_SHIP_DESC": "Menghitung kecocokan antara dua orang.",
+    "CMD_QUITARFONDO_DESC": "Menghapus latar belakang gambar (PNG transparan).",
+    "CMD_QUITARFONDO_TITLE": "Hapus Latar Belakang",
+    "CMD_QUITARFONDO_UNSUPPORTED": "Runtime saat ini tidak mendukung fetch/FormData untuk perintah ini.",
+    "CMD_QUITARFONDO_MISSING_KEY": "Variabel lingkungan REMOVEBG_API_KEY belum diatur untuk perintah ini.",
+    "CMD_QUITARFONDO_USAGE": "Penggunaan: quitarfondo <url> atau lampirkan gambar bersama perintah.",
+    "CMD_QUITARFONDO_PROCESSING": "Memproses gambar, mohon tunggu...",
+    "CMD_QUITARFONDO_DEFAULT_API_ERROR": "Tidak dapat memproses gambar.",
+    "CMD_QUITARFONDO_API_ERROR": "Tidak dapat menghapus latar belakang: {{reason}}",
+    "CMD_QUITARFONDO_SUCCESS": "Selesai, ini gambar tanpa latar belakang:",
+    "CMD_QUITARFONDO_RUNTIME_ERROR": "Terjadi kesalahan saat menghapus latar belakang: {{reason}}"
 }

@@ -116,5 +116,15 @@
     "CMD_COINFLIP_DESC": "Lancia una moneta (testa o croce).",
     "CMD_DICE_DESC": "Tira un dado (facce opzionali).",
     "CMD_8BALL_DESC": "Fai una domanda alla sfera magica 8.",
-    "CMD_SHIP_DESC": "Calcola la compatibilità tra due persone."
+    "CMD_SHIP_DESC": "Calcola la compatibilità tra due persone.",
+    "CMD_QUITARFONDO_DESC": "Rimuove lo sfondo da un'immagine (PNG trasparente).",
+    "CMD_QUITARFONDO_TITLE": "Rimuovi Sfondo",
+    "CMD_QUITARFONDO_UNSUPPORTED": "L'ambiente corrente non supporta fetch/FormData per questo comando.",
+    "CMD_QUITARFONDO_MISSING_KEY": "Manca la variabile d'ambiente REMOVEBG_API_KEY per questo comando.",
+    "CMD_QUITARFONDO_USAGE": "Uso: quitarfondo <url> oppure allega un'immagine al comando.",
+    "CMD_QUITARFONDO_PROCESSING": "Elaborazione immagine in corso, attendi...",
+    "CMD_QUITARFONDO_DEFAULT_API_ERROR": "Impossibile elaborare l'immagine.",
+    "CMD_QUITARFONDO_API_ERROR": "Impossibile rimuovere lo sfondo: {{reason}}",
+    "CMD_QUITARFONDO_SUCCESS": "Fatto, ecco la tua immagine senza sfondo:",
+    "CMD_QUITARFONDO_RUNTIME_ERROR": "Errore durante la rimozione dello sfondo: {{reason}}"
 }

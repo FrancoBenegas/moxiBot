@@ -114,5 +114,15 @@
     "CMD_COINFLIP_DESC": "동전을 던져요(앞면/뒷면).",
     "CMD_DICE_DESC": "주사위를 굴려요(면 수 선택 가능).",
     "CMD_8BALL_DESC": "매직 8볼에게 질문해요.",
-    "CMD_SHIP_DESC": "두 사람의 궁합을 계산해요."
+    "CMD_SHIP_DESC": "두 사람의 궁합을 계산해요.",
+    "CMD_QUITARFONDO_DESC": "이미지 배경을 제거합니다(투명 PNG).",
+    "CMD_QUITARFONDO_TITLE": "배경 제거",
+    "CMD_QUITARFONDO_UNSUPPORTED": "현재 런타임은 이 명령에 필요한 fetch/FormData를 지원하지 않습니다.",
+    "CMD_QUITARFONDO_MISSING_KEY": "이 명령에 필요한 REMOVEBG_API_KEY 환경 변수가 설정되지 않았습니다.",
+    "CMD_QUITARFONDO_USAGE": "사용법: quitarfondo <url> 또는 명령과 함께 이미지를 첨부하세요.",
+    "CMD_QUITARFONDO_PROCESSING": "이미지를 처리 중입니다. 잠시만 기다려 주세요...",
+    "CMD_QUITARFONDO_DEFAULT_API_ERROR": "이미지를 처리할 수 없습니다.",
+    "CMD_QUITARFONDO_API_ERROR": "배경을 제거할 수 없습니다: {{reason}}",
+    "CMD_QUITARFONDO_SUCCESS": "완료되었습니다. 배경이 제거된 이미지입니다:",
+    "CMD_QUITARFONDO_RUNTIME_ERROR": "배경 제거 중 오류가 발생했습니다: {{reason}}"
 }
