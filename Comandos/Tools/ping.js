@@ -5,6 +5,7 @@ const { ButtonBuilder } = require('../../Util/compatButtonBuilder');
 const moxi = require('../../i18n');
 const { EMOJIS } = require('../../Util/emojis');
 const { Bot } = require('../../Config');
+const { withSeasonTitle, getSeasonBadge, formatGlobalFooter } = require('../../Util/seasonBrand');
 module.exports = {
     name: "ping",
     alias: ['ping', 'latency', 'p'],
@@ -59,7 +60,11 @@ module.exports = {
             new ContainerBuilder()
                 .setAccentColor(Bot.AccentColor)
                 .addTextDisplayComponents(c =>
-                    c.setContent(`# ${EMOJIS.pingPong} ${safePingTitle}`)
+                    c.setContent(withSeasonTitle(`${EMOJIS.pingPong} ${safePingTitle}`))
+                )
+                .addSeparatorComponents(s => s.setDivider(true))
+                .addTextDisplayComponents(c =>
+                    c.setContent(`> Estación activa: **${getSeasonBadge()}**`)
                 )
                 .addSeparatorComponents(s => s.setDivider(true))
                 .addTextDisplayComponents(c => {
@@ -96,7 +101,7 @@ module.exports = {
                 )
                 .addSeparatorComponents(s => s.setDivider(true))
                 .addTextDisplayComponents(c =>
-                    c.setContent(`${EMOJIS.copyright} ${Moxi.user.username} • ${new Date().getFullYear()}`)
+                    c.setContent(formatGlobalFooter(Moxi.user.username, new Date().getFullYear()))
                 );
 
         const now = Date.now();
