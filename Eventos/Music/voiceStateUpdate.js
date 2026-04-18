@@ -2,7 +2,9 @@ const Moxi = require("../../index");
 const { MessageFlags } = require("discord.js");
 const { buildDisabledMusicSessionContainer } = require("../../Components/V2/musicControlsComponent");
 const logger = require("../../Util/logger");
+const { formatSessionEndedFooter } = require('../../Util/seasonBrand');
 const { getMusicPanelMessage, stopMusicPanelAutoUpdate } = require('../../Util/musicPanelAutoUpdater');
+const { setGuildMusicPanelActive } = require('../../Util/guildSettings');
 
 const SOLO_DESTROY_GRACE_MS = Number(process.env.MUSIC_SOLO_DESTROY_GRACE_MS || 15000);
 
@@ -43,7 +45,7 @@ Moxi.on('voiceStateUpdate', async (oldVoice, newVoice) => {
                                 title: lastSession.title,
                                 info: lastSession.info,
                                 imageUrl: lastSession.imageUrl,
-                                footerText: "_**Moxi Studios**_ - Sesión Finalizada",
+                                footerText: formatSessionEndedFooter(),
                             });
                             await panelMessage.edit({
                                 components: [disabledContainer],
@@ -55,6 +57,7 @@ Moxi.on('voiceStateUpdate', async (oldVoice, newVoice) => {
                     }
                 }
 
+                await setGuildMusicPanelActive(oldVoice.guild.id, false).catch(() => null);
                 livePlayer.destroy();
             }, SOLO_DESTROY_GRACE_MS).unref?.();
         }

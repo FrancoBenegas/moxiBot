@@ -187,6 +187,9 @@ Moxi.on("interactionCreate", async (interaction) => {
           'autoplay',
           'vol_up',
           'vol_down',
+          'seek_back',
+          'seek_forward',
+          'stop',
         ]);
         if (musicIds.has(baseId)) return;
       } catch { }

@@ -13,7 +13,10 @@ const { EMOJIS } = require("../../Util/emojis");
 const ms = require("ms");
 const { ButtonBuilder } = require("../../Util/compatButtonBuilder");
 const { resolveBlacklistBlock, logBlacklistHit } = require("../../Util/blacklistStorage");
-const { renderActiveMusicPanel, seekMusicPanelTimeline, setMusicPanelMessage, setMusicPanelPaused } = require('../../Util/musicPanelAutoUpdater');
+const { renderActiveMusicPanel, seekMusicPanelTimeline, setMusicPanelMessage, setMusicPanelPaused, stopMusicPanelAutoUpdate } = require('../../Util/musicPanelAutoUpdater');
+const { buildDisabledMusicSessionContainer } = require('../../Components/V2/musicControlsComponent');
+const { formatSessionEndedFooter } = require('../../Util/seasonBrand');
+const { getGuildSettingsCached, setGuildMusicPanelActive } = require('../../Util/guildSettings');
 
 function v2Flags() {
     return MessageFlags.Ephemeral | MessageFlags.IsComponentsV2;
@@ -312,6 +315,46 @@ Moxi.on("interactionCreate", async (interaction) => {
             return safeReply(interaction, { components: [buildV2Notice(moxi.translate('MUSIC_VOLUME_UP', lang, { vol: newVol }))], flags: v2Flags() });
         }
 
+        if (interaction.customId === "seek_back" || interaction.customId === "seek_forward") {
+            const lang = await moxi.guildLang(interaction.guild?.id, process.env.DEFAULT_LANG || 'es-ES');
+            const player = Moxi.poru.players.get(interaction.guild.id);
+            if (!player) {
+                return safeReply(interaction, { components: [buildV2Notice(moxi.translate('MUSIC_NO_MUSIC_PLAYING', lang))], flags: v2Flags() });
+            }
+
+            const memberChannel = interaction.member.voice.channelId;
+            const botChannel = interaction.guild.members.me.voice.channelId;
+            if (!memberChannel || memberChannel !== botChannel) {
+                return safeReply(interaction, { components: [buildV2Notice(moxi.translate('MUSIC_SAME_VOICE_CHANNEL', lang))], flags: v2Flags() });
+            }
+
+            const current = player.currentTrack?.info;
+            if (!current) {
+                return safeReply(interaction, { components: [buildV2Notice(moxi.translate('MUSIC_NO_MUSIC_PLAYING', lang))], flags: v2Flags() });
+            }
+
+            if (current.isStream || current.isSeekable === false) {
+                return safeReply(interaction, { components: [buildV2Notice(moxi.translate('MUSIC_NOT_SEEKABLE', lang))], flags: v2Flags() });
+            }
+
+            const stepMs = 10_000;
+            const direction = interaction.customId === 'seek_forward' ? 1 : -1;
+            const duration = Number(current.length) || 0;
+            const currentPos = Number(player.position) || 0;
+            const maxSeek = duration > 1_500 ? (duration - 1_000) : duration;
+            const target = Math.max(0, Math.min(maxSeek, currentPos + (direction * stepMs)));
+
+            await player.seekTo(target);
+            seekMusicPanelTimeline(player, target);
+
+            const notice = direction > 0
+                ? `Adelantado a ${ms(target)}.`
+                : `Retrocedido a ${ms(target)}.`;
+
+            await tryUpdateMainPanel(interaction, player, lang, notice);
+            return safeReply(interaction, { components: [buildV2Notice(notice)], flags: v2Flags() });
+        }
+
         // --- BAJAR VOLUMEN ---
         if (interaction.customId === "vol_down") {
             const lang = await moxi.guildLang(interaction.guild?.id, process.env.DEFAULT_LANG || 'es-ES');
@@ -331,6 +374,74 @@ Moxi.on("interactionCreate", async (interaction) => {
             player.setVolume(newVol);
             await tryUpdateMainPanel(interaction, player, lang, moxi.translate('MUSIC_CURRENT_VOLUME', lang, { volume: newVol }));
             return safeReply(interaction, { components: [buildV2Notice(moxi.translate('MUSIC_VOLUME_DOWN', lang, { vol: newVol }))], flags: v2Flags() });
+        }
+
+        if (interaction.customId === 'stop') {
+            const lang = await moxi.guildLang(interaction.guild?.id, process.env.DEFAULT_LANG || 'es-ES');
+            const guard = ensureSameVoiceChannel(interaction, lang);
+            if (guard) return safeReply(interaction, guard);
+
+            const player = Moxi.poru.players.get(interaction.guild.id);
+            if (!player) {
+                return safeReply(interaction, { components: [buildV2Notice(moxi.translate('MUSIC_NO_MUSIC_PLAYING', lang))], flags: v2Flags() });
+            }
+
+            // Restaurar panel fijo a estado inactivo si estaba activo
+            const guildId = interaction.guild.id;
+            const guildSettings = await getGuildSettingsCached(guildId).catch(() => null);
+            const fixedPanelEnabled = !!guildSettings?.MusicFixedPanelEnabled;
+            const fixedPanelChannelId = String(guildSettings?.MusicFixedPanelChannelId || '');
+            const fixedPanelMessageId = String(guildSettings?.MusicFixedPanelMessageId || '');
+
+            stopMusicPanelAutoUpdate(player);
+
+            if (fixedPanelEnabled && fixedPanelChannelId && fixedPanelMessageId) {
+                try {
+                    const panelChannel = interaction.guild.channels.cache.get(fixedPanelChannelId)
+                        || await interaction.guild.channels.fetch(fixedPanelChannelId).catch(() => null);
+                    if (panelChannel?.isTextBased?.()) {
+                        const panelMsg = await panelChannel.messages.fetch(fixedPanelMessageId).catch(() => null);
+                        if (panelMsg) {
+                            const configuredImage = String(guildSettings?.MusicFixedPanelImageUrl || '').trim()
+                                || String(process.env.MUSIC_FALLBACK_IMAGE_URL || '').trim()
+                                || Moxi?.user?.displayAvatarURL?.({ extension: 'png', size: 1024 })
+                                || null;
+                            const idleContainer = buildDisabledMusicSessionContainer({
+                                title: '## Panel de musica fijo',
+                                info: 'Escribe aqui el nombre de una cancion para reproducirla automaticamente.\nLos comandos de musica tambien funcionan normalmente.',
+                                imageUrl: configuredImage,
+                                footerText: formatSessionEndedFooter(),
+                            });
+                            await panelMsg.edit({
+                                content: '',
+                                components: [idleContainer],
+                                flags: MessageFlags.IsComponentsV2,
+                            }).catch(() => null);
+                        }
+                    }
+                } catch { /* ignore */ }
+                await setGuildMusicPanelActive(guildId, false).catch(() => null);
+            } else if (Moxi.previousMessage) {
+                // Panel normal: deshabilitar botones del último mensaje
+                try {
+                    const lastSession = await player.get('lastSessionData').catch(() => null);
+                    if (lastSession) {
+                        const disabledContainer = buildDisabledMusicSessionContainer({
+                            title: lastSession.title,
+                            info: lastSession.info,
+                            imageUrl: lastSession.imageUrl,
+                            footerText: formatSessionEndedFooter(),
+                        });
+                        await Moxi.previousMessage.edit({
+                            components: [disabledContainer],
+                            flags: MessageFlags.IsComponentsV2,
+                        }).catch(() => null);
+                    }
+                } catch { /* ignore */ }
+            }
+
+            await player.destroy();
+            return safeReply(interaction, { components: [buildV2Notice(moxi.translate('MUSIC_PLAYER_DISCONNECTED', lang))], flags: v2Flags() });
         }
 
     }

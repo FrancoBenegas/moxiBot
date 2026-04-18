@@ -3,6 +3,7 @@ const mentionPanel = require('../Client/mentionPanel');
 const Config = require('../../Config');
 
 const { getGuildSettingsCached } = require('../../Util/guildSettings');
+const { touchGuildMusicPanelActivity } = require('../../Util/guildSettings');
 const { getUserPrefix } = require('../../Util/userPrefix');
 const { getSettings: getBugSettings } = require('../../Util/bugStorage');
 const moxi = require('../../i18n');
@@ -425,6 +426,13 @@ Moxi.on("messageCreate", async (message) => {
   // Importante: esto ocurre después de resolver settings/prefix para poder detectar comandos.
   if (!matched) {
     try {
+      const handledByMusicPanel = await maybeHandleFixedMusicPanelInput({ message, settings, Moxi });
+      if (handledByMusicPanel) return;
+    } catch (err) {
+      debugHelper?.warn?.('music-panel', `fixed panel handler failed: ${err?.message || err}`);
+    }
+
+    try {
       await awardXpForMessage(message);
     } catch (err) {
       // Nunca romper el handler por fallos de niveles.
@@ -737,4 +745,57 @@ function scheduleAutoDelete(response, channel) {
   if (!response) return;
   if (!channel || channel.type === 'dm') return;
   setTimeout(() => response.delete().catch(() => null), AFK_RESPONSE_LIFETIME_MS);
+}
+
+function isLikelyCommandText(content) {
+  const text = String(content || '').trim();
+  if (!text) return false;
+  return /^[.!/$#?]/.test(text);
+}
+
+async function maybeHandleFixedMusicPanelInput({ message, settings, Moxi }) {
+  if (!message?.guild || !message?.channel) return false;
+  if (!settings?.MusicFixedPanelEnabled) return false;
+
+  const panelChannelId = String(settings?.MusicFixedPanelChannelId || '');
+  if (!panelChannelId || panelChannelId !== String(message.channel.id)) return false;
+
+  const content = String(message.content || '').trim();
+  if (!content) return false;
+  if (isLikelyCommandText(content)) return false;
+
+  const botMember = message.guild?.members?.me;
+  const memberVoiceId = message.member?.voice?.channelId;
+  const botVoiceId = botMember?.voice?.channelId;
+
+  if (!memberVoiceId) {
+    await message.reply({
+      content: message.translate ? message.translate('MUSIC_JOIN_VOICE') : 'Debes entrar a un canal de voz.',
+      allowedMentions: { repliedUser: false, parse: [] },
+    }).catch(() => null);
+    return true;
+  }
+
+  if (botVoiceId && botVoiceId !== memberVoiceId) {
+    await message.reply({
+      content: message.translate ? message.translate('MUSIC_SAME_VOICE_CHANNEL') : 'Debes estar en el mismo canal de voz del bot.',
+      allowedMentions: { repliedUser: false, parse: [] },
+    }).catch(() => null);
+    return true;
+  }
+
+  const lang = message.lang || await moxi.guildLang(message.guild?.id, process.env.DEFAULT_LANG || 'es-ES');
+  const playCmd = resolvePrefixCommandByToken({ token: 'play', lang });
+  if (!playCmd) return false;
+
+  const args = content.split(/\s+/g).filter(Boolean);
+  if (!args.length) return false;
+
+  const handleCommand = require('../../Util/commandHandler');
+  await touchGuildMusicPanelActivity(message.guild.id, { active: true }).catch(() => null);
+  await handleCommand(Moxi, message, args, playCmd);
+
+  // Mantener limpio el canal del panel: solo se edita el panel fijo.
+  await message.delete().catch(() => null);
+  return true;
 }
