@@ -10,6 +10,7 @@ const { startBirthdayAnnouncements } = require('../../Util/birthdayAnnouncements
 const { startAnniversaryAnnouncements } = require('../../Util/anniversaryAnnouncements');
 const { startStreamAlerts } = require('../../Util/streamAlerts');
 const { refreshSeasonStyle } = require('../../Util/seasonStyle');
+const { runAutoUpdateAnnouncements } = require('../../Util/releaseUpdates');
 
 function isPrimaryShard(client) {
     try {
@@ -167,6 +168,9 @@ module.exports = async (Moxi) => {
                 });
 
                 startStreamAlerts(Moxi);
+
+                // Auto anuncio de updates por servidor (si esta configurado).
+                runAutoUpdateAnnouncements(Moxi).catch(() => null);
             }
         } catch (error) {
             logger.error(`${EMOJIS.cross} Error crítico al conectar a MongoDB:`);
