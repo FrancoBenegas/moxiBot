@@ -5,12 +5,14 @@ const logger = require('../Util/logger');
 const moxi = require('../i18n');
 const { sendVoteShare } = require('../Util/sendVoteShare');
 const { getMusicPanelMessage, stopMusicPanelAutoUpdate } = require('../Util/musicPanelAutoUpdater');
+const { setGuildMusicPanelActive } = require('../Util/guildSettings');
 
 module.exports = async (client, player) => {
 	logger.info(`[QUEUE END] El bot se ha desconectado del canal de voz en guild: ${player.guildId}`);
 
 	if (!player) return;
 	stopMusicPanelAutoUpdate(player);
+	await setGuildMusicPanelActive(player.guildId || player.guild?.id, false).catch(() => null);
 
 	try {
 		const lastSession = await player.get('lastSessionData');
