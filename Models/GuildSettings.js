@@ -460,6 +460,56 @@ async function setGuildUpdatesLastAnnouncedCommit(guildId, commitHash) {
   return result.matchedCount > 0 || result.upsertedCount > 0;
 }
 
+async function setGuildUpdatesChannel(guildId, channelId) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const cleanId = normalizeDiscordId(channelId);
+  const update = cleanId
+    ? {
+      $set: { UpdateChannelId: cleanId },
+      $setOnInsert: { guildID: guildId, id: guildId },
+    }
+    : {
+      $unset: { UpdateChannelId: '' },
+      $setOnInsert: { guildID: guildId, id: guildId },
+    };
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function setGuildUpdatesAutoEnabled(guildId, enabled) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { UpdateAutoEnabled: !!enabled },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function setGuildUpdatesLastAnnouncedVersion(guildId, version) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const cleanVersion = normalizeDbText(version, { maxLen: 32, fallback: '' });
+  if (!cleanVersion) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { UpdateLastAnnouncedVersion: cleanVersion },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
 module.exports = {
   setGuildLanguage,
   getGuildSettings,
@@ -480,4 +530,7 @@ module.exports = {
   setGuildUpdatesAutoEnabled,
   setGuildUpdatesLastAnnouncedVersion,
   setGuildUpdatesLastAnnouncedCommit,
+  setGuildUpdatesChannel,
+  setGuildUpdatesAutoEnabled,
+  setGuildUpdatesLastAnnouncedVersion,
 };

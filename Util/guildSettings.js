@@ -19,6 +19,12 @@ const {
   setGuildUpdatesAutoEnabled: setGuildUpdatesAutoEnabledRaw,
   setGuildUpdatesLastAnnouncedVersion: setGuildUpdatesLastAnnouncedVersionRaw,
   setGuildUpdatesLastAnnouncedCommit: setGuildUpdatesLastAnnouncedCommitRaw,
+  setGuildMusicPanelConfig: setGuildMusicPanelConfigRaw,
+  touchGuildMusicPanelActivity: touchGuildMusicPanelActivityRaw,
+  setGuildMusicPanelActive: setGuildMusicPanelActiveRaw,
+  setGuildUpdatesChannel: setGuildUpdatesChannelRaw,
+  setGuildUpdatesAutoEnabled: setGuildUpdatesAutoEnabledRaw,
+  setGuildUpdatesLastAnnouncedVersion: setGuildUpdatesLastAnnouncedVersionRaw,
 } = require('../Models/GuildSettings');
 
 const DEFAULT_SETTINGS_TTL_MS = Number.parseInt(process.env.GUILD_SETTINGS_TTL_MS || '', 10) || (5 * 60 * 1000);
@@ -64,6 +70,24 @@ async function setGuildEconomyChannel(guildId, channelId) {
 
 async function setGuildEconomyExclusive(guildId, exclusive) {
   const ok = await setGuildEconomyExclusiveRaw(guildId, exclusive);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
+async function setGuildMusicPanelConfig(guildId, patch) {
+  const ok = await setGuildMusicPanelConfigRaw(guildId, patch);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
+async function touchGuildMusicPanelActivity(guildId, payload) {
+  const ok = await touchGuildMusicPanelActivityRaw(guildId, payload);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
+async function setGuildMusicPanelActive(guildId, active) {
+  const ok = await setGuildMusicPanelActiveRaw(guildId, active);
   if (ok) invalidateGuildSettingsCache(guildId);
   return ok;
 }
@@ -134,6 +158,24 @@ async function setGuildUpdatesLastAnnouncedCommit(guildId, commitHash) {
   return ok;
 }
 
+async function setGuildUpdatesChannel(guildId, channelId) {
+  const ok = await setGuildUpdatesChannelRaw(guildId, channelId);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
+async function setGuildUpdatesAutoEnabled(guildId, enabled) {
+  const ok = await setGuildUpdatesAutoEnabledRaw(guildId, enabled);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
+async function setGuildUpdatesLastAnnouncedVersion(guildId, version) {
+  const ok = await setGuildUpdatesLastAnnouncedVersionRaw(guildId, version);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
 module.exports = {
   setGuildLanguage,
   getGuildSettings,
@@ -154,6 +196,12 @@ module.exports = {
   setGuildUpdatesAutoEnabled,
   setGuildUpdatesLastAnnouncedVersion,
   setGuildUpdatesLastAnnouncedCommit,
+  setGuildMusicPanelConfig,
+  touchGuildMusicPanelActivity,
+  setGuildMusicPanelActive,
+  setGuildUpdatesChannel,
+  setGuildUpdatesAutoEnabled,
+  setGuildUpdatesLastAnnouncedVersion,
   getGuildSettingsCached,
   invalidateGuildSettingsCache
 };
