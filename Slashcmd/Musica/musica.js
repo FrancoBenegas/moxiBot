@@ -77,12 +77,63 @@ function extractSpotifyArtistId(normalizedSpotify) {
     return m ? m[1] : '';
 }
 
+const SPOTIFY_ALL_MARKETS = [
+    'US', 'CA', 'MX', 'CR', 'SV', 'GT', 'HN', 'NI', 'PA', 'AR', 'BR', 'CL', 'CO', 'CU', 'DO', 'EC', 'PE', 'PY', 'UY', 'VE',
+    'AT', 'BE', 'FR', 'DE', 'IE', 'IT', 'LU', 'NL', 'PT', 'ES', 'CH', 'GB', 'BG', 'HR', 'CZ', 'DK', 'EE', 'FI', 'GR', 'HU',
+    'LV', 'LT', 'MT', 'PL', 'RO', 'SK', 'SI', 'SE', 'TR', 'UA', 'IS', 'NO', 'LI', 'CY', 'BH', 'IL', 'JO', 'KW', 'LB', 'OM',
+    'QA', 'SA', 'AE', 'AZ', 'KZ', 'BD', 'IN', 'PK', 'LK', 'BN', 'KH', 'ID', 'LA', 'MY', 'MM', 'PH', 'SG', 'TH', 'VN', 'CN',
+    'HK', 'JP', 'KR', 'MO', 'TW', 'AU', 'FJ', 'NZ', 'EG', 'GH', 'KE', 'NG', 'TN', 'ZA'
+];
+
+function parseSpotifyMarkets(rawValue) {
+    const raw = typeof rawValue === 'string' ? rawValue.trim().toUpperCase() : '';
+    if (!raw) return [];
+    return raw
+        .split(/[\s,;]+/)
+        .map((m) => m.trim())
+        .filter((m) => /^[A-Z]{2}$/.test(m));
+}
+
+function getSpotifyMarketMaxAttempts() {
+    const raw = Number(process.env.SPOTIFY_MARKET_MAX_TRIES);
+    if (!Number.isFinite(raw)) return 20;
+    return Math.min(100, Math.max(1, Math.floor(raw)));
+}
+
 function getSpotifyMarketCandidates() {
-    const raw = typeof process.env.SPOTIFY_MARKET === 'string' ? process.env.SPOTIFY_MARKET.trim().toUpperCase() : '';
-    const envMarket = /^[A-Z]{2}$/.test(raw) ? raw : '';
-    const candidates = [envMarket, 'US', 'ES'].filter(Boolean);
-    // unique preserving order
-    return Array.from(new Set(candidates));
+    const envSingle = parseSpotifyMarkets(process.env.SPOTIFY_MARKET)[0] || '';
+    const envList = parseSpotifyMarkets(process.env.SPOTIFY_MARKETS);
+    const preferred = envList.length ? envList : [envSingle].filter(Boolean);
+
+    const candidates = [
+        ...preferred,
+        'US', 'ES', 'GB', 'CA', 'MX', 'BR', 'JP', 'KR',
+        ...SPOTIFY_ALL_MARKETS,
+    ];
+
+    const unique = Array.from(new Set(candidates));
+    return unique.slice(0, getSpotifyMarketMaxAttempts());
+}
+
+function compactMarkets(markets, { preview = 8 } = {}) {
+    if (!Array.isArray(markets) || !markets.length) return 'US, ES';
+    if (markets.length <= preview) return markets.join(', ');
+    const head = markets.slice(0, preview).join(', ');
+    return `${head} (+${markets.length - preview} más)`;
+}
+
+function buildSpotifyMarketsHint(markets = getSpotifyMarketCandidates()) {
+    return `Mercados probados: ${compactMarkets(markets)}. Puedes fijarlo con SPOTIFY_MARKET=US (o ES).`;
+}
+
+function buildSpotifyMarketRestrictionMessage({ title = '', status = '403/404', markets = getSpotifyMarketCandidates() } = {}) {
+    const statusText = String(status || '403/404');
+    const titleText = String(title || '').trim();
+    const firstLine = titleText
+        ? `Parece público (${titleText}), pero Spotify API devolvió ${statusText}.`
+        : `Parece público, pero Spotify API devolvió ${statusText}.`;
+
+    return `${firstLine}\n${buildSpotifyMarketsHint(markets)}\nEsto puede ser una restricción de Spotify. Prueba con SPOTIFY_MARKET=US o usa YouTube.`;
 }
 
 async function getSpotifyTrackMeta(trackId) {
@@ -90,17 +141,28 @@ async function getSpotifyTrackMeta(trackId) {
     if (!id) return null;
     const token = await getSpotifyApiToken();
     if (!token) return null;
-    const res = await axios.get(`https://api.spotify.com/v1/tracks/${encodeURIComponent(id)}`,
-        {
-            headers: { Authorization: `Bearer ${token}` },
-            params: { market: getSpotifyMarketCandidates()[0] || 'US' },
-            timeout: 12_000,
+    const markets = getSpotifyMarketCandidates();
+    for (const market of markets) {
+        try {
+            const res = await axios.get(`https://api.spotify.com/v1/tracks/${encodeURIComponent(id)}`,
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                    params: { market },
+                    timeout: 12_000,
+                }
+            );
+            const name = String(res?.data?.name || '').trim();
+            const artists = Array.isArray(res?.data?.artists) ? res.data.artists.map(a => String(a?.name || '').trim()).filter(Boolean) : [];
+            if (!name) continue;
+            debugHelper.log('spotify-market', 'track meta resolved', { trackId: id, market });
+            return { name, artists };
+        } catch (e) {
+            const status = e?.response?.status;
+            if ((status === 403 || status === 404) && markets.length > 1) continue;
+            throw e;
         }
-    );
-    const name = String(res?.data?.name || '').trim();
-    const artists = Array.isArray(res?.data?.artists) ? res.data.artists.map(a => String(a?.name || '').trim()).filter(Boolean) : [];
-    if (!name) return null;
-    return { name, artists };
+    }
+    return null;
 }
 
 async function getSpotifyPlaylistMetaAndTracks(playlistId, { maxTracks = 25 } = {}) {
@@ -159,6 +221,7 @@ async function getSpotifyPlaylistMetaAndTracks(playlistId, { maxTracks = 25 } = 
                 offset += limit;
             }
 
+            debugHelper.log('spotify-market', 'playlist resolved', { playlistId: id, market, tracks: tracks.length });
             return { name, tracks, market };
         } catch (e) {
             lastErr = e;
@@ -208,6 +271,7 @@ async function searchSpotifyPlaylistByTitle(title, { limit = 5 } = {}) {
             || pool.find((p) => String(p?.owner?.display_name || '').toLowerCase().includes('spotify'));
         const picked = spotifyOwned || pool[0];
         if (!picked) continue;
+        debugHelper.log('spotify-market', 'playlist by title resolved', { title: q, market, pickedId: String(picked.id) });
         return {
             id: String(picked.id),
             name: String(picked.name || '').trim(),
@@ -274,6 +338,7 @@ async function getSpotifyAlbumMetaAndTracks(albumId, { maxTracks = 25 } = {}) {
                 offset += limit;
             }
 
+            debugHelper.log('spotify-market', 'album resolved', { albumId: id, market, tracks: tracks.length });
             return { name, tracks, market };
         } catch (e) {
             lastErr = e;
@@ -328,6 +393,7 @@ async function getSpotifyArtistMetaAndTopTracks(artistId, { maxTracks = 15 } = {
                 if (tracks.length >= maxTracks) break;
             }
 
+            debugHelper.log('spotify-market', 'artist top-tracks resolved', { artistId: id, market, tracks: tracks.length });
             return { name, tracks, market };
         } catch (e) {
             lastErr = e;
@@ -769,7 +835,6 @@ module.exports = {
                     const oembedTitle = await getSpotifyOEmbedTitle(requestedTrack);
                     const oembedOk = Boolean(oembedTitle);
                     const markets = getSpotifyMarketCandidates();
-                    const marketsHint = markets.length ? `\nMercados probados: ${markets.join(', ')}. Puedes fijarlo con SPOTIFY_MARKET=US (o ES).` : '';
 
                     // Caso especial: algunas playlists editoriales públicas dan 404/403 con client_credentials.
                     // Intentamos encontrar una alternativa accesible por título y reproducirla.
@@ -803,8 +868,84 @@ module.exports = {
                             });
                         }
 
+                        // Último fallback: si Spotify API no deja leer la colección por región/permisos,
+                        // intentamos resolver por título en YouTube para no cortar el comando.
+                        try {
+                            const ytQuery = String(oembedTitle || '').trim();
+                            if (ytQuery) {
+                                const trySources = ['ytsearch', 'ytmsearch'];
+                                for (const src of trySources) {
+                                    const ytRes = await Moxi.poru.resolve({ query: ytQuery, source: src, requester: interaction.member });
+                                    const ytType = String(ytRes?.loadType ?? '');
+                                    const ytLower = ytType.toLowerCase();
+                                    const ytUpper = ytType.toUpperCase();
+                                    const ytFailed = ytLower === 'error' || ytUpper === 'LOAD_FAILED';
+                                    const ytEmpty = ytLower === 'empty' || ytUpper === 'NO_MATCHES';
+                                    if (ytFailed || ytEmpty) continue;
+
+                                    player = Moxi.poru.createConnection({
+                                        guildId: interaction.guildId,
+                                        voiceChannel: interaction.member.voice.channelId,
+                                        textChannel: interaction.channel.id,
+                                        deaf: true,
+                                    });
+
+                                    const ytTracks = Array.isArray(ytRes?.tracks) ? ytRes.tracks : [];
+                                    let added = 0;
+                                    for (const t of ytTracks) {
+                                        if (!t) continue;
+                                        t.info.requester = interaction.user;
+                                        player.queue.add(t);
+                                        added += 1;
+                                        // Evitar colas gigantes al caer a búsqueda por texto.
+                                        if (added >= 5) break;
+                                    }
+
+                                    if (added > 0) {
+                                        await interaction.editReply({
+                                            embeds: [buildV2Notice(`Spotify API bloqueó ${kind} (${status}). Cargado automáticamente desde YouTube: ${oembedTitle} (${added} resultado${added === 1 ? '' : 's'}).`)],
+                                        });
+
+                                        if (!player.isPlaying) {
+                                            try {
+                                                const ready = await waitForVoiceHandshake(player);
+                                                if (!ready) {
+                                                    debugHelper.warn('play', 'voice handshake timeout before play (spotify restricted -> youtube fallback)', {
+                                                        guildId,
+                                                        requesterId,
+                                                        source: src,
+                                                        title: oembedTitle,
+                                                    });
+                                                }
+                                                await player.play();
+                                            } catch (ePlay) {
+                                                debugHelper.error('play', 'player.play failed (spotify restricted -> youtube fallback)', {
+                                                    guildId,
+                                                    requesterId,
+                                                    message: ePlay?.message || String(ePlay),
+                                                });
+                                            }
+                                        }
+
+                                        return;
+                                    }
+                                }
+                            }
+                        } catch (ytErr) {
+                            debugHelper.warn('play', 'spotify restricted youtube fallback failed', {
+                                guildId,
+                                requesterId,
+                                message: ytErr?.message || String(ytErr),
+                                title: oembedTitle,
+                            });
+                        }
+
                         return interaction.editReply({
-                            embeds: [buildV2Notice(`Parece público (${oembedTitle}), pero Spotify API devolvió ${status}.${marketsHint}\nEsto puede ser una restricción de Spotify. Prueba con SPOTIFY_MARKET=US o usa YouTube.`)],
+                            embeds: [buildV2Notice(buildSpotifyMarketRestrictionMessage({
+                                title: oembedTitle,
+                                status,
+                                markets,
+                            }))],
                         });
                     } else if (status === 401) {
                         return interaction.editReply({
@@ -887,13 +1028,17 @@ module.exports = {
             if (isLoadFailed) {
                 debugHelper.warn('play', 'resolve failed', { guildId, requesterId });
                 if (looksLikeSpotifyPlaylist || looksLikeSpotifyAlbum || looksLikeSpotifyArtist) {
-                    return interaction.editReply({ embeds: [buildV2Notice('No pude cargar ese enlace de Spotify. Si es privado/restringido, no puedo acceder; si es público, revisa SPOTIFY_CLIENT_ID/SECRET y prueba con SPOTIFY_MARKET=US (o ES) o usa YouTube.')] });
+                    return interaction.editReply({
+                        embeds: [buildV2Notice(buildSpotifyMarketRestrictionMessage({ status: '403/404' }))],
+                    });
                 }
                 return interaction.editReply({ embeds: [buildV2Notice(moxi.translate('MUSIC_LOAD_FAILED', lang))] });
             } else if (isNoMatches) {
                 debugHelper.warn('play', 'resolve no matches', { guildId, requesterId });
                 if (looksLikeSpotifyPlaylist || looksLikeSpotifyAlbum || looksLikeSpotifyArtist) {
-                    return interaction.editReply({ embeds: [buildV2Notice('No pude encontrar resultados para ese enlace de Spotify. Si es privado/restringido, no puedo acceder; si es público, revisa SPOTIFY_CLIENT_ID/SECRET y prueba con SPOTIFY_MARKET=US (o ES) o usa YouTube.')] });
+                    return interaction.editReply({
+                        embeds: [buildV2Notice(buildSpotifyMarketRestrictionMessage({ status: '403/404' }))],
+                    });
                 }
                 return interaction.editReply({ embeds: [buildV2Notice(moxi.translate('MUSIC_NO_SOURCE_FOUND', lang))] });
             }
