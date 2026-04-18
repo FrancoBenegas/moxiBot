@@ -10,54 +10,92 @@ Bot multiproposito para Discord con enfoque en musica, moderacion, utilidades de
 - Base de datos: MongoDB (Mongoose)
 - Idiomas: sistema i18n multi-locale
 
-## Funcionalidades principales
+## Inventario funcional actual
+
+Esta seccion lista lo que ya tiene el bot hoy en produccion/desarrollo activo.
 
 ### Musica (Poru + Lavalink)
 
-- Reproduccion y control completo de cola.
-- Panel de musica fijo por servidor/canal.
-- Botones de control (playback, volumen, stop, etc.).
-- Auto-actualizacion del panel durante la sesion.
-- Integraciones de busqueda con Spotify y soporte de fuentes adicionales.
+- Reproduccion, pausa, resume, skip, stop, cola, volumen, autoplay y control de sesion.
+- Panel de musica fijo por servidor/canal configurable con imagen de estado.
+- Botones de control en Components V2 y flujo de actualizacion automatica del panel.
+- Integracion con Spotify (busqueda y manejo de mercados), SoundCloud y fuentes Lavalink.
+- Eventos de reproduccion robustos: trackStart, trackEnd, queueEnd, errores de nodo y reconexion.
 
 ### Perfil del bot (owner tools)
 
-- Comando botperfil con panel interactivo.
-- Edicion por botones + modales.
-- Soporte de avatar/banner por servidor.
-- Soporte de carga de imagen por attachment (flujo guiado).
-- Vista de datos actuales del bot en el panel.
+- Comando botperfil con panel interactivo para gestion centralizada.
+- Edicion mediante botones + modales para nombre, bio, nick, estado y actividad.
+- Avatar y banner por servidor (guild profile), no solo global.
+- Carga de avatar/banner por URL o por attachment (flujo guiado en canal).
+- Prefill de valores actuales en modales y vista de estado actual del bot.
 
-### Imagenes y utilidades
+### Imagenes y media
 
 - Comando quitarfondo (remove.bg) con soporte URL y attachment.
-- Respuestas con Components V2.
-- Vista del resultado en panel visual.
+- Respuestas en Components V2 con vista del resultado en el mismo panel.
+- Soporte i18n para textos del comando y manejo de errores por API.
 
 ### Moderacion y administracion
 
-- Comandos de sancion (ban, kick, timeout, warn, mute, etc.).
-- Reglas automaticas y herramientas de control.
-- Auditoria y soporte para configuracion de servidor.
+- Comandos de sancion (ban, kick, timeout, warn, mute, unban, unmute).
+- Reglas automaticas (crear, editar, listar, eliminar) y herramientas de control.
+- Auditoria, configuracion de canales/permisos y utilidades de administracion.
+- Modulo de mantenimiento global y herramientas root para diagnostico.
 
 ### Comunidad y sistemas sociales
 
-- Niveles, rangos y economia.
-- Sistema de cumpleaños/aniversarios.
-- Modulo de relaciones/marriage.
-- Sistema de alertas de streaming.
+- Economia, niveles, ranking y tarjetas de perfil/rango.
+- Sistema de cumpleaños y aniversarios con configuracion por servidor.
+- Sistema social (compatibilidad/relaciones/marriage y estado social).
+- Modulo de feedback y herramientas de participacion de comunidad.
+
+### Streaming y notificaciones
+
+- Sistema de alertas de directos con suscripciones por plataforma.
+- Gestion de estado en tiempo real y formatos de mensaje para notificaciones.
+- Persistencia de suscripciones y configuracion por servidor.
 
 ### Invitaciones y portal
 
 - Invitacion permanente reutilizable por servidor.
 - Portal con acceso centralizado.
 - Tracking best-effort de invitacion usada.
+- Guard anti-invitaciones manuales y controles por variables de entorno.
 
 ### IA y clima
 
 - Modo IA por canal (configurable).
 - Ejecucion opcional de comandos sin prefijo en canales IA.
 - Respuestas de clima en tiempo real (WeatherAPI/Open-Meteo).
+- Configuracion contextual del modo IA con controles por canal.
+
+### Internacionalizacion (i18n)
+
+- Soporte multi-idioma con locales en: ar-SA, de-DE, en-US, es-ES, fr-FR, hi-IN, id-ID, it-IT, ja-JP, ko-KR, zh-CN.
+- Resolucion de idioma por servidor y estructuras de traduccion por modulo.
+
+### UI y experiencia (Components V2)
+
+- Paneles visuales con ContainerBuilder, MediaGallery, botones y modales.
+- Footer estacional y estilos de marca aplicados en vistas clave.
+- Flujos interactivos para musica, perfil del bot y comandos utilitarios.
+
+### Persistencia y modelos de datos
+
+- Modelos MongoDB para configuracion de guild, economia, cooldowns, timers, sugerencias, verify, welcome/byes, starboard y mas.
+- Esquemas dedicados para streaming, comandos, reglas y configuraciones de perfil.
+
+## Cobertura de modulos por carpetas
+
+El bot esta organizado por dominios funcionales ya activos:
+
+- Comandos prefijo: Comandos/Admin, Economy, Fun, Games, Genshin, Giveaways, Marriage, Moderation, Music, Root, Security, Sistemas, Social, Streaming, Tickets, Tools, Utility, Verification, Voice.
+- Comandos slash: Slashcmd con la misma segmentacion por categorias.
+- Eventos: Eventos/Client, InteractionCreate, MessageCreate, Music.
+- Componentes: Components/Help y Components/V2.
+- Utilidades: Util con builders, renderers, helpers y vistas V2.
+- Handlers: registro y carga de comandos/eventos/slash/poru.
 
 ## Arquitectura de comandos
 
@@ -93,41 +131,6 @@ Categorias activas (prefijo y/o slash):
 - quitarfondo: elimina fondos de imagen por URL o archivo.
 - invite / portal: gestion de invitaciones del servidor.
 
-## Instalacion rapida
-
-1. Instalar dependencias.
-
-```bash
-npm install
-```
-
-2. Configurar variables de entorno (.env).
-
-Minimas recomendadas:
-
-- TOKEN o DISCORD_TOKEN
-- MONGODB
-- Lavalink (host, puerto, password)
-
-Opcionales importantes:
-
-- REMOVEBG_API_KEY
-- WEATHERAPI_KEY
-- PRIVACY_POLICY_URL
-- DATA_DELETE_CONTACT
-
-3. Iniciar bot.
-
-```bash
-npm run dev
-```
-
-o
-
-```bash
-npm run start:clean
-```
-
 ## Versionado y releases
 
 Se usa SemVer: MAJOR.MINOR.PATCH.
@@ -159,4 +162,4 @@ Historial de releases de la serie 1.x documentado en RELEASE_NOTES.md.
 
 ## Nota
 
-Este README refleja el estado actual del proyecto y sus sistemas principales. Para ver implementaciones exactas, revisa las carpetas Comandos, Slashcmd, Eventos y Util.
+Este README esta enfocado en mostrar todo lo que el bot ya incluye hoy. Para detalle de implementacion tecnica, revisa Comandos, Slashcmd, Eventos, Util, Models y Handlers.
