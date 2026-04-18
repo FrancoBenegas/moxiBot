@@ -1,10 +1,11 @@
 const { MessageFlags } = require('discord.js');
-const { musicCard } = require('musicard-quartz');
 
 const moxi = require('../i18n');
 const formatDuration = require('./formate');
 const { EMOJIS } = require('./emojis');
+const { formatStudioFooter } = require('./seasonBrand');
 const { buildActiveMusicSessionContainer } = require('../Components/V2/musicControlsComponent');
+const { getDisplaySongName, renderMusicCard } = require('./musicCardRenderer');
 
 const DEFAULT_UPDATE_MS = Number(process.env.MUSIC_PANEL_UPDATE_MS || 2000);
 const TIMER_KEY = '__moxiMusicPanelTimer';
@@ -14,11 +15,10 @@ const RENDERING_KEY = '__moxiMusicPanelRendering';
 const BASE_POSITION_KEY = '__moxiMusicBasePositionMs';
 const BASE_AT_KEY = '__moxiMusicBaseAtMs';
 const PAUSED_KEY = '__moxiMusicPausedState';
-const MUSIC_CARD_THEME = String(process.env.MUSIC_CARD_THEME || 'vector+');
-const MUSIC_CARD_COLOR = String(process.env.MUSIC_CARD_COLOR || 'auto');
-const MUSIC_CARD_BRIGHTNESS = Number.isFinite(Number(process.env.MUSIC_CARD_BRIGHTNESS))
-  ? Number(process.env.MUSIC_CARD_BRIGHTNESS)
-  : 50;
+const MUSIC_CARD_FALLBACK_IMG = String(process.env.MUSIC_FALLBACK_IMAGE_URL || '').trim();
+const MAX_PLAYER_VOLUME = Number.isFinite(Number(process.env.MUSIC_MAX_VOLUME))
+  ? Math.max(1, Number(process.env.MUSIC_MAX_VOLUME))
+  : 150;
 
 function clampNumber(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -26,6 +26,15 @@ function clampNumber(value, min, max) {
 
 function getGuildId(player) {
   return player?.guild?.id || player?.guildId || player?.options?.guildId || null;
+}
+
+function isPlayerPaused(player) {
+  // En algunos wrappers `isPaused` puede ser función; no la evaluamos aquí
+  // porque `Boolean(function)` sería true y congelaría el timeline en 00:00.
+  if (typeof player?.isPaused === 'boolean') return player.isPaused;
+  if (typeof player?.paused === 'boolean') return player.paused;
+  if (typeof player?.isPlaying === 'boolean') return !player.isPlaying;
+  return Boolean(player?.[PAUSED_KEY]);
 }
 
 function getPlayerPosition(player, track) {
@@ -37,7 +46,8 @@ function getPlayerPosition(player, track) {
     player?.currentTrack?.position,
   ];
 
-  const raw = candidates.find((value) => Number.isFinite(Number(value)));
+  // Ignoramos 0 para no quedarnos clavados en origen cuando el nodo no reporta posición aún.
+  const raw = candidates.find((value) => Number.isFinite(Number(value)) && Number(value) > 0);
   const safeRaw = Number.isFinite(Number(raw)) ? Math.max(0, Number(raw)) : null;
 
   if (safeRaw !== null && safeRaw > 0) {
@@ -53,9 +63,16 @@ function getPlayerPosition(player, track) {
   const now = Date.now();
   const basePos = Number.isFinite(Number(player?.[BASE_POSITION_KEY])) ? Number(player[BASE_POSITION_KEY]) : 0;
   const baseAt = Number.isFinite(Number(player?.[BASE_AT_KEY])) ? Number(player[BASE_AT_KEY]) : now;
-  const isPaused = Boolean(player?.[PAUSED_KEY] || player?.isPaused);
+  const isPaused = isPlayerPaused(player);
   const elapsed = isPaused ? 0 : Math.max(0, now - baseAt);
   const computed = Math.max(0, basePos + elapsed);
+
+  // Mantener timeline caliente mientras reproduce evita quedarse clavado en 00:00
+  // cuando el nodo no reporta `position` de forma continua.
+  if (!isPaused) {
+    player[BASE_POSITION_KEY] = computed;
+    player[BASE_AT_KEY] = now;
+  }
 
   if (!duration || track?.info?.isStream) return computed;
   return clampNumber(computed, 0, duration);
@@ -65,12 +82,12 @@ function initMusicPanelTimeline(player, startPositionMs = 0) {
   if (!player) return;
   player[BASE_POSITION_KEY] = Math.max(0, Number(startPositionMs) || 0);
   player[BASE_AT_KEY] = Date.now();
-  player[PAUSED_KEY] = Boolean(player?.isPaused);
+  player[PAUSED_KEY] = isPlayerPaused(player);
 }
 
 function setMusicPanelPaused(player, paused) {
   if (!player) return;
-  const wasPaused = Boolean(player?.[PAUSED_KEY]);
+  const wasPaused = isPlayerPaused(player);
   const nextPaused = Boolean(paused);
   if (wasPaused === nextPaused) return;
 
@@ -98,25 +115,103 @@ function toCardProgress(position, duration) {
   return clampNumber(pct, 2, 100);
 }
 
+function getProgressMilestoneBucket(position, duration) {
+  if (!Number.isFinite(duration) || duration <= 0) return 'unknown';
+
+  const ratio = clampNumber(position / duration, 0, 1);
+  if (ratio < 0.5) return 'first-half';
+  if (ratio < 0.99) return 'second-half';
+  return 'ending';
+}
+
+function getPlayerVolumePercent(player) {
+  const candidates = [player?.volume, player?.filters?.volume, player?.currentVolume];
+  const found = candidates.find((v) => Number.isFinite(Number(v)));
+  if (!Number.isFinite(Number(found))) return 67;
+
+  const playerVolume = Math.max(0, Number(found));
+  const normalized = Math.round((playerVolume / MAX_PLAYER_VOLUME) * 100);
+  return clampNumber(normalized, 0, 100);
+}
+
+function getPlayerRawVolume(player) {
+  const candidates = [player?.volume, player?.filters?.volume, player?.currentVolume];
+  const found = candidates.find((v) => Number.isFinite(Number(v)));
+  if (!Number.isFinite(Number(found))) return 100;
+  return Math.max(0, Math.round(Number(found)));
+}
+
+function getTrackRequesterDisplay(track) {
+  const requester = track?.info?.requester || track?.requester || null;
+  const requesterId =
+    requester?.id ||
+    track?.info?.requesterId ||
+    track?.requesterId ||
+    null;
+
+  if (requesterId) return `<@${requesterId}>`;
+
+  const requesterName =
+    requester?.globalName ||
+    requester?.displayName ||
+    requester?.username ||
+    requester?.tag ||
+    null;
+
+  if (requesterName) return String(requesterName);
+  return 'Unknown';
+}
+
+function toBooleanFlag(value) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value > 0;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return ['1', 'true', 'yes', 'si', 'explicit', 'clean=false'].includes(normalized);
+  }
+  return false;
+}
+
+function hasExplicitMarkerInTitle(title) {
+  const t = String(title || '').trim().toLowerCase();
+  if (!t) return false;
+
+  // Modo estricto: solo marcadores explícitos canónicos.
+  if (/\[e\]|\(e\)|🅴/.test(t)) return true;
+  return false;
+}
+
+function isTrackExplicit(track) {
+  const candidates = [
+    track?.info?.isExplicit,
+    track?.info?.explicit,
+    track?.pluginInfo?.isExplicit,
+    track?.pluginInfo?.explicit,
+  ];
+  if (candidates.some((value) => toBooleanFlag(value))) return true;
+  return hasExplicitMarkerInTitle(track?.info?.title);
+}
+
 async function buildDynamicMusicCard({ player, track, sourceImageUrl, position }) {
   const duration = Number(track?.info?.length) || 0;
   if (!sourceImageUrl || !duration || track?.info?.isStream) return null;
 
-  const card = new musicCard()
-    .setName(track.info.title)
-    .setAuthor(track.info.author)
-    .setColor(MUSIC_CARD_COLOR)
-    .setTheme(MUSIC_CARD_THEME)
-    .setBrightness(MUSIC_CARD_BRIGHTNESS)
-    .setProgress(toCardProgress(position, duration))
-    .setStartTime(formatDuration(position))
-    .setEndTime(formatDuration(duration))
-    .setThumbnail(sourceImageUrl);
-
   try {
-    const buffer = await card.build();
+    const buffer = await renderMusicCard({
+      trackName: getDisplaySongName(track?.info?.title, track?.info?.author),
+      artistName: String(track?.info?.author || 'Unknown Artist'),
+      albumArt: sourceImageUrl,
+      fallbackArt: MUSIC_CARD_FALLBACK_IMG || sourceImageUrl,
+      timeStart: formatDuration(position),
+      timeEnd: formatDuration(duration),
+      progressBar: toCardProgress(position, duration),
+      volumeBar: getPlayerVolumePercent(player),
+      isExplicit: isTrackExplicit(track),
+      isLive: false,
+    });
+
     if (!Buffer.isBuffer(buffer) || buffer.length <= 0) return null;
-    const fileName = `moxi_live_${Date.now()}.png`;
+    const fileName = 'moxi_live.png';
     return {
       attachment: { attachment: buffer, name: fileName },
       imageUrl: `attachment://${fileName}`,
@@ -132,27 +227,32 @@ async function buildActiveMusicPanelData({ player, lang, imageUrl, extraLine = '
 
   const position = getPlayerPosition(player, track);
   const duration = Number(track.info.length) || 0;
-  const requester = track?.info?.requester?.tag || track?.info?.requester?.username || 'Moxi Autoplay';
+  const volume = getPlayerVolumePercent(player);
+  const rawVolume = getPlayerRawVolume(player);
   const title = `${EMOJIS.nowPlayingAnim} ${moxi.translate('MUSIC_NOW_PLAYING', lang)} [${track.info.title}](${track.info.uri})`;
+  const requestedByLabel = moxi.translate('MUSIC_REQUESTED_BY', lang) || 'Solicitado por:';
+  const requestedByValue = getTrackRequesterDisplay(track);
 
   const infoLines = [
+    `**${requestedByLabel}** ${requestedByValue}`,
     `**${moxi.translate('MUSIC_QUEUE_COUNT', lang)}** \`${player.queue.length}\``,
-    `**${moxi.translate('MUSIC_REQUESTED_BY', lang)}** \`${requester}\``,
   ];
 
   if (track.info.isStream) {
     infoLines.push(`${EMOJIS.hourglass} \`LIVE\``);
   }
 
-  if (player.isPaused) infoLines.push('⏸️');
+  if (isPlayerPaused(player)) infoLines.push('⏸️');
   if (extraLine) infoLines.push(String(extraLine));
 
   return {
     title,
     info: infoLines.join('\n'),
     imageUrl: imageUrl || null,
-    footerText: `> ${EMOJIS.studioAnim} _**Moxi Studios**_ `,
-    positionBucket: track.info.isStream ? 'live' : Math.floor(position / 1000),
+    footerText: formatStudioFooter(),
+    positionBucket: track.info.isStream ? 'live' : getProgressMilestoneBucket(position, duration),
+    volumeBucket: volume,
+    rawVolumeBucket: rawVolume,
     trackId: track.info.identifier || track.info.uri || track.info.title,
   };
 }
@@ -164,6 +264,24 @@ function getMusicPanelMessage(player) {
 function setMusicPanelMessage(player, message) {
   if (!player) return;
   player[MESSAGE_KEY] = message || null;
+}
+
+async function safePlayerGet(player, key) {
+  if (!player || typeof player.get !== 'function') return null;
+  try {
+    return await Promise.resolve(player.get(key));
+  } catch {
+    return null;
+  }
+}
+
+async function safePlayerSet(player, key, value) {
+  if (!player || typeof player.set !== 'function') return;
+  try {
+    await Promise.resolve(player.set(key, value));
+  } catch {
+    // ignore
+  }
 }
 
 function stopMusicPanelAutoUpdate(player) {
@@ -183,7 +301,7 @@ async function renderActiveMusicPanel({ client, player, message, extraLine = '',
 
   const guildId = getGuildId(player);
   const lang = await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES');
-  const previousSession = (typeof player.get === 'function') ? await player.get('lastSessionData').catch(() => null) : null;
+  const previousSession = await safePlayerGet(player, 'lastSessionData');
   const sourceImageUrl =
     previousSession?.artworkSourceUrl ||
     previousSession?.imageUrl ||
@@ -210,8 +328,10 @@ async function renderActiveMusicPanel({ client, player, message, extraLine = '',
   const signature = [
     panel.trackId,
     panel.positionBucket,
+    panel.volumeBucket,
+    panel.rawVolumeBucket,
     player.queue.length,
-    player.isPaused ? 'paused' : 'playing',
+    isPlayerPaused(player) ? 'paused' : 'playing',
     extraLine,
   ].join('|');
 
@@ -219,14 +339,17 @@ async function renderActiveMusicPanel({ client, player, message, extraLine = '',
 
   player[RENDERING_KEY] = true;
   try {
-    const container = buildActiveMusicSessionContainer({
-      title: panel.title,
-      info: panel.info,
-      imageUrl: panel.imageUrl,
-      footerText: panel.footerText,
-    });
+    const buildPayload = (imageUrl) => {
+      const container = buildActiveMusicSessionContainer({
+        title: panel.title,
+        info: panel.info,
+        imageUrl,
+        footerText: panel.footerText,
+      });
+      return { components: [container] };
+    };
 
-    const basePayload = { components: [container] };
+    const basePayload = buildPayload(panel.imageUrl);
 
     if (dynamicCard?.attachment) {
       try {
@@ -256,14 +379,12 @@ async function renderActiveMusicPanel({ client, player, message, extraLine = '',
     }
 
     player[SIGNATURE_KEY] = signature;
-    if (typeof player.set === 'function') {
-      await player.set('lastSessionData', {
-        title: panel.title,
-        info: panel.info,
-        imageUrl: panel.imageUrl,
-        artworkSourceUrl: sourceImageUrl,
-      }).catch(() => null);
-    }
+    await safePlayerSet(player, 'lastSessionData', {
+      title: panel.title,
+      info: panel.info,
+      imageUrl: panel.imageUrl,
+      artworkSourceUrl: sourceImageUrl,
+    });
     return panel;
   } catch (error) {
     const msg = String(error?.message || error || 'unknown error');
@@ -282,7 +403,7 @@ function startMusicPanelAutoUpdate(client, player, message) {
   stopMusicPanelAutoUpdate(player);
   setMusicPanelMessage(player, message);
 
-  const intervalMs = Number.isFinite(DEFAULT_UPDATE_MS) && DEFAULT_UPDATE_MS >= 1500
+  const intervalMs = Number.isFinite(DEFAULT_UPDATE_MS) && DEFAULT_UPDATE_MS >= 1000
     ? DEFAULT_UPDATE_MS
     : 2000;
 
@@ -291,7 +412,8 @@ function startMusicPanelAutoUpdate(client, player, message) {
       stopMusicPanelAutoUpdate(player);
       return;
     }
-    void renderActiveMusicPanel({ client, player });
+    // Actualizamos por hitos (mitad/final) en lugar de cada tick para evitar parpadeo.
+    void renderActiveMusicPanel({ client, player, force: false });
   }, intervalMs);
 
   timer.unref?.();
