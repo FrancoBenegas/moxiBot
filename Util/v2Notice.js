@@ -1,6 +1,7 @@
 const { ContainerBuilder, MessageFlags } = require('discord.js');
 const { Bot } = require('../Config');
 const { getCommandContext } = require('./commandContext');
+const { formatGlobalFooter } = require('./seasonBrand');
 
 function formatExecutorFooter(ctx) {
     const userId = ctx && ctx.userId ? String(ctx.userId) : '';
@@ -33,6 +34,28 @@ function maybeApplyEconomyFooter(container, footerText, footerDivider = true) {
     container.__moxiEconomyFooterApplied = true;
 }
 
+function maybeApplySeasonFooter(container, footerText, footerDivider = true) {
+    if (!container || typeof container.addTextDisplayComponents !== 'function') return;
+
+    // Si ya se indicó footer explícito, respetarlo.
+    if (footerText) return;
+    if (container.__moxiSeasonFooterApplied) return;
+
+    const ctx = getCommandContext();
+    if (ctx && ctx.isEconomy) return;
+
+    const year = new Date().getFullYear();
+    const botName = Bot?.Name || 'Moxi Studio';
+    const text = formatGlobalFooter(botName, year);
+    if (!text) return;
+
+    if (footerDivider && typeof container.addSeparatorComponents === 'function') {
+        container.addSeparatorComponents(s => s.setDivider(true));
+    }
+    container.addTextDisplayComponents(c => c.setContent(String(text)));
+    container.__moxiSeasonFooterApplied = true;
+}
+
 function buildNoticeContainer({ title, text, emoji, accentColor, footerText, footerDivider = true } = {}) {
     const container = new ContainerBuilder().setAccentColor(accentColor ?? Bot.AccentColor);
 
@@ -53,6 +76,9 @@ function buildNoticeContainer({ title, text, emoji, accentColor, footerText, foo
         container.addTextDisplayComponents(c => c.setContent(String(footerText)));
     }
 
+    // Footer estacional por defecto cuando no hay uno explícito.
+    maybeApplySeasonFooter(container, footerText, footerDivider);
+
     // Auto-footer para comandos de Economy (si no hay footer explícito)
     maybeApplyEconomyFooter(container, footerText, footerDivider);
 
@@ -61,6 +87,7 @@ function buildNoticeContainer({ title, text, emoji, accentColor, footerText, foo
 
 function asV2MessageOptions(container) {
     // Para contenedores construidos a mano (no via buildNoticeContainer)
+    maybeApplySeasonFooter(container, null, true);
     maybeApplyEconomyFooter(container, null, true);
     return { content: '', components: [container], flags: MessageFlags.IsComponentsV2 };
 }

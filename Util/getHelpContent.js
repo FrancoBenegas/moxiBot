@@ -7,6 +7,7 @@ const logger = require('./logger');
 const debugHelper = require('./debugHelper');
 const Config = require('../Config');
 const { Bot } = Config;
+const { withSeasonTitle, getSeasonBadge } = require('./seasonBrand');
 
 const HELP_INDEX_TTL_MS = 5 * 60 * 1000;
 let HELP_INDEX_CACHE = null;
@@ -556,6 +557,7 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
     const { toComponentEmoji } = require('./discordEmoji');
     const container = new ContainerBuilder().setAccentColor(Bot.AccentColor);
     const safeDesc = desc || moxi.translate('HELP_NO_CONTENT', lang);
+    const seasonBadge = getSeasonBadge();
 
     if (helpDebugEnabled) {
       debugHelper.log(
@@ -565,7 +567,9 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
       );
     }
 
-    container.addTextDisplayComponents(c => c.setContent(isRtl ? `**${titulo}**` : `## ${titulo}`));
+    container.addTextDisplayComponents(c => c.setContent(isRtl ? `**${titulo}**` : withSeasonTitle(titulo)));
+    container.addSeparatorComponents(s => s.setDivider(true));
+    container.addTextDisplayComponents(c => c.setContent(`> Estación activa: **${seasonBadge}**`));
     container.addSeparatorComponents(s => s.setDivider(true));
     container.addTextDisplayComponents(c => c.setContent(safeDesc));
 
@@ -642,7 +646,7 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
 
     // Footer/thanks
     container.addSeparatorComponents(s => s.setDivider(true));
-    container.addTextDisplayComponents(c => c.setContent(moxi.translate('HELP_THANKS_FOOTER', lang, { botName: Moxi?.user?.username || 'BOT' })));
+    container.addTextDisplayComponents(c => c.setContent(`${moxi.translate('HELP_THANKS_FOOTER', lang, { botName: Moxi?.user?.username || 'BOT' })}\n${seasonBadge}`));
 
     return { content: '', components: [container], flags: MessageFlags.IsComponentsV2 };
   }
