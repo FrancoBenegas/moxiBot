@@ -1,6 +1,7 @@
 const { ContainerBuilder } = require('discord.js');
 const { ButtonBuilder, ButtonStyle } = require('../../Util/compatButtonBuilder');
 const { Bot } = require('../../Config');
+const { getSeasonBadge, getSeasonBrand, withSeasonTitle, formatGlobalFooter } = require('../../Util/seasonBrand');
 
 function formatUptime(ms) {
     const sec = Math.floor((ms / 1000) % 60);
@@ -22,6 +23,8 @@ function getShutdownComponentV2(client) {
     const guilds = client.guilds?.cache?.size || 0;
     const uptime = formatUptime(client.uptime || 0);
     const fecha = `<t:${Math.floor(Date.now() / 1000)}:f>`;
+    const season = getSeasonBrand();
+    const seasonBadge = getSeasonBadge();
     // Heurística de entorno
     let entorno = '💻 Local';
     const hostIp = process.env.BOT_HOST_IP || '';
@@ -42,10 +45,13 @@ function getShutdownComponentV2(client) {
     const container = new ContainerBuilder()
         .setAccentColor(Bot.AccentColor)
         .addTextDisplayComponents(c =>
-            c.setContent(`# 💔 Moxi apagado`)
+            c.setContent(withSeasonTitle('Moxi apagado'))
         )
         .addTextDisplayComponents(c =>
             c.setContent(`> Moxi se apagó como **${botTag}**`)
+        )
+        .addTextDisplayComponents(c =>
+            c.setContent(`> Estación activa: **${seasonBadge}** · ${season.subtitle}`)
         )
         .addTextDisplayComponents(c =>
             c.setContent(`> **Entorno:** ${entorno}`)
@@ -59,7 +65,7 @@ function getShutdownComponentV2(client) {
         )
         .addSeparatorComponents(s => s.setDivider(true))
         .addTextDisplayComponents(c =>
-            c.setContent(`© Moxi • ID: ${botId}`)
+            c.setContent(`${formatGlobalFooter(client.user?.username || 'Moxi', new Date().getFullYear())} • ID: ${botId}`)
         )
         .addActionRowComponents(row =>
             row.addComponents(

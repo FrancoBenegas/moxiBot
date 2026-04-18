@@ -3,6 +3,7 @@ const { ButtonBuilder } = require('../../Util/compatButtonBuilder');
 const moxi = require('../../i18n');
 const { EMOJIS } = require('../../Util/emojis');
 const { Bot } = require('../../Config');
+const { withSeasonTitle, getSeasonBadge } = require('../../Util/seasonBrand');
 
 module.exports = async function sendPingComponent(interaction, Moxi) {
     const lang = await moxi.guildLang(interaction.guildId, process.env.DEFAULT_LANG || 'es-ES');
@@ -10,7 +11,11 @@ module.exports = async function sendPingComponent(interaction, Moxi) {
     const container = new ContainerBuilder()
         .setAccentColor(Bot.AccentColor)
         .addTextDisplayComponents(c =>
-            c.setContent(`# ${EMOJIS.pingPong} ${moxi.translate('PING_TITLE', lang) || '¡Pong!'}`)
+            c.setContent(withSeasonTitle(`${EMOJIS.pingPong} ${moxi.translate('PING_TITLE', lang) || '¡Pong!'}`))
+        )
+        .addSeparatorComponents(s => s.setDivider(true))
+        .addTextDisplayComponents(c =>
+            c.setContent(`> Estación activa: **${getSeasonBadge()}**`)
         )
         .addSeparatorComponents(s => s.setDivider(true))
         .addTextDisplayComponents(c =>

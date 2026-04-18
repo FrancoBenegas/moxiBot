@@ -12,6 +12,7 @@ const { ButtonBuilder } = require('../../Util/compatButtonBuilder');
 
 const { Bot } = require('../../Config');
 const { EMOJIS } = require('../../Util/emojis');
+const { formatStudioFooter, formatSessionEndedFooter } = require('../../Util/seasonBrand');
 
 // Sin placeholder: si no hay imagen, el container no mostrará MediaGallery.
 const FALLBACK_IMG = String(process.env.MUSIC_FALLBACK_IMAGE_URL || '').trim();
@@ -22,6 +23,7 @@ const CONTROL_EMOJIS = {
     skip: EMOJIS.icon,
     queue: EMOJIS.queue,
     autoplay: EMOJIS.infinito,
+    stop: EMOJIS.stopSign,
 };
 
 function buildMusicControlsRow({ disabled = false } = {}) {
@@ -59,6 +61,11 @@ function buildMusicVolumeRow({ disabled = false } = {}) {
     const suffix = disabled ? '_d' : '';
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder()
+            .setCustomId(`seek_back${suffix}`)
+            .setStyle(ButtonStyle.Secondary)
+            .setLabel('-10s')
+            .setDisabled(disabled),
+        new ButtonBuilder()
             .setCustomId(`vol_down${suffix}`)
             .setStyle(ButtonStyle.Secondary)
             .setEmoji(EMOJIS.volDown)
@@ -67,6 +74,16 @@ function buildMusicVolumeRow({ disabled = false } = {}) {
             .setCustomId(`vol_up${suffix}`)
             .setStyle(ButtonStyle.Secondary)
             .setEmoji(EMOJIS.volUp)
+            .setDisabled(disabled),
+        new ButtonBuilder()
+            .setCustomId(`seek_forward${suffix}`)
+            .setStyle(ButtonStyle.Secondary)
+            .setLabel('+10s')
+            .setDisabled(disabled),
+        new ButtonBuilder()
+            .setCustomId(`stop${suffix}`)
+            .setStyle(ButtonStyle.Danger)
+            .setEmoji(CONTROL_EMOJIS.stop)
             .setDisabled(disabled)
     );
 }
@@ -79,7 +96,7 @@ function buildDisabledMusicSessionContainer({ title, info, imageUrl, footerText 
 
     const resolvedTitle = title || '';
     const resolvedInfo = info || '';
-    const resolvedFooterText = footerText || '_**Moxi Studios**_ - Sesión Finalizada';
+    const resolvedFooterText = footerText || formatSessionEndedFooter();
 
     const container = new ContainerBuilder()
         .setAccentColor(Bot.AccentColor)
@@ -104,13 +121,15 @@ function buildDisabledMusicSessionContainer({ title, info, imageUrl, footerText 
 
 function buildActiveMusicSessionContainer({ title, info, imageUrl, footerText } = {}) {
     let safeImageUrl = imageUrl;
-    if (!safeImageUrl || typeof safeImageUrl !== 'string' || safeImageUrl.startsWith('attachment://')) {
+    // En panel activo permitimos attachment:// porque se edita el mensaje con el archivo dinámico
+    // y así la barra de progreso de la card se actualiza correctamente.
+    if (!safeImageUrl || typeof safeImageUrl !== 'string') {
         safeImageUrl = FALLBACK_IMG;
     }
 
     const resolvedTitle = title || '';
     const resolvedInfo = info || '';
-    const resolvedFooterText = footerText || `> ${EMOJIS.studioAnim} _**Moxi Studios**_ `;
+    const resolvedFooterText = footerText || formatStudioFooter();
 
     const container = new ContainerBuilder()
         .setAccentColor(Bot.AccentColor)
