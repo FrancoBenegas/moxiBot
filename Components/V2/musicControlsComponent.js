@@ -5,6 +5,7 @@ const {
     MediaGalleryBuilder,
     MediaGalleryItemBuilder,
     SeparatorBuilder,
+    StringSelectMenuBuilder,
     TextDisplayBuilder,
 } = require('discord.js');
 
@@ -88,6 +89,29 @@ function buildMusicVolumeRow({ disabled = false } = {}) {
     );
 }
 
+function buildMusicFilterRow({ disabled = false, activeFilter = null } = {}) {
+    const active = typeof activeFilter === 'string' ? activeFilter.trim().toLowerCase() : null;
+    const options = [
+        { label: 'OFF', description: 'Desactiva todos los filtros', value: 'off' },
+        { label: 'BASS BOOST', description: 'Potencia los graves', value: 'bassboost' },
+        { label: 'NIGHTCORE', description: 'Pitch y velocidad altos', value: 'nightcore' },
+        { label: 'VAPORWAVE', description: 'Pitch y velocidad bajos', value: 'vaporwave' },
+        { label: '8D AUDIO', description: 'Efecto de audio rotatorio 3D', value: '8d' },
+        { label: 'SLOW MODE', description: 'Reproduce mas lento', value: 'slowmode' },
+        { label: 'KARAOKE', description: 'Reduce la voz central', value: 'karaoke' },
+        { label: 'TREMOLO', description: 'Vibracion de volumen', value: 'tremolo' },
+        { label: 'VIBRATO', description: 'Vibracion de pitch', value: 'vibrato' },
+    ].map((opt) => (active === opt.value ? { ...opt, default: true } : opt));
+
+    const menu = new StringSelectMenuBuilder()
+        .setCustomId('music_filter')
+        .setPlaceholder('Filtro de audio')
+        .setDisabled(disabled)
+        .addOptions(options);
+
+    return new ActionRowBuilder().addComponents(menu);
+}
+
 function buildDisabledMusicSessionContainer({ title, info, imageUrl, footerText } = {}) {
     let safeImageUrl = imageUrl;
     if (!safeImageUrl || typeof safeImageUrl !== 'string' || safeImageUrl.startsWith('attachment://')) {
@@ -113,13 +137,15 @@ function buildDisabledMusicSessionContainer({ title, info, imageUrl, footerText 
         .addTextDisplayComponents(new TextDisplayBuilder().setContent(resolvedInfo))
         .addActionRowComponents(buildMusicControlsRow({ disabled: true }))
         .addSeparatorComponents(new SeparatorBuilder())
+        .addActionRowComponents(buildMusicFilterRow({ disabled: true }))
+        .addSeparatorComponents(new SeparatorBuilder())
         .addActionRowComponents(buildMusicVolumeRow({ disabled: true }))
         .addTextDisplayComponents(new TextDisplayBuilder().setContent(resolvedFooterText));
 
     return container;
 }
 
-function buildActiveMusicSessionContainer({ title, info, imageUrl, footerText } = {}) {
+function buildActiveMusicSessionContainer({ title, info, imageUrl, footerText, activeFilter = null } = {}) {
     let safeImageUrl = imageUrl;
     // En panel activo permitimos attachment:// porque se edita el mensaje con el archivo dinámico
     // y así la barra de progreso de la card se actualiza correctamente.
@@ -148,6 +174,8 @@ function buildActiveMusicSessionContainer({ title, info, imageUrl, footerText } 
         .addTextDisplayComponents(new TextDisplayBuilder().setContent(resolvedInfo))
         .addActionRowComponents(buildMusicControlsRow({ disabled: false }))
         .addSeparatorComponents(new SeparatorBuilder())
+        .addActionRowComponents(buildMusicFilterRow({ disabled: false, activeFilter }))
+        .addSeparatorComponents(new SeparatorBuilder())
         .addActionRowComponents(buildMusicVolumeRow({ disabled: false }))
         .addTextDisplayComponents(new TextDisplayBuilder().setContent(resolvedFooterText));
 
@@ -156,6 +184,7 @@ function buildActiveMusicSessionContainer({ title, info, imageUrl, footerText } 
 
 module.exports = {
     buildMusicControlsRow,
+    buildMusicFilterRow,
     buildMusicVolumeRow,
     buildDisabledMusicSessionContainer,
     buildActiveMusicSessionContainer,
