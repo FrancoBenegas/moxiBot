@@ -339,12 +339,16 @@ async function renderActiveMusicPanel({ client, player, message, extraLine = '',
 
   player[RENDERING_KEY] = true;
   try {
+    const activeFilter = (() => {
+      try { return player.get('__moxiActiveFilter') || null; } catch { return null; }
+    })();
     const buildPayload = (imageUrl) => {
       const container = buildActiveMusicSessionContainer({
         title: panel.title,
         info: panel.info,
         imageUrl,
         footerText: panel.footerText,
+        activeFilter,
       });
       return { components: [container] };
     };

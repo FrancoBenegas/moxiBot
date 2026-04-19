@@ -38,6 +38,32 @@ async function ensureMusicardFonts() {
   musicardFontsReady = true;
 }
 
+function isNoisyBarStyleLog(args = []) {
+  if (!Array.isArray(args) || args.length !== 1) return false;
+  const first = args[0];
+  if (!first || typeof first !== 'object' || Array.isArray(first)) return false;
+
+  const keys = Object.keys(first);
+  if (!keys.includes('barColor') || !keys.includes('barColorDuo')) return false;
+  if (typeof first.barColor !== 'string') return false;
+  if (typeof first.barColorDuo !== 'boolean') return false;
+  return keys.length <= 2;
+}
+
+async function renderMeltWithSuppressedNoise(payload) {
+  const originalLog = console.log;
+  console.log = (...args) => {
+    if (isNoisyBarStyleLog(args)) return;
+    return originalLog(...args);
+  };
+
+  try {
+    return await musicardLib.Melt(payload);
+  } finally {
+    console.log = originalLog;
+  }
+}
+
 async function renderMusicCard({
   trackName,
   artistName,
@@ -60,7 +86,7 @@ async function renderMusicCard({
 
   await ensureMusicardFonts();
 
-  return musicardLib.Melt({
+  return renderMeltWithSuppressedNoise({
     trackName: String(trackName || 'Unknown Track'),
     artistName: String(artistName || 'Unknown Artist'),
     albumArt: String(albumArt || fallbackArt || ''),
