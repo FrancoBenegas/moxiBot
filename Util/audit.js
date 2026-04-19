@@ -1,4 +1,9 @@
+const { ContainerBuilder, MessageFlags, MediaGalleryBuilder, MediaGalleryItemBuilder } = require('discord.js');
+const moxi = require('../i18n');
+const { Bot } = require('../Config');
+const { EMOJIS } = require('./emojis');
 const { permissionInfoEmbed } = require('./auditPermissionEmbeds');
+
 // Permite registrar avisos informativos de permisos insuficientes en el canal de auditoría
 async function sendPermissionInfoLog({ client, guild, guildId, moderatorId, reason, fallbackLang = 'es-ES' }) {
     const gid = String(guildId || guild?.id || '');
@@ -15,14 +20,10 @@ async function sendPermissionInfoLog({ client, guild, guildId, moderatorId, reas
 
     const now = new Date();
     const timeStr = now.toISOString().replace('T', ' ').replace('Z', ' UTC');
-    const embed = permissionInfoEmbed({ moderatorId, reason, timeStr });
-    await ch.send({ embeds: [embed] }).catch(() => null);
+    const container = permissionInfoEmbed({ moderatorId, reason, timeStr });
+    await ch.send({ content: '', components: [container], flags: MessageFlags.IsComponentsV2 }).catch(() => null);
     return true;
 }
-const { ContainerBuilder, MessageFlags, MediaGalleryBuilder, MediaGalleryItemBuilder } = require('discord.js');
-const moxi = require('../i18n');
-const { Bot } = require('../Config');
-const { EMOJIS } = require('./emojis');
 
 function actionLabel(action, lang) {
     const keyByAction = {
