@@ -15,7 +15,11 @@ module.exports = async (client, player) => {
 	await setGuildMusicPanelActive(player.guildId || player.guild?.id, false).catch(() => null);
 
 	try {
-		const lastSession = await player.get('lastSessionData');
+		const manualStop = await Promise.resolve(player.get('__moxiManualStop')).catch(() => false);
+		if (manualStop) {
+			logger.info(`[QUEUE END] Saltando update visual por stop manual en guild: ${player.guildId}`);
+		} else {
+		const lastSession = await Promise.resolve(player.get('lastSessionData')).catch(() => null);
 		const panelMessage = getMusicPanelMessage(player) || client.previousMessage;
 		if (panelMessage && lastSession) {
 			const disabledContainer = buildDisabledMusicSessionContainer({
@@ -29,6 +33,7 @@ module.exports = async (client, player) => {
 				components: [disabledContainer],
 				flags: MessageFlags.IsComponentsV2,
 			});
+		}
 		}
 	} catch (error) {
 		logger.error(`[QUEUE END] Error actualizando el mensaje de colas finalizada: ${error.message}`);
