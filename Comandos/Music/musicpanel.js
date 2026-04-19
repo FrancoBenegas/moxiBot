@@ -16,6 +16,7 @@ const { EMOJIS } = require('../../Util/emojis');
 const { buildDisabledMusicSessionContainer } = require('../../Components/V2/musicControlsComponent');
 const { formatSessionEndedFooter } = require('../../Util/seasonBrand');
 const { getGuildSettingsCached, setGuildMusicPanelConfig } = require('../../Util/guildSettings');
+const { renderActiveMusicPanel, setMusicPanelMessage } = require('../../Util/musicPanelAutoUpdater');
 
 function resolvePanelImageUrl(Moxi) {
     const envUrl = String(process.env.MUSIC_FALLBACK_IMAGE_URL || '').trim();
@@ -102,11 +103,36 @@ async function activateMusicPanelInChannel({ message, targetChannel, created = f
         footerText: formatSessionEndedFooter(),
     });
 
-    const panelMessage = await targetChannel.send({
-        content: '',
-        components: [idleContainer],
-        flags: MessageFlags.IsComponentsV2,
-    }).catch(() => null);
+    const cfg = await getGuildSettingsCached(message.guild.id).catch(() => null);
+    const existingChannelId = String(cfg?.MusicFixedPanelChannelId || '');
+    const existingMessageId = String(cfg?.MusicFixedPanelMessageId || '');
+    let reusedExistingPanel = false;
+
+    let panelMessage = null;
+    if (existingChannelId && existingMessageId && existingChannelId === String(targetChannel.id)) {
+        const currentChannel = message.guild.channels.cache.get(existingChannelId)
+            || await message.guild.channels.fetch(existingChannelId).catch(() => null);
+
+        if (currentChannel?.isTextBased?.()) {
+            const existingPanel = await currentChannel.messages.fetch(existingMessageId).catch(() => null);
+            if (existingPanel) {
+                panelMessage = await existingPanel.edit({
+                    content: '',
+                    components: [idleContainer],
+                    flags: MessageFlags.IsComponentsV2,
+                }).catch(() => null);
+                reusedExistingPanel = !!panelMessage;
+            }
+        }
+    }
+
+    if (!panelMessage) {
+        panelMessage = await targetChannel.send({
+            content: '',
+            components: [idleContainer],
+            flags: MessageFlags.IsComponentsV2,
+        }).catch(() => null);
+    }
 
     if (!panelMessage) {
         return {
@@ -128,7 +154,7 @@ async function activateMusicPanelInChannel({ message, targetChannel, created = f
         ok: true,
         reply: panelText(
             'Panel de musica',
-            `${EMOJIS.tick} Panel fijo activado en <#${targetChannel.id}>.${created ? '\nCanal creado automaticamente: **moxi-music-panel**.' : ''}\nAhora puedes escribir canciones sin comando y tambien seguir usando comandos de musica.`
+            `${EMOJIS.tick} Panel fijo ${reusedExistingPanel ? 'actualizado' : 'activado'} en <#${targetChannel.id}>.${created ? '\nCanal creado automaticamente: **moxi-music-panel**.' : ''}\nAhora puedes escribir canciones sin comando y tambien seguir usando comandos de musica.`
         ),
     };
 }
@@ -252,7 +278,7 @@ async function promptCategorySelector({ Moxi, message }) {
 
 module.exports = {
     name: 'musicpanel',
-    alias: ['musicpanel', 'panelmusica', 'panelmusic', 'mpanel'],
+    alias: ['musicpanel', 'panelmusica', 'panelmusic', 'pnaelmusic', 'mpanel'],
     Category: function (lang) {
         lang = lang || 'es-ES';
         return moxi.translate('commands:CATEGORY_MUSICA', lang);
@@ -263,6 +289,7 @@ module.exports = {
     },
     async execute(Moxi, message, args) {
         const lang = await moxi.guildLang(message.guild?.id, process.env.DEFAULT_LANG || 'es-ES');
+        const prefix = await moxi.guildPrefix(message.guild?.id, process.env.PREFIX || '.').catch(() => (process.env.PREFIX || '.'));
         const sub = String(args?.[0] || 'status').trim().toLowerCase();
         const canManage = message.member?.permissions?.has(PermissionsBitField.Flags.ManageGuild, true)
             || message.member?.permissions?.has(PermissionsBitField.Flags.ManageChannels, true)
@@ -290,7 +317,7 @@ module.exports = {
                 `Activo: **${active ? 'SI' : 'NO'}**`,
                 `Imagen principal: ${imageUrl || '(fallback del bot)'}`,
                 '',
-                `Comandos siguen funcionando: **SI** (.play, /moxi play, botones).`,
+                `Comandos siguen funcionando: **SI** (${prefix}play, ${prefix}filter, /moxi play, botones).`,
             ].join('\n');
 
             return message.reply(panelText('Panel de musica', body));
@@ -308,7 +335,7 @@ module.exports = {
         if (sub === 'image' || sub === 'imagen' || sub === 'img') {
             const imageUrl = pickImageUrlFromInput(message, args?.[1]);
             if (!imageUrl) {
-                return message.reply(panelText('Panel de musica', `${EMOJIS.cross} Usa: \`musicpanel image <url>\` o adjunta una imagen junto al comando.`));
+                return message.reply(panelText('Panel de musica', `${EMOJIS.cross} Usa: \`${prefix}musicpanel image <url>\` o adjunta una imagen junto al comando.`));
             }
 
             await setGuildMusicPanelConfig(message.guild.id, {
@@ -323,14 +350,36 @@ module.exports = {
 
         if (sub === 'on') {
             const hasManageChannels = message.guild?.members?.me?.permissions?.has(PermissionsBitField.Flags.ManageChannels, true);
-            if (!hasManageChannels) {
-                return message.reply(panelText('Panel de musica', `${EMOJIS.cross} Me falta permiso de Gestionar canales para crear el canal del panel.`));
-            }
-
-            // Sin argumentos: abrir selector interactivo.
             if (!args?.[1]) {
+                const cfg = await getGuildSettingsCached(message.guild.id).catch(() => null);
+                const existingChannelId = String(cfg?.MusicFixedPanelChannelId || '').trim();
+
+                if (existingChannelId) {
+                    const existingChannel = message.guild.channels.cache.get(existingChannelId)
+                        || await message.guild.channels.fetch(existingChannelId).catch(() => null);
+
+                    if (existingChannel?.isTextBased?.()) {
+                        const result = await activateMusicPanelInChannel({
+                            message,
+                            targetChannel: existingChannel,
+                            created: false,
+                            panelImageUrl: String(cfg?.MusicFixedPanelImageUrl || '').trim(),
+                        });
+                        return message.reply(result.reply);
+                    }
+                }
+
+                if (!hasManageChannels) {
+                    return message.reply(panelText('Panel de musica', `${EMOJIS.cross} Me falta permiso de Gestionar canales para crear el canal del panel.`));
+                }
+
+                // Sin panel previo: abrir selector interactivo.
                 await promptCategorySelector({ Moxi, message });
                 return;
+            }
+
+            if (!hasManageChannels) {
+                return message.reply(panelText('Panel de musica', `${EMOJIS.cross} Me falta permiso de Gestionar canales para crear el canal del panel.`));
             }
 
             const resolved = await resolveTargetChannel(message, args?.[1]);
@@ -350,6 +399,50 @@ module.exports = {
             return message.reply(result.reply);
         }
 
-        return message.reply(panelText('Panel de musica', 'Uso: `musicpanel status`, `musicpanel on [#canal|#categoria]`, `musicpanel image <url|adjunto>`, `musicpanel off`.'));
+        if (sub === 'update' || sub === 'refresh' || sub === 'actualizar') {
+            const cfg = await getGuildSettingsCached(message.guild.id).catch(() => null);
+            const channelId = String(cfg?.MusicFixedPanelChannelId || '');
+            const messageId = String(cfg?.MusicFixedPanelMessageId || '');
+
+            if (!channelId || !messageId) {
+                return message.reply(panelText('Panel de musica', `${EMOJIS.cross} No hay un panel fijo configurado. Usa \`${prefix}musicpanel on\` primero.`));
+            }
+
+            const panelChannel = message.guild.channels.cache.get(channelId)
+                || await message.guild.channels.fetch(channelId).catch(() => null);
+
+            if (!panelChannel?.isTextBased?.()) {
+                return message.reply(panelText('Panel de musica', `${EMOJIS.cross} No encontre el canal del panel. Puede que haya sido eliminado.`));
+            }
+
+            const panelMsg = await panelChannel.messages.fetch(messageId).catch(() => null);
+            if (!panelMsg) {
+                return message.reply(panelText('Panel de musica', `${EMOJIS.cross} No encontre el mensaje del panel. Puede que haya sido eliminado.`));
+            }
+
+            const player = Moxi.poru?.players?.get(message.guild.id);
+            if (player?.isPlaying || player?.isPaused) {
+                setMusicPanelMessage(player, panelMsg);
+                await renderActiveMusicPanel({ client: Moxi, player, message: panelMsg, force: true });
+                return message.reply(panelText('Panel de musica', `${EMOJIS.tick} Panel actualizado con la cancion actual.`));
+            }
+
+            const idleContainer = buildDisabledMusicSessionContainer({
+                title: '## Panel de musica fijo',
+                info: 'Escribe aqui el nombre de una cancion para reproducirla automaticamente.\nLos comandos de musica tambien funcionan normalmente.',
+                imageUrl: String(cfg?.MusicFixedPanelImageUrl || '').trim() || resolvePanelImageUrl(Moxi),
+                footerText: formatSessionEndedFooter(),
+            });
+
+            await panelMsg.edit({
+                content: '',
+                components: [idleContainer],
+                flags: MessageFlags.IsComponentsV2,
+            }).catch(() => null);
+
+            return message.reply(panelText('Panel de musica', `${EMOJIS.tick} Panel reiniciado al estado inactivo.`));
+        }
+
+        return message.reply(panelText('Panel de musica', `Uso: \`${prefix}musicpanel status\`, \`${prefix}musicpanel on [#canal|#categoria]\`, \`${prefix}musicpanel update\`, \`${prefix}musicpanel image <url|adjunto>\`, \`${prefix}musicpanel off\`.`));
     },
 };

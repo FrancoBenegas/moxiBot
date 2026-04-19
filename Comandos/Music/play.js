@@ -12,6 +12,35 @@ function makeResponder(message) {
     const ttlMs = Number(process.env.PREFIX_EPHEMERAL_DELETE_MS ?? 8000);
     let lastBotMessage = null;
 
+    function isUnknownMessageReference(error) {
+        const code = Number(error?.code);
+        const raw = String(error?.rawError?.message || error?.message || '');
+        return code === 50035 && /MESSAGE_REFERENCE_UNKNOWN_MESSAGE|Unknown message/i.test(raw);
+    }
+
+    function stripMessageReference(payload) {
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload;
+        // eslint-disable-next-line no-unused-vars
+        const { messageReference, message_reference, ...rest } = payload;
+        return rest;
+    }
+
+    async function sendWithoutReference(payload) {
+        if (!message?.channel || typeof message.channel.send !== 'function') {
+            throw new Error('Canal no disponible para enviar respuesta');
+        }
+        return message.channel.send(stripMessageReference(payload));
+    }
+
+    async function sendBestEffort(payload) {
+        try {
+            return await message.reply(payload);
+        } catch (error) {
+            if (!isUnknownMessageReference(error)) throw error;
+            return sendWithoutReference(payload);
+        }
+    }
+
     async function scheduleDelete(msg) {
         if (!msg || !Number.isFinite(ttlMs) || ttlMs <= 0) return;
         setTimeout(() => {
@@ -22,7 +51,7 @@ function makeResponder(message) {
     return {
         // En prefix no existe ephemeral: emulamos con auto-delete.
         reply: async (payload) => {
-            const sent = await message.reply(payload);
+            const sent = await sendBestEffort(payload);
             lastBotMessage = sent;
             await scheduleDelete(sent);
             return sent;
@@ -32,7 +61,7 @@ function makeResponder(message) {
                 const edited = await lastBotMessage.edit(payload).catch(() => null);
                 if (edited) return edited;
             }
-            const sent = await message.reply(payload);
+            const sent = await sendBestEffort(payload);
             lastBotMessage = sent;
             await scheduleDelete(sent);
             return sent;
