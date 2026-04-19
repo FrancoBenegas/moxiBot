@@ -395,6 +395,14 @@ Moxi.on("interactionCreate", async (interaction) => {
 
             stopMusicPanelAutoUpdate(player);
 
+            // Marca este stop como manual para evitar que queueEnd reescriba
+            // el panel fijo con la card de la ultima cancion.
+            try {
+                await Promise.resolve(player?.set?.('__moxiManualStop', true));
+            } catch {
+                // ignore
+            }
+
             if (fixedPanelEnabled && fixedPanelChannelId && fixedPanelMessageId) {
                 try {
                     const panelChannel = interaction.guild.channels.cache.get(fixedPanelChannelId)
