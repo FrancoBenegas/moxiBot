@@ -4,7 +4,6 @@ const { EMOJIS } = require("../../Util/emojis");
 const Config = require("../../Config");
 const { ensureMongoConnection } = require('../../Util/mongoConnect');
 const { restoreTimers } = require('../../Util/timerStorage');
-const { syncCommandRegistry } = require('../../Util/commandRegistry');
 const { normalizeDiscordId } = require('../../Util/idGuards');
 const { startBirthdayAnnouncements } = require('../../Util/birthdayAnnouncements');
 const { startAnniversaryAnnouncements } = require('../../Util/anniversaryAnnouncements');
