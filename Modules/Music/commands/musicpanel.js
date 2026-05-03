@@ -404,7 +404,7 @@ module.exports = {
             const channelId = String(cfg?.MusicFixedPanelChannelId || '');
             const messageId = String(cfg?.MusicFixedPanelMessageId || '');
 
-            if (!channelId || !messageId) {
+            if (!channelId) {
                 return message.reply(panelText('Panel de musica', `${EMOJIS.cross} No hay un panel fijo configurado. Usa \`${prefix}musicpanel on\` primero.`));
             }
 
@@ -415,9 +415,31 @@ module.exports = {
                 return message.reply(panelText('Panel de musica', `${EMOJIS.cross} No encontre el canal del panel. Puede que haya sido eliminado.`));
             }
 
-            const panelMsg = await panelChannel.messages.fetch(messageId).catch(() => null);
+            let panelMsg = messageId
+                ? await panelChannel.messages.fetch(messageId).catch(() => null)
+                : null;
+
             if (!panelMsg) {
-                return message.reply(panelText('Panel de musica', `${EMOJIS.cross} No encontre el mensaje del panel. Puede que haya sido eliminado.`));
+                const recreated = await activateMusicPanelInChannel({
+                    message,
+                    targetChannel: panelChannel,
+                    created: false,
+                    panelImageUrl: String(cfg?.MusicFixedPanelImageUrl || '').trim(),
+                });
+
+                if (!recreated?.ok) {
+                    return message.reply(recreated?.reply || panelText('Panel de musica', `${EMOJIS.cross} No pude recrear el panel.`));
+                }
+
+                const freshCfg = await getGuildSettingsCached(message.guild.id).catch(() => null);
+                const freshMessageId = String(freshCfg?.MusicFixedPanelMessageId || '');
+                panelMsg = freshMessageId
+                    ? await panelChannel.messages.fetch(freshMessageId).catch(() => null)
+                    : null;
+
+                if (!panelMsg) {
+                    return message.reply(panelText('Panel de musica', `${EMOJIS.cross} Recree el panel, pero no pude recuperar su mensaje para actualizarlo.`));
+                }
             }
 
             const player = Moxi.poru?.players?.get(message.guild.id);
