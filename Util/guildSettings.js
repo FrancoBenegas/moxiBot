@@ -12,6 +12,17 @@ const {
   setGuildEconomyEnabled: setGuildEconomyEnabledRaw,
   setGuildEconomyChannel: setGuildEconomyChannelRaw,
   setGuildEconomyExclusive: setGuildEconomyExclusiveRaw,
+  setGuildMarriageEnabled: setGuildMarriageEnabledRaw,
+  setGuildMarriageChannel: setGuildMarriageChannelRaw,
+  setGuildMarriageExclusive: setGuildMarriageExclusiveRaw,
+  setGuildMarriageProposalsEnabled: setGuildMarriageProposalsEnabledRaw,
+  setGuildMarriageProposalTimeout: setGuildMarriageProposalTimeoutRaw,
+  setGuildMarriageCustomAnniversaryEnabled: setGuildMarriageCustomAnniversaryEnabledRaw,
+  setGuildMarriageAnniversariesEnabled: setGuildMarriageAnniversariesEnabledRaw,
+  setGuildMarriageAnnounceAnniversaries: setGuildMarriageAnnounceAnniversariesRaw,
+  setGuildMarriageTreeEnabled: setGuildMarriageTreeEnabledRaw,
+  setGuildMarriageDivorcesEnabled: setGuildMarriageDivorcesEnabledRaw,
+  setGuildMarriageDivorceMutualConfirm: setGuildMarriageDivorceMutualConfirmRaw,
   setGuildModuleEnabled: setGuildModuleEnabledRaw,
   setGuildMusicPanelConfig: setGuildMusicPanelConfigRaw,
   touchGuildMusicPanelActivity: touchGuildMusicPanelActivityRaw,
@@ -65,6 +76,72 @@ async function setGuildEconomyChannel(guildId, channelId) {
 
 async function setGuildEconomyExclusive(guildId, exclusive) {
   const ok = await setGuildEconomyExclusiveRaw(guildId, exclusive);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
+async function setGuildMarriageEnabled(guildId, enabled) {
+  const ok = await setGuildMarriageEnabledRaw(guildId, enabled);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
+async function setGuildMarriageChannel(guildId, channelId) {
+  const ok = await setGuildMarriageChannelRaw(guildId, channelId);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
+async function setGuildMarriageExclusive(guildId, exclusive) {
+  const ok = await setGuildMarriageExclusiveRaw(guildId, exclusive);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
+async function setGuildMarriageProposalsEnabled(guildId, enabled) {
+  const ok = await setGuildMarriageProposalsEnabledRaw(guildId, enabled);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
+async function setGuildMarriageProposalTimeout(guildId, hours) {
+  const ok = await setGuildMarriageProposalTimeoutRaw(guildId, hours);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
+async function setGuildMarriageCustomAnniversaryEnabled(guildId, enabled) {
+  const ok = await setGuildMarriageCustomAnniversaryEnabledRaw(guildId, enabled);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
+async function setGuildMarriageAnniversariesEnabled(guildId, enabled) {
+  const ok = await setGuildMarriageAnniversariesEnabledRaw(guildId, enabled);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
+async function setGuildMarriageAnnounceAnniversaries(guildId, enabled) {
+  const ok = await setGuildMarriageAnnounceAnniversariesRaw(guildId, enabled);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
+async function setGuildMarriageTreeEnabled(guildId, enabled) {
+  const ok = await setGuildMarriageTreeEnabledRaw(guildId, enabled);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
+async function setGuildMarriageDivorcesEnabled(guildId, enabled) {
+  const ok = await setGuildMarriageDivorcesEnabledRaw(guildId, enabled);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
+async function setGuildMarriageDivorceMutualConfirm(guildId, enabled) {
+  const ok = await setGuildMarriageDivorceMutualConfirmRaw(guildId, enabled);
   if (ok) invalidateGuildSettingsCache(guildId);
   return ok;
 }
@@ -154,6 +231,17 @@ module.exports = {
   setGuildEconomyEnabled,
   setGuildEconomyChannel,
   setGuildEconomyExclusive,
+  setGuildMarriageEnabled,
+  setGuildMarriageChannel,
+  setGuildMarriageExclusive,
+  setGuildMarriageProposalsEnabled,
+  setGuildMarriageProposalTimeout,
+  setGuildMarriageCustomAnniversaryEnabled,
+  setGuildMarriageAnniversariesEnabled,
+  setGuildMarriageAnnounceAnniversaries,
+  setGuildMarriageTreeEnabled,
+  setGuildMarriageDivorcesEnabled,
+  setGuildMarriageDivorceMutualConfirm,
   setGuildModuleEnabled,
   setGuildMusicPanelConfig,
   touchGuildMusicPanelActivity,

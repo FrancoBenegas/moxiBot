@@ -301,6 +301,85 @@ async function addModAction({ guildId, userId, action, reason, evidence }) {
     return true;
 }
 
+async function listModActions({ guildId, limit = 50, userId, action }) {
+    const cleanGuildId = normalizeId(guildId);
+    if (!cleanGuildId) return [];
+
+    const safeLimit = Math.max(1, Math.min(200, Number(limit) || 50));
+    const query = { guildId: cleanGuildId };
+
+    const cleanUserId = normalizeId(userId);
+    if (cleanUserId) query.userId = cleanUserId;
+
+    if (action) {
+        const cleanAction = String(action).trim().toUpperCase();
+        if (cleanAction) query.action = cleanAction;
+    }
+
+    const col = await getCollection(ACTIONS_COLLECTION);
+    return await col.find(query).sort({ createdAt: -1 }).limit(safeLimit).toArray();
+}
+
+async function listRiskUsers({ guildId, limit = 50, minRiskScore = 1 }) {
+    const cleanGuildId = normalizeId(guildId);
+    if (!cleanGuildId) return [];
+
+    const safeLimit = Math.max(1, Math.min(200, Number(limit) || 50));
+    const safeMinRisk = Math.max(0, Number(minRiskScore) || 0);
+
+    const col = await getCollection(USER_STATE_COLLECTION);
+    return await col
+        .find({ guildId: cleanGuildId, riskScore: { $gte: safeMinRisk } })
+        .sort({ riskScore: -1, strikes: -1, updatedAt: -1 })
+        .limit(safeLimit)
+        .toArray();
+}
+
+async function getModerationStats({ guildId, days = 7 }) {
+    const cleanGuildId = normalizeId(guildId);
+    if (!cleanGuildId) return null;
+
+    const safeDays = Math.max(1, Math.min(90, Number(days) || 7));
+    const since = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000);
+
+    const actionsCol = await getCollection(ACTIONS_COLLECTION);
+    const rulesCol = await getCollection(RULES_COLLECTION);
+    const usersCol = await getCollection(USER_STATE_COLLECTION);
+
+    const [totalActions, recentActions, byAction, totalRules, enabledRules, highRiskUsers, shadowbannedUsers] = await Promise.all([
+        actionsCol.countDocuments({ guildId: cleanGuildId }),
+        actionsCol.countDocuments({ guildId: cleanGuildId, createdAt: { $gte: since } }),
+        actionsCol.aggregate([
+            { $match: { guildId: cleanGuildId, createdAt: { $gte: since } } },
+            { $group: { _id: '$action', count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+        ]).toArray(),
+        rulesCol.countDocuments({ guildId: cleanGuildId }),
+        rulesCol.countDocuments({ guildId: cleanGuildId, enabled: true }),
+        usersCol.countDocuments({ guildId: cleanGuildId, riskScore: { $gte: 5 } }),
+        usersCol.countDocuments({ guildId: cleanGuildId, shadowbanned: true }),
+    ]);
+
+    return {
+        guildId: cleanGuildId,
+        days: safeDays,
+        since,
+        actions: {
+            total: totalActions,
+            recent: recentActions,
+            byAction: byAction.map((x) => ({ action: x._id || 'UNKNOWN', count: x.count || 0 })),
+        },
+        rules: {
+            total: totalRules,
+            enabled: enabledRules,
+        },
+        users: {
+            highRisk: highRiskUsers,
+            shadowbanned: shadowbannedUsers,
+        },
+    };
+}
+
 async function ensureDefaultRules({ guildId }) {
     const cleanGuildId = normalizeId(guildId);
     if (!cleanGuildId) return false;
@@ -373,5 +452,8 @@ module.exports = {
     getUserState,
     upsertUserState,
     addModAction,
+    listModActions,
+    listRiskUsers,
+    getModerationStats,
     ensureDefaultRules,
 };
