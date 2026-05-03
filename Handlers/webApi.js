@@ -10,6 +10,8 @@
  */
 
 const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
 const logger = require('../Util/logger');
 const moxi = require('../i18n');
 const { getGuildSettingsCached, setGuildModuleEnabled } = require('../Util/guildSettings');
@@ -114,74 +116,63 @@ function normalizeModuleId(value) {
   if (!key) return '';
 
   const aliases = new Map([
-    ['welcome', 'welcome'],
-    ['bienvenida', 'welcome'],
-    ['sistema de bienvenida', 'welcome'],
-    ['roleplay', 'roleplay'],
-    ['rol', 'roleplay'],
-    ['economia', 'economy'],
     ['economy', 'economy'],
-    ['utilidades', 'utilities'],
-    ['utilidad', 'utilities'],
-    ['herramientas', 'utilities'],
-    ['utilities', 'utilities'],
-    ['moderacion', 'moderation'],
-    ['moderation', 'moderation'],
-    ['musica', 'music'],
-    ['music', 'music'],
-    ['ia', 'ai'],
-    ['inteligencia artificial', 'ai'],
-    ['ai', 'ai'],
-    ['sorteos', 'giveaways'],
-    ['giveaways', 'giveaways'],
-    ['tickets', 'tickets'],
-    ['soporte', 'tickets'],
-    ['logs', 'logs'],
-    ['registros', 'logs'],
-    ['automod', 'automod'],
-    ['automoderacion', 'automod'],
-    ['wiki', 'wiki'],
-    ['voice', 'voice'],
-    ['voz', 'voice'],
-    ['owner', 'owner'],
-    ['propietario', 'owner'],
+    ['economia', 'economy'],
     ['fun', 'fun'],
     ['diversion', 'fun'],
-    ['juegos', 'fun'],
-    ['administracion', 'administration'],
-    ['administration', 'administration'],
-    ['sistema', 'systems'],
-    ['sistemas', 'systems'],
-    ['systems', 'systems'],
-    ['streaming', 'streaming'],
+    ['games', 'games'],
+    ['juegos', 'games'],
     ['genshin', 'genshin'],
-    ['matrimonio', 'matrimonio'],
+    ['giveaways', 'giveaways'],
+    ['sorteos', 'giveaways'],
+    ['matrimonio', 'marriage'],
+    ['marriage', 'marriage'],
+    ['moderation', 'moderation'],
+    ['moderacion', 'moderation'],
+    ['music', 'music'],
+    ['musica', 'music'],
+    ['security', 'security'],
+    ['seguridad', 'security'],
+    ['sistemas', 'sistemas'],
+    ['social', 'social'],
+    ['streaming', 'streaming'],
+    ['systems', 'systems'],
+    ['sistema', 'systems'],
+    ['tickets', 'tickets'],
+    ['soporte', 'tickets'],
+    ['tools', 'tools'],
+    ['herramientas', 'tools'],
+    ['utiility', 'utiility'],
+    ['utility', 'utiility'],
+    ['utilidad', 'utiility'],
+    ['verification', 'verification'],
+    ['verificacion', 'verification'],
+    ['voice', 'voice'],
+    ['voz', 'voice'],
   ]);
 
   return aliases.get(key) ?? key.replace(/\s+/g, '-');
 }
 
 const MODULE_META = {
-  welcome: { icon: 'MessageSquare', configColor: 'from-blue-500 to-cyan-500', dashboardColor: 'from-blue-500/20 to-cyan-500/20 border-blue-500/30' },
-  roleplay: { icon: 'Swords', configColor: 'from-rose-500 to-pink-500', dashboardColor: 'from-rose-500/20 to-pink-500/20 border-rose-500/30' },
-  economy: { icon: 'Coins', configColor: 'from-yellow-500 to-amber-500', dashboardColor: 'from-yellow-500/20 to-amber-500/20 border-yellow-500/30' },
-  utilities: { icon: 'Wrench', configColor: 'from-slate-500 to-gray-500', dashboardColor: 'from-slate-500/20 to-gray-500/20 border-slate-500/30' },
-  moderation: { icon: 'Shield', configColor: 'from-red-500 to-orange-500', dashboardColor: 'from-red-500/20 to-orange-500/20 border-red-500/30' },
-  ai: { icon: 'Sparkles', configColor: 'from-violet-500 to-purple-500', dashboardColor: 'from-violet-500/20 to-purple-500/20 border-violet-500/30' },
-  music: { icon: 'Music', configColor: 'from-green-500 to-emerald-500', dashboardColor: 'from-green-500/20 to-emerald-500/20 border-green-500/30' },
-  giveaways: { icon: 'Gift', configColor: 'from-fuchsia-500 to-pink-500', dashboardColor: 'from-fuchsia-500/20 to-pink-500/20 border-fuchsia-500/30' },
-  tickets: { icon: 'Ticket', configColor: 'from-indigo-500 to-blue-500', dashboardColor: 'from-indigo-500/20 to-blue-500/20 border-indigo-500/30' },
-  logs: { icon: 'Bell', configColor: 'from-teal-500 to-cyan-500', dashboardColor: 'from-teal-500/20 to-cyan-500/20 border-teal-500/30' },
-  automod: { icon: 'Bot', configColor: 'from-orange-500 to-red-500', dashboardColor: 'from-orange-500/20 to-red-500/20 border-orange-500/30' },
-  wiki: { icon: 'BookOpen', configColor: 'from-lime-500 to-green-500', dashboardColor: 'from-lime-500/20 to-green-500/20 border-lime-500/30' },
-  voice: { icon: 'Mic', configColor: 'from-cyan-500 to-sky-500', dashboardColor: 'from-cyan-500/20 to-sky-500/20 border-cyan-500/30' },
-  owner: { icon: 'Crown', configColor: 'from-amber-500 to-yellow-500', dashboardColor: 'from-amber-500/20 to-yellow-500/20 border-amber-500/30' },
-  fun: { icon: 'Gamepad2', configColor: 'from-pink-500 to-rose-500', dashboardColor: 'from-pink-500/20 to-rose-500/20 border-pink-500/30' },
-  administration: { icon: 'Settings2', configColor: 'from-slate-500 to-zinc-500', dashboardColor: 'from-slate-500/20 to-zinc-500/20 border-slate-500/30' },
-  systems: { icon: 'Cpu', configColor: 'from-blue-500 to-indigo-500', dashboardColor: 'from-blue-500/20 to-indigo-500/20 border-blue-500/30' },
-  streaming: { icon: 'Radio', configColor: 'from-red-500 to-pink-500', dashboardColor: 'from-red-500/20 to-pink-500/20 border-red-500/30' },
-  genshin: { icon: 'Sparkles', configColor: 'from-purple-500 to-fuchsia-500', dashboardColor: 'from-purple-500/20 to-fuchsia-500/20 border-purple-500/30' },
-  matrimonio: { icon: 'HeartHandshake', configColor: 'from-rose-500 to-red-500', dashboardColor: 'from-rose-500/20 to-red-500/20 border-rose-500/30' },
+  economy:      { icon: 'Coins',          configColor: 'from-yellow-500 to-amber-500',   dashboardColor: 'from-yellow-500/20 to-amber-500/20 border-yellow-500/30' },
+  fun:          { icon: 'Gamepad2',       configColor: 'from-pink-500 to-rose-500',      dashboardColor: 'from-pink-500/20 to-rose-500/20 border-pink-500/30' },
+  games:        { icon: 'Gamepad2',       configColor: 'from-emerald-500 to-teal-500',   dashboardColor: 'from-emerald-500/20 to-teal-500/20 border-emerald-500/30' },
+  genshin:      { icon: 'Sparkles',       configColor: 'from-purple-500 to-fuchsia-500', dashboardColor: 'from-purple-500/20 to-fuchsia-500/20 border-purple-500/30' },
+  giveaways:    { icon: 'Gift',           configColor: 'from-fuchsia-500 to-pink-500',   dashboardColor: 'from-fuchsia-500/20 to-pink-500/20 border-fuchsia-500/30' },
+  marriage:   { icon: 'HeartHandshake', configColor: 'from-rose-500 to-red-500',       dashboardColor: 'from-rose-500/20 to-red-500/20 border-rose-500/30' },
+  moderation:   { icon: 'Shield',         configColor: 'from-red-500 to-orange-500',     dashboardColor: 'from-red-500/20 to-orange-500/20 border-red-500/30' },
+  music:        { icon: 'Music',          configColor: 'from-green-500 to-emerald-500',  dashboardColor: 'from-green-500/20 to-emerald-500/20 border-green-500/30' },
+  security:     { icon: 'ShieldCheck',    configColor: 'from-red-600 to-rose-500',       dashboardColor: 'from-red-600/20 to-rose-500/20 border-red-600/30' },
+  sistemas:     { icon: 'Settings',       configColor: 'from-zinc-500 to-slate-500',     dashboardColor: 'from-zinc-500/20 to-slate-500/20 border-zinc-500/30' },
+  social:       { icon: 'Users',          configColor: 'from-sky-500 to-blue-500',       dashboardColor: 'from-sky-500/20 to-blue-500/20 border-sky-500/30' },
+  streaming:    { icon: 'Radio',          configColor: 'from-red-500 to-pink-500',       dashboardColor: 'from-red-500/20 to-pink-500/20 border-red-500/30' },
+  systems:      { icon: 'Cpu',            configColor: 'from-blue-500 to-indigo-500',    dashboardColor: 'from-blue-500/20 to-indigo-500/20 border-blue-500/30' },
+  tickets:      { icon: 'Ticket',         configColor: 'from-indigo-500 to-blue-500',    dashboardColor: 'from-indigo-500/20 to-blue-500/20 border-indigo-500/30' },
+  tools:        { icon: 'Wrench',         configColor: 'from-stone-500 to-neutral-500',  dashboardColor: 'from-stone-500/20 to-neutral-500/20 border-stone-500/30' },
+  utiility:     { icon: 'LayoutDashboard',configColor: 'from-indigo-500 to-violet-500',  dashboardColor: 'from-indigo-500/20 to-violet-500/20 border-indigo-500/30' },
+  verification: { icon: 'BadgeCheck',     configColor: 'from-green-500 to-lime-500',     dashboardColor: 'from-green-500/20 to-lime-500/20 border-green-500/30' },
+  voice:        { icon: 'Mic',            configColor: 'from-cyan-500 to-sky-500',       dashboardColor: 'from-cyan-500/20 to-sky-500/20 border-cyan-500/30' },
 };
 
 // ─── Serialización de comandos ───────────────────────────────────────────────
@@ -239,41 +230,57 @@ function serializeCommands(Moxi) {
   };
 }
 
-function serializeModules(Moxi) {
-  // Derivamos módulos desde categorías de comandos para que sea automático.
-  const commands = serializeCommands(Moxi);
-  const seen = new Set();
-  const items = [];
+// Carpetas a ignorar (no son módulos de usuario)
+const MODULES_SKIP = new Set(['Admin', 'Root']);
+const MODULES_DIR = path.join(__dirname, '..', 'Modules');
 
-  for (const cmd of commands.items) {
-    const rawName = String(cmd.category ?? '').trim();
-    if (!rawName) continue;
-    const id = normalizeModuleId(rawName);
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
+function serializeModules(_Moxi, lang) {
+  const resolvedLang = String(lang || 'es-ES').trim();
+  const fallback = {
+    icon: 'Box',
+    configColor: 'from-slate-500 to-slate-600',
+    dashboardColor: 'from-slate-500/20 to-slate-600/20 border-slate-500/30',
+  };
 
-    const meta = MODULE_META[id] ?? {
-      icon: 'Box',
-      configColor: 'from-slate-500 to-slate-600',
-      dashboardColor: 'from-slate-500/20 to-slate-600/20 border-slate-500/30',
-    };
-    items.push({
-      id,
-      name: rawName,
-      description: `Modulo ${rawName}`,
-      icon: meta.icon,
-      configColor: meta.configColor,
-      dashboardColor: meta.dashboardColor,
-    });
+  let folders = [];
+  try {
+    folders = fs.readdirSync(MODULES_DIR, { withFileTypes: true })
+      .filter(d => d.isDirectory() && !MODULES_SKIP.has(d.name))
+      .map(d => d.name)
+      .sort();
+  } catch (e) {
+    logger.error('[webApi] No se pudo leer Modules/:', e.message);
   }
 
-  items.sort((a, b) => a.id.localeCompare(b.id));
+  const items = folders.map((folder) => {
+    const id = folder.toLowerCase();
+    const meta = MODULE_META[id] ?? fallback;
 
-  return {
-    generatedAt: new Date().toISOString(),
-    count: items.length,
-    items,
-  };
+    // Leer module.json si existe para obtener nombre/descripción real
+    let name = folder;
+    let description = `Módulo ${folder}`;
+    try {
+      const jsonPath = path.join(MODULES_DIR, folder, 'module.json');
+      if (fs.existsSync(jsonPath)) {
+        const json = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+        // Soporte multiidioma: names/descriptions son objetos { 'es-ES': '...', 'en-US': '...' }
+        if (json.names && typeof json.names === 'object') {
+          name = json.names[resolvedLang] || json.names['en-US'] || json.name || folder;
+        } else if (json.name) {
+          name = json.name;
+        }
+        if (json.descriptions && typeof json.descriptions === 'object') {
+          description = json.descriptions[resolvedLang] || json.descriptions['en-US'] || json.description || description;
+        } else if (json.description) {
+          description = json.description;
+        }
+      }
+    } catch { /* si no hay module.json, usamos defaults */ }
+
+    return { id, name, description, icon: meta.icon, configColor: meta.configColor, dashboardColor: meta.dashboardColor };
+  });
+
+  return { generatedAt: new Date().toISOString(), count: items.length, items };
 }
 
 function serializeComponentTree(component) {
@@ -408,7 +415,8 @@ function startWebApi(Moxi) {
 
     if (req.method === 'GET' && url.pathname === '/api/modules') {
       try {
-        const data = serializeModules(Moxi);
+        const lang = url.searchParams.get('lang') || 'es-ES';
+        const data = serializeModules(Moxi, lang);
         const body = JSON.stringify(data);
         res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
         res.end(body);
