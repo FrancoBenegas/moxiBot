@@ -40,6 +40,136 @@ function resolveCommandName(comando) {
     return 'unknown';
 }
 
+function normalizeText(value) {
+    return String(value ?? '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9\s-]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function normalizeModuleId(value) {
+    const key = normalizeText(value);
+    if (!key) return '';
+
+    const aliases = new Map([
+        ['welcome', 'welcome'],
+        ['bienvenida', 'welcome'],
+        ['sistema de bienvenida', 'welcome'],
+        ['roleplay', 'roleplay'],
+        ['rol', 'roleplay'],
+        ['economia', 'economy'],
+        ['economy', 'economy'],
+        ['utilidades', 'utilities'],
+        ['utilidad', 'utilities'],
+        ['herramientas', 'utilities'],
+        ['utilities', 'utilities'],
+        ['moderacion', 'moderation'],
+        ['moderation', 'moderation'],
+        ['musica', 'music'],
+        ['music', 'music'],
+        ['ia', 'ai'],
+        ['inteligencia artificial', 'ai'],
+        ['ai', 'ai'],
+        ['sorteos', 'giveaways'],
+        ['giveaways', 'giveaways'],
+        ['tickets', 'tickets'],
+        ['soporte', 'tickets'],
+        ['logs', 'logs'],
+        ['registros', 'logs'],
+        ['automod', 'automod'],
+        ['automoderacion', 'automod'],
+        ['wiki', 'wiki'],
+        ['voz', 'voice'],
+        ['voice', 'voice'],
+        ['owner', 'owner'],
+        ['propietario', 'owner'],
+        ['fun', 'fun'],
+        ['diversion', 'fun'],
+        ['juegos', 'fun'],
+        ['administracion', 'administration'],
+        ['administration', 'administration'],
+        ['sistema', 'systems'],
+        ['sistemas', 'systems'],
+        ['systems', 'systems'],
+        ['streaming', 'streaming'],
+        ['genshin', 'genshin'],
+        ['matrimonio', 'matrimonio'],
+        ['marriage', 'matrimonio'],
+        ['games', 'fun'],
+        ['juegos', 'fun'],
+        ['social', 'social'],
+        ['verification', 'verification'],
+        ['verificacion', 'verification'],
+    ]);
+
+    return aliases.get(key) ?? key.replace(/\s+/g, '-');
+}
+
+function resolveModuleIdFromSourcePath(sourceFile) {
+    const source = String(sourceFile || '').trim();
+    if (!source) return '';
+
+    const rootFolders = new Set(['comandos', 'slashcmd', 'modules']);
+    const structuralFolders = new Set(['commands', 'slashcmds']);
+    const genericFallbackMap = new Map([
+        ['tools', 'utilities'],
+        ['utiility', 'utilities'],
+        ['admin', 'administration'],
+        ['root', 'owner'],
+    ]);
+    const segments = source
+        .split(/[\\/]/g)
+        .map((segment) => segment.replace(/\.[^.]+$/, '').trim())
+        .filter(Boolean);
+
+    const rootIndex = segments.findIndex((segment) => {
+        const normalizedSegment = normalizeText(segment);
+        return rootFolders.has(normalizedSegment);
+    });
+
+    const searchStart = rootIndex >= 0 ? rootIndex + 1 : 0;
+    let genericFallback = '';
+
+    for (let index = searchStart; index < segments.length; index += 1) {
+        const segment = segments[index];
+        const normalizedSegment = normalizeText(segment);
+        if (!normalizedSegment || structuralFolders.has(normalizedSegment)) continue;
+
+        if (!genericFallback && genericFallbackMap.has(normalizedSegment)) {
+            genericFallback = genericFallbackMap.get(normalizedSegment) || '';
+            continue;
+        }
+
+        const id = normalizeModuleId(segment);
+        if (id) return id;
+    }
+
+    return genericFallback;
+}
+
+function resolveCommandModuleId(comando) {
+    try {
+        const sourceFromPath = resolveModuleIdFromSourcePath(comando?.__sourceFile);
+        if (sourceFromPath) return sourceFromPath;
+
+        if (typeof comando?.Category === 'function') {
+            const category = comando.Category('es-ES');
+            const id = normalizeModuleId(category);
+            if (id) return id;
+        }
+        if (typeof comando?.category === 'string') {
+            const id = normalizeModuleId(comando.category);
+            if (id) return id;
+        }
+    } catch {
+        // ignore
+    }
+    return '';
+}
+
 function summarizeArgs(args) {
     if (!Array.isArray(args) || args.length === 0) return null;
     const preview = [];
@@ -329,6 +459,27 @@ async function shouldBlockByMaintenanceGate(Moxi, ctx, comando) {
     };
 }
 
+async function shouldBlockByModuleGate(ctx, comando) {
+    const guildId = ctx?.guildId || ctx?.guild?.id || null;
+    if (!guildId) return { shouldBlock: false };
+
+    const moduleId = resolveCommandModuleId(comando);
+    if (!moduleId) return { shouldBlock: false };
+
+    const settings = await getGuildSettingsCached(guildId).catch(() => null);
+    if (settings && ctx?.guild) ctx.guild.settings = settings;
+
+    const moduleStates = (settings && typeof settings.ModuleStates === 'object' && settings.ModuleStates)
+        ? settings.ModuleStates
+        : {};
+
+    if (Object.prototype.hasOwnProperty.call(moduleStates, moduleId) && moduleStates[moduleId] === false) {
+        return { shouldBlock: true, moduleId };
+    }
+
+    return { shouldBlock: false };
+}
+
 // Handler global para comandos prefix y slash
 // Uso: require y llama a handleCommand(client, ctx, args, comando)
 
@@ -494,6 +645,18 @@ module.exports = async function handleCommand(Moxi, ctx, args, comando) {
         // best-effort: si falla el gate, no bloqueamos
     }
     // --- FIN ECONOMY GATE ---
+
+    // --- MODULE GATE (módulo desactivado en el servidor) ---
+    try {
+        const moduleGate = await shouldBlockByModuleGate(ctx, comando);
+        if (moduleGate?.shouldBlock) {
+            const content = `El módulo \`${moduleGate.moduleId}\` está desactivado en este servidor.`;
+            return await replyBlocked(Moxi, ctx, { content, isInteraction });
+        }
+    } catch {
+        // best-effort: si falla el gate, no bloqueamos
+    }
+    // --- FIN MODULE GATE ---
 
     // --- TIME GATE (bloqueo por horario) ---
     try {

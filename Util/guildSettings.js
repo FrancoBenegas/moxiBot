@@ -12,6 +12,7 @@ const {
   setGuildEconomyEnabled: setGuildEconomyEnabledRaw,
   setGuildEconomyChannel: setGuildEconomyChannelRaw,
   setGuildEconomyExclusive: setGuildEconomyExclusiveRaw,
+  setGuildModuleEnabled: setGuildModuleEnabledRaw,
   setGuildMusicPanelConfig: setGuildMusicPanelConfigRaw,
   touchGuildMusicPanelActivity: touchGuildMusicPanelActivityRaw,
   setGuildMusicPanelActive: setGuildMusicPanelActiveRaw,
@@ -64,6 +65,12 @@ async function setGuildEconomyChannel(guildId, channelId) {
 
 async function setGuildEconomyExclusive(guildId, exclusive) {
   const ok = await setGuildEconomyExclusiveRaw(guildId, exclusive);
+  if (ok) invalidateGuildSettingsCache(guildId);
+  return ok;
+}
+
+async function setGuildModuleEnabled(guildId, moduleId, enabled) {
+  const ok = await setGuildModuleEnabledRaw(guildId, moduleId, enabled);
   if (ok) invalidateGuildSettingsCache(guildId);
   return ok;
 }
@@ -147,6 +154,7 @@ module.exports = {
   setGuildEconomyEnabled,
   setGuildEconomyChannel,
   setGuildEconomyExclusive,
+  setGuildModuleEnabled,
   setGuildMusicPanelConfig,
   touchGuildMusicPanelActivity,
   setGuildMusicPanelActive,
