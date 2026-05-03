@@ -5,7 +5,7 @@
  * Esto inicializa:
  * 1. ModuleLoader
  * 2. Carga todos los módulos
- * 3. Registra comandos, slash commands y eventos desde módulos
+ * 3. Registra comandos y slash commands desde módulos
  */
 
 const ModuleLoader = require('../Modules/loader');
@@ -34,10 +34,6 @@ module.exports = async (client) => {
     const loadModuleSlashCommands = require('./moduleSlashCommands');
     await loadModuleSlashCommands(client, moduleLoader);
 
-    // Registrar eventos desde módulos
-    const loadModuleEvents = require('./moduleEvents');
-    await loadModuleEvents(client, moduleLoader);
-
     // Mostrar estadísticas
     const stats = moduleLoader.getStats();
     logger.divider();
@@ -52,6 +48,13 @@ module.exports = async (client) => {
     logger.divider();
 
     // Sincronizar CommandRegistry con MongoDB (solo módulos)
+    // Esperar a que i18next termine de cargar antes de traducir descripciones
+    try {
+      const moxi = require('../i18n');
+      if (moxi && typeof moxi.ready === 'object' && typeof moxi.ready.then === 'function') {
+        await moxi.ready;
+      }
+    } catch { /* best-effort */ }
     try {
       const { syncCommandRegistry } = require('../Util/commandRegistry');
       syncCommandRegistry(client, { enabled: true, deleteMissing: true })
