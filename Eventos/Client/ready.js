@@ -130,8 +130,7 @@ module.exports = async (Moxi) => {
         try {
             await ensureMongoConnection();
 
-            // Sincronizar (upsert) todos los comandos a MongoDB (best-effort)
-            syncCommandRegistry(Moxi, { deleteMissing: true }).catch(() => null);
+            // CommandRegistry sync se realiza en initializeModules (sistema modular)
 
             // Restaurar timers persistidos (best-effort) una vez Mongo está listo.
             restoreTimers(async (guildId, channelId, userId, minutos) => {
