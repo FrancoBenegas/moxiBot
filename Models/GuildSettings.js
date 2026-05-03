@@ -18,6 +18,15 @@ function safeGuildId(guildId) {
   return normalizeDiscordId(guildId);
 }
 
+function normalizeModuleStateKey(moduleId) {
+  const raw = normalizeDbText(moduleId, { maxLen: 64, fallback: '' })
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return raw || null;
+}
+
 async function setGuildEconomyEnabled(guildId, enabled) {
   guildId = safeGuildId(guildId);
   if (!guildId) return false;
@@ -147,6 +156,25 @@ async function setGuildMusicPanelActive(guildId, active) {
     $set: {
       MusicFixedPanelActive: !!active,
       MusicFixedPanelLastActiveAt: new Date(),
+    },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function setGuildModuleEnabled(guildId, moduleId, enabled) {
+  guildId = safeGuildId(guildId);
+  const moduleKey = normalizeModuleStateKey(moduleId);
+  if (!guildId || !moduleKey) return false;
+
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: {
+      [`ModuleStates.${moduleKey}`]: !!enabled,
     },
     $setOnInsert: { guildID: guildId, id: guildId },
   };
@@ -523,6 +551,7 @@ module.exports = {
   setGuildEconomyEnabled,
   setGuildEconomyChannel,
   setGuildEconomyExclusive,
+  setGuildModuleEnabled,
   setGuildMusicPanelConfig,
   touchGuildMusicPanelActivity,
   setGuildMusicPanelActive,
