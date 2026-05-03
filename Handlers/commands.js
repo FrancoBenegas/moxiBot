@@ -7,8 +7,11 @@ module.exports = async (Moxi) => {
   Moxi.slashcommands = new Collection();
 
   const ignoreDirs = ['Tarot'];
-  const commandFiles = getFiles("Comandos", { ignoreDirs });
-  const slashcommandsFiles = getFiles("Slashcmd", { ignoreDirs });
+  // LEGACY: Comentado - usar Sistema Modular en Modules/
+  // const commandFiles = getFiles("Comandos", { ignoreDirs });
+  // const slashcommandsFiles = getFiles("Slashcmd", { ignoreDirs });
+  const commandFiles = [];
+  const slashcommandsFiles = [];
 
   const logger = require("../Util/logger");
 
