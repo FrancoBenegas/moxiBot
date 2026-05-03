@@ -11,10 +11,43 @@
 
 const http = require('node:http');
 const logger = require('../Util/logger');
+const moxi = require('../i18n');
+const { getGuildSettingsCached, setGuildModuleEnabled } = require('../Util/guildSettings');
+const { buildDisabledMusicSessionContainer, buildActiveMusicSessionContainer } = require('../Components/V2/musicControlsComponent');
+const { formatSessionEndedFooter } = require('../Util/seasonBrand');
+const { buildActiveMusicPanelData } = require('../Util/musicPanelAutoUpdater');
 
 const PORT = Number(process.env.BOT_API_PORT ?? 3099);
 const SECRET = (process.env.BOT_API_SECRET ?? '').trim();
 const PUBLIC_URL = (process.env.BOT_API_PUBLIC_URL ?? '').trim();
+
+function resolvePanelImageUrl(Moxi) {
+  const envUrl = String(process.env.MUSIC_FALLBACK_IMAGE_URL || '').trim();
+  if (envUrl) return envUrl;
+  return Moxi?.user?.displayAvatarURL?.({ extension: 'png', size: 1024 }) || null;
+}
+
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let raw = '';
+    req.on('data', (chunk) => {
+      raw += chunk;
+      if (raw.length > 1024 * 1024) {
+        reject(new Error('Payload too large'));
+        req.destroy();
+      }
+    });
+    req.on('end', () => {
+      if (!raw.trim()) return resolve({});
+      try {
+        resolve(JSON.parse(raw));
+      } catch (error) {
+        reject(error);
+      }
+    });
+    req.on('error', reject);
+  });
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -243,10 +276,110 @@ function serializeModules(Moxi) {
   };
 }
 
+function serializeComponentTree(component) {
+  if (!component || typeof component.toJSON !== 'function') return null;
+  try {
+    return component.toJSON();
+  } catch {
+    return null;
+  }
+}
+
+async function serializeMusicPanelPreview(Moxi, guildId) {
+  const cleanGuildId = String(guildId ?? '').trim();
+  if (!cleanGuildId) {
+    return { ok: false, reason: 'missing_guild_id' };
+  }
+
+  const guild = Moxi.guilds?.cache?.get(cleanGuildId)
+    || await Moxi.guilds?.fetch?.(cleanGuildId).catch(() => null);
+
+  if (!guild) {
+    return { ok: false, reason: 'guild_not_found', guildId: cleanGuildId };
+  }
+
+  const settings = await getGuildSettingsCached(cleanGuildId).catch(() => null);
+  const channelId = String(settings?.MusicFixedPanelChannelId || '').trim() || null;
+  const messageId = String(settings?.MusicFixedPanelMessageId || '').trim() || null;
+  const imageUrl = String(settings?.MusicFixedPanelImageUrl || '').trim() || resolvePanelImageUrl(Moxi) || null;
+  const player = Moxi.poru?.players?.get(cleanGuildId) || null;
+  const lang = await moxi.guildLang(cleanGuildId, process.env.DEFAULT_LANG || 'es-ES').catch(() => process.env.DEFAULT_LANG || 'es-ES');
+
+  let title = '## Panel de musica fijo';
+  let info = 'Escribe aqui el nombre de una cancion para reproducirla automaticamente.\nLos comandos de musica tambien funcionan normalmente.';
+  let footerText = formatSessionEndedFooter();
+  let state = 'idle';
+  let activeFilter = null;
+
+  if (player?.currentTrack?.info) {
+    const activeData = await buildActiveMusicPanelData({
+      player,
+      lang,
+      imageUrl,
+    }).catch(() => null);
+
+    if (activeData) {
+      title = activeData.title;
+      info = activeData.info;
+      footerText = activeData.footerText;
+      state = 'active';
+      try {
+        activeFilter = player.get('__moxiActiveFilter') || null;
+      } catch {
+        activeFilter = null;
+      }
+    }
+  }
+
+  const container = state === 'active'
+    ? buildActiveMusicSessionContainer({ title, info, imageUrl, footerText, activeFilter })
+    : buildDisabledMusicSessionContainer({ title, info, imageUrl, footerText });
+
+  return {
+    ok: true,
+    guildId: cleanGuildId,
+    guildName: guild.name,
+    state,
+    configured: Boolean(channelId && messageId),
+    panel: {
+      title,
+      info,
+      imageUrl,
+      footerText,
+      channelId,
+      messageId,
+      activeFilter,
+      componentTree: serializeComponentTree(container),
+    },
+  };
+}
+
+async function serializeGuildModuleStates(guildId) {
+  const cleanGuildId = String(guildId ?? '').trim();
+  if (!cleanGuildId) return { ok: false, reason: 'missing_guild_id' };
+
+  const settings = await getGuildSettingsCached(cleanGuildId).catch(() => null);
+  const rawStates = (settings && typeof settings.ModuleStates === 'object' && settings.ModuleStates)
+    ? settings.ModuleStates
+    : {};
+
+  const moduleStates = Object.fromEntries(
+    Object.entries(rawStates)
+      .map(([key, value]) => [normalizeModuleId(key), value === false ? false : true])
+      .filter(([key]) => Boolean(key))
+  );
+
+  return {
+    ok: true,
+    guildId: cleanGuildId,
+    moduleStates,
+  };
+}
+
 // ─── Servidor HTTP ───────────────────────────────────────────────────────────
 
 function startWebApi(Moxi) {
-  const server = http.createServer((req, res) => {
+  const server = http.createServer(async (req, res) => {
     // Autenticación obligatoria por header X-Bot-Secret cuando está configurado
     if (SECRET) {
       const provided = (req.headers['x-bot-secret'] ?? '').trim();
@@ -281,6 +414,64 @@ function startWebApi(Moxi) {
         res.end(body);
       } catch (err) {
         logger.error('[webApi] Error al serializar módulos:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Internal error' }));
+      }
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/music-panel') {
+      try {
+        const guildId = url.searchParams.get('guildId');
+        const data = await serializeMusicPanelPreview(Moxi, guildId);
+        const status = data.ok ? 200 : (data.reason === 'guild_not_found' ? 404 : 400);
+        const body = JSON.stringify(data);
+        res.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+        res.end(body);
+      } catch (err) {
+        logger.error('[webApi] Error al serializar music panel:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Internal error' }));
+      }
+      return;
+    }
+
+    const guildModulesMatch = url.pathname.match(/^\/api\/guilds\/([^/]+)\/module-states$/);
+    if (guildModulesMatch && req.method === 'GET') {
+      try {
+        const data = await serializeGuildModuleStates(guildModulesMatch[1]);
+        const body = JSON.stringify(data);
+        res.writeHead(data.ok ? 200 : 400, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+        res.end(body);
+      } catch (err) {
+        logger.error('[webApi] Error al serializar estados de módulos:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Internal error' }));
+      }
+      return;
+    }
+
+    const guildModuleToggleMatch = url.pathname.match(/^\/api\/guilds\/([^/]+)\/module-states\/([^/]+)$/);
+    if (guildModuleToggleMatch && req.method === 'PUT') {
+      try {
+        const guildId = guildModuleToggleMatch[1];
+        const moduleId = normalizeModuleId(guildModuleToggleMatch[2]);
+        const payload = await readJsonBody(req);
+        if (!moduleId || typeof payload?.enabled !== 'boolean') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'guildId, moduleId y enabled son obligatorios.' }));
+          return;
+        }
+
+        const ok = await setGuildModuleEnabled(guildId, moduleId, payload.enabled);
+        const estado = payload.enabled ? 'ACTIVADO' : 'DESACTIVADO';
+        const guildName = Moxi?.guilds?.cache?.get(guildId)?.name ?? guildId;
+        logger.info(`[MODULE TOGGLE] Módulo "${moduleId}" ${estado} en "${guildName}" → ${ok ? 'guardado' : 'error al guardar'}`);
+        const body = JSON.stringify({ ok, guildId, moduleId, enabled: payload.enabled });
+        res.writeHead(ok ? 200 : 500, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+        res.end(body);
+      } catch (err) {
+        logger.error('[webApi] Error al actualizar estado de módulo:', err);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Internal error' }));
       }
