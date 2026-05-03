@@ -291,6 +291,16 @@ function buildSlashSubcommandDocs(slashCmd, botId) {
     }).filter(Boolean);
 }
 
+function dedupeBy(items, keyFn) {
+    const map = new Map();
+    for (const item of items || []) {
+        const key = keyFn(item);
+        if (!key) continue;
+        map.set(key, item);
+    }
+    return Array.from(map.values());
+}
+
 async function syncCommandRegistry(Moxi, opts = {}) {
     const enabled = opts.enabled ?? (process.env.SYNC_COMMAND_REGISTRY !== '0');
     if (!enabled) return { ok: false, reason: 'disabled' };
@@ -330,12 +340,21 @@ async function syncCommandRegistry(Moxi, opts = {}) {
         }
     }
 
-    if (!docs.length && !subDocs.length) {
+    const uniqueDocs = dedupeBy(
+        docs,
+        (d) => `${d?.botId || ''}::${d?.type || ''}::${d?.name || ''}`
+    );
+    const uniqueSubDocs = dedupeBy(
+        subDocs,
+        (d) => `${d?.botId || ''}::${d?.type || ''}::${d?.rootName || ''}::${d?.subcommandGroup || ''}::${d?.subcommandName || ''}`
+    );
+
+    if (!uniqueDocs.length && !uniqueSubDocs.length) {
         logger.warn('[commandRegistry] No se detectaron comandos para sincronizar');
         return { ok: true, upserted: 0 };
     }
 
-    const ops = docs.map((doc) => ({
+    const ops = uniqueDocs.map((doc) => ({
         updateOne: {
             filter: { botId: doc.botId, type: doc.type, name: doc.name },
             update: { $set: doc },
@@ -343,7 +362,7 @@ async function syncCommandRegistry(Moxi, opts = {}) {
         },
     }));
 
-    const subOps = subDocs.map((sd) => ({
+    const subOps = uniqueSubDocs.map((sd) => ({
         updateOne: {
             filter: {
                 botId: sd.botId,
@@ -416,22 +435,24 @@ async function syncCommandRegistry(Moxi, opts = {}) {
 
     logger.info(
         `${EMOJIS.burger || '📦'} CommandRegistry sync: ` +
-        `${docs.length} comandos (prefix=${prefix.length}, slash=${slash.length}), ` +
+        `${uniqueDocs.length} comandos (raw=${docs.length}, prefix=${prefix.length}, slash=${slash.length}), ` +
         `upserted=${upserted}, modified=${modified}, matched=${matched}` +
         (deleteMissing ? `, deleted=${deleted}` : '') +
-        ` | subcommands=${subDocs.length} (upserted=${subUpserted}, modified=${subModified}, matched=${subMatched}` +
+        ` | subcommands=${uniqueSubDocs.length} (raw=${subDocs.length}, upserted=${subUpserted}, modified=${subModified}, matched=${subMatched}` +
         (deleteMissing ? `, deleted=${subDeleted}` : '') +
         `)`
     );
 
     return {
         ok: true,
-        total: docs.length,
+        total: uniqueDocs.length,
+        totalRaw: docs.length,
         upserted,
         modified,
         matched,
         deleted,
-        subcommandsTotal: subDocs.length,
+        subcommandsTotal: uniqueSubDocs.length,
+        subcommandsTotalRaw: subDocs.length,
         subUpserted,
         subModified,
         subMatched,
