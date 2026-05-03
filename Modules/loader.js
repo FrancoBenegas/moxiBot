@@ -82,48 +82,62 @@ class ModuleLoader {
         events: []
       };
 
-      // Cargar comandos de prefijo
+      const rootJsFiles = fs.readdirSync(modulePath)
+        .filter(f => f.endsWith('.js') && f !== 'module.json');
+
+      const seenPrefix = new Set();
+      const seenSlash = new Set();
+
+      const registerCommand = (cmd, fileTag) => {
+        if (!cmd || typeof cmd !== 'object') return;
+        if (cmd.name) {
+          const key = String(cmd.name).trim().toLowerCase();
+          if (key && !seenPrefix.has(key)) {
+            module.commands.push({ file: fileTag, handler: cmd });
+            seenPrefix.add(key);
+          }
+        }
+        if (cmd.data?.name) {
+          const key = String(cmd.data.name).trim().toLowerCase();
+          if (key && !seenSlash.has(key)) {
+            module.slashCommands.push({ file: fileTag, handler: cmd });
+            seenSlash.add(key);
+          }
+        }
+      };
+
+      // 1) Archivos .js en la raíz del módulo (formato plano)
+      for (const file of rootJsFiles) {
+        try {
+          const mod = require(path.join(modulePath, file));
+          registerCommand(mod, file);
+        } catch (e) {
+          logger.warn(`[${moduleName}] Error cargando archivo ${file}: ${e.message}`);
+        }
+      }
+
+      // 2) Subcarpeta commands/ (comandos de prefijo)
       const commandsPath = path.join(modulePath, 'commands');
       if (fs.existsSync(commandsPath)) {
-        const cmdFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
-        for (const file of cmdFiles) {
+        for (const file of fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'))) {
           try {
             const cmd = require(path.join(commandsPath, file));
-            if (cmd.name) {
-              module.commands.push({ file, handler: cmd });
-            }
+            registerCommand(cmd, `commands/${file}`);
           } catch (e) {
             logger.warn(`[${moduleName}] Error cargando comando ${file}: ${e.message}`);
           }
         }
       }
 
-      // Cargar slash commands
+      // 3) Subcarpeta slashcmds/ (slash commands)
       const slashPath = path.join(modulePath, 'slashcmds');
       if (fs.existsSync(slashPath)) {
-        const slashFiles = fs.readdirSync(slashPath).filter(f => f.endsWith('.js'));
-        for (const file of slashFiles) {
+        for (const file of fs.readdirSync(slashPath).filter(f => f.endsWith('.js'))) {
           try {
             const cmd = require(path.join(slashPath, file));
-            if (cmd.data?.name) {
-              module.slashCommands.push({ file, handler: cmd });
-            }
+            registerCommand(cmd, `slashcmds/${file}`);
           } catch (e) {
             logger.warn(`[${moduleName}] Error cargando slash command ${file}: ${e.message}`);
-          }
-        }
-      }
-
-      // Cargar eventos
-      const eventsPath = path.join(modulePath, 'events');
-      if (fs.existsSync(eventsPath)) {
-        const eventFiles = fs.readdirSync(eventsPath).filter(f => f.endsWith('.js'));
-        for (const file of eventFiles) {
-          try {
-            const evt = require(path.join(eventsPath, file));
-            module.events.push({ file, handler: evt });
-          } catch (e) {
-            logger.warn(`[${moduleName}] Error cargando evento ${file}: ${e.message}`);
           }
         }
       }

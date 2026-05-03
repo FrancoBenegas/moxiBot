@@ -41,16 +41,10 @@ function migrate(categoryName) {
   console.log(`   Fuente: ${categoryPath}`);
   console.log(`   Destino: ${modulePath}`);
 
-  // Crear estructura de módulo si no existe
-  const commandsPath = path.join(modulePath, 'commands');
-  const slashPath = path.join(modulePath, 'slashcmds');
-  const eventsPath = path.join(modulePath, 'events');
-
-  [commandsPath, slashPath, eventsPath].forEach(p => {
-    if (!fs.existsSync(p)) {
-      fs.mkdirSync(p, { recursive: true });
-    }
-  });
+  // Crear carpeta de módulo si no existe (formato plano, sin subcarpetas)
+  if (!fs.existsSync(modulePath)) {
+    fs.mkdirSync(modulePath, { recursive: true });
+  }
 
   // Crear module.json si no existe
   const moduleJsonPath = path.join(modulePath, 'module.json');
@@ -72,7 +66,7 @@ function migrate(categoryName) {
     const files = fs.readdirSync(categoryPath).filter(f => f.endsWith('.js'));
     for (const file of files) {
       const src = path.join(categoryPath, file);
-      const dest = path.join(commandsPath, file);
+      const dest = path.join(modulePath, file);
       if (copyFile(src, dest)) {
         cmdCount++;
       }
@@ -88,7 +82,7 @@ function migrate(categoryName) {
     const files = fs.readdirSync(slashCategoryPath).filter(f => f.endsWith('.js'));
     for (const file of files) {
       const src = path.join(slashCategoryPath, file);
-      const dest = path.join(slashPath, file);
+      const dest = path.join(modulePath, `slash.${file}`);
       if (copyFile(src, dest)) {
         slashCount++;
       }
