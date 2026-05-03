@@ -95,6 +95,27 @@ async function resolveTargetChannel(message, rawArg) {
     return { channel: null, created: false };
 }
 
+async function ensurePanelRecoveryChannel(message) {
+    const desiredName = 'moxi-music-panel';
+    const reusable = message.guild.channels.cache.find((ch) =>
+        ch.type === ChannelType.GuildText
+        && String(ch.name || '').toLowerCase() === desiredName
+    );
+
+    if (reusable?.isTextBased?.()) {
+        return { channel: reusable, created: false };
+    }
+
+    const created = await message.guild.channels.create({
+        name: desiredName,
+        type: ChannelType.GuildText,
+        reason: `Recuperacion automatica del panel de musica solicitada por ${message.author?.tag || message.author?.id || 'unknown'}`,
+    }).catch(() => null);
+
+    if (!created?.isTextBased?.()) return { channel: null, created: false };
+    return { channel: created, created: true };
+}
+
 async function activateMusicPanelInChannel({ message, targetChannel, created = false, panelImageUrl = '' }) {
     const idleContainer = buildDisabledMusicSessionContainer({
         title: '## Panel de musica fijo',
@@ -403,16 +424,37 @@ module.exports = {
             const cfg = await getGuildSettingsCached(message.guild.id).catch(() => null);
             const channelId = String(cfg?.MusicFixedPanelChannelId || '');
             const messageId = String(cfg?.MusicFixedPanelMessageId || '');
+            const hasManageChannels = message.guild?.members?.me?.permissions?.has(PermissionsBitField.Flags.ManageChannels, true);
+            let recoveryNotice = '';
 
             if (!channelId) {
                 return message.reply(panelText('Panel de musica', `${EMOJIS.cross} No hay un panel fijo configurado. Usa \`${prefix}musicpanel on\` primero.`));
             }
 
-            const panelChannel = message.guild.channels.cache.get(channelId)
+            let panelChannel = message.guild.channels.cache.get(channelId)
                 || await message.guild.channels.fetch(channelId).catch(() => null);
 
             if (!panelChannel?.isTextBased?.()) {
-                return message.reply(panelText('Panel de musica', `${EMOJIS.cross} No encontre el canal del panel. Puede que haya sido eliminado.`));
+                if (!hasManageChannels) {
+                    return message.reply(panelText('Panel de musica', `${EMOJIS.cross} No encontre el canal del panel y no tengo permiso de Gestionar canales para recrearlo.`));
+                }
+
+                const recoveredChannel = await ensurePanelRecoveryChannel(message);
+                panelChannel = recoveredChannel.channel;
+
+                if (!panelChannel?.isTextBased?.()) {
+                    return message.reply(panelText('Panel de musica', `${EMOJIS.cross} No encontre el canal del panel y no pude recrearlo automaticamente.`));
+                }
+
+                recoveryNotice = recoveredChannel.created
+                    ? `\nCanal recreado automaticamente: <#${panelChannel.id}>.`
+                    : `\nSe reutilizo un canal existente para recuperar el panel: <#${panelChannel.id}>.`;
+
+                await setGuildMusicPanelConfig(message.guild.id, {
+                    enabled: true,
+                    channelId: panelChannel.id,
+                    lastActiveAt: new Date(),
+                }).catch(() => null);
             }
 
             let panelMsg = messageId
@@ -446,7 +488,7 @@ module.exports = {
             if (player?.isPlaying || player?.isPaused) {
                 setMusicPanelMessage(player, panelMsg);
                 await renderActiveMusicPanel({ client: Moxi, player, message: panelMsg, force: true });
-                return message.reply(panelText('Panel de musica', `${EMOJIS.tick} Panel actualizado con la cancion actual.`));
+                return message.reply(panelText('Panel de musica', `${EMOJIS.tick} Panel actualizado con la cancion actual.${recoveryNotice}`));
             }
 
             const idleContainer = buildDisabledMusicSessionContainer({
@@ -462,7 +504,7 @@ module.exports = {
                 flags: MessageFlags.IsComponentsV2,
             }).catch(() => null);
 
-            return message.reply(panelText('Panel de musica', `${EMOJIS.tick} Panel reiniciado al estado inactivo.`));
+            return message.reply(panelText('Panel de musica', `${EMOJIS.tick} Panel reiniciado al estado inactivo.${recoveryNotice}`));
         }
 
         return message.reply(panelText('Panel de musica', `Uso: \`${prefix}musicpanel status\`, \`${prefix}musicpanel on [#canal|#categoria]\`, \`${prefix}musicpanel update\`, \`${prefix}musicpanel image <url|adjunto>\`, \`${prefix}musicpanel off\`.`));
