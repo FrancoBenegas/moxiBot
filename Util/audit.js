@@ -4,6 +4,18 @@ const { Bot } = require('../Config');
 const { EMOJIS } = require('./emojis');
 const { permissionInfoEmbed } = require('./auditPermissionEmbeds');
 
+function neutralizeMentions(value) {
+    return String(value || '')
+        .replace(/<@!?(\d+)>/g, 'ID usuario: $1')
+        .replace(/<@&(\d+)>/g, 'ID rol: $1')
+        .replace(/<#(\d+)>/g, 'ID canal: $1')
+        .replace(/@/g, '@\u200b');
+}
+
+function userLabelFromId(id) {
+    return id ? `ID usuario: ${id}` : '-';
+}
+
 // Permite registrar avisos informativos de permisos insuficientes en el canal de auditoría
 async function sendPermissionInfoLog({ client, guild, guildId, moderatorId, reason, fallbackLang = 'es-ES' }) {
     const gid = String(guildId || guild?.id || '');
@@ -20,8 +32,17 @@ async function sendPermissionInfoLog({ client, guild, guildId, moderatorId, reas
 
     const now = new Date();
     const timeStr = now.toISOString().replace('T', ' ').replace('Z', ' UTC');
-    const container = permissionInfoEmbed({ moderatorId, reason, timeStr });
-    await ch.send({ content: '', components: [container], flags: MessageFlags.IsComponentsV2 }).catch(() => null);
+    const container = permissionInfoEmbed({
+        moderatorId,
+        reason: neutralizeMentions(reason || ''),
+        timeStr,
+    });
+    await ch.send({
+        content: '',
+        components: [container],
+        flags: MessageFlags.IsComponentsV2,
+        allowedMentions: { parse: [] },
+    }).catch(() => null);
     return true;
 }
 
@@ -143,7 +164,8 @@ async function sendAuditLog({ client, guild, guildId, action, moderatorId, targe
         ? `https://cdn.discordapp.com/banners/${targetUser.id}/${targetUser.banner}.${String(targetUser.banner).startsWith('a_') ? 'gif' : 'png'}?size=2048`
         : null;
 
-    const safeReason = (reason && String(reason).trim()) ? String(reason).trim() : moxi.translate('audit:AUDIT_REASON_NONE', lang);
+    const safeReasonRaw = (reason && String(reason).trim()) ? String(reason).trim() : moxi.translate('audit:AUDIT_REASON_NONE', lang);
+    const safeReason = neutralizeMentions(safeReasonRaw);
     const now = new Date();
     const timeStr = now.toISOString().replace('T', ' ').replace('Z', ' UTC');
 
@@ -154,8 +176,8 @@ async function sendAuditLog({ client, guild, guildId, action, moderatorId, targe
         .addTextDisplayComponents(c => c.setContent(
             [
                 `${EMOJIS.shield || ''} ${moxi.translate('audit:AUDIT_LINE_ACTION', lang, { action: actionLabel(action, lang) })}`.trim(),
-                `${EMOJIS.user || ''} ${moxi.translate('audit:AUDIT_LINE_TARGET', lang, { target: targetId ? `<@${targetId}>` : '-' })}`.trim(),
-                `${EMOJIS.user || ''} ${moxi.translate('audit:AUDIT_LINE_MODERATOR', lang, { moderator: moderatorId ? `<@${moderatorId}>` : '-' })}`.trim(),
+                `${EMOJIS.user || ''} ${moxi.translate('audit:AUDIT_LINE_TARGET', lang, { target: userLabelFromId(targetId) })}`.trim(),
+                `${EMOJIS.user || ''} ${moxi.translate('audit:AUDIT_LINE_MODERATOR', lang, { moderator: userLabelFromId(moderatorId) })}`.trim(),
                 `${EMOJIS.edit || ''} ${moxi.translate('audit:AUDIT_LINE_REASON', lang, { reason: safeReason })}`.trim(),
                 `${EMOJIS.time || ''} ${moxi.translate('audit:AUDIT_LINE_TIME', lang, { time: timeStr })}`.trim(),
             ].filter(Boolean).join('\n')
@@ -168,7 +190,12 @@ async function sendAuditLog({ client, guild, guildId, action, moderatorId, targe
         container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(...mediaItems));
     }
 
-    await ch.send({ content: '', components: [container], flags: MessageFlags.IsComponentsV2 }).catch(() => null);
+    await ch.send({
+        content: '',
+        components: [container],
+        flags: MessageFlags.IsComponentsV2,
+        allowedMentions: { parse: [] },
+    }).catch(() => null);
     return true;
 }
 

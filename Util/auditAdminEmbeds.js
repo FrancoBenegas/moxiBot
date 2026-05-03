@@ -3,18 +3,30 @@
 const { ContainerBuilder, TextDisplayBuilder, SeparatorBuilder, MessageFlags, EmbedBuilder, ActionRowBuilder, ButtonStyle } = require('discord.js');
 const { ButtonBuilder } = require('./compatButtonBuilder');
 
+function neutralizeMentions(value) {
+    return String(value || '')
+        .replace(/<@!?(\d+)>/g, 'ID usuario: $1')
+        .replace(/<@&(\d+)>/g, 'ID rol: $1')
+        .replace(/<#(\d+)>/g, 'ID canal: $1')
+        .replace(/@/g, '@\u200b');
+}
+
 // Funciones de eventos de mensajes
-function messageDeleteEmbed({ messageId, authorId, authorUsername, channelId, channelName, content, messageUrl, timeStr }) {
+function messageDeleteEmbed({ messageId, authorId, authorUsername, channelId, channelName, content, messageUrl, timeStr, deletedById = null, deletedByTag = null }) {
     const lines = [];
 
     // Canal
-    const canalDisplay = channelName ? `#${channelName}` : `<#${channelId}>`;
+    const canalDisplay = channelName ? `#${channelName}` : `ID canal: ${channelId}`;
     lines.push(`**Canal:** ${canalDisplay}`);
 
     // Autor
     if (authorId) {
-        const autorDisplay = authorUsername ? `${authorUsername} (<@${authorId}>)` : `<@${authorId}>`;
+        const autorDisplay = authorUsername ? `${authorUsername} (ID usuario: ${authorId})` : `ID usuario: ${authorId}`;
         lines.push(`**Usuario:** ${autorDisplay}`);
+    }
+    if (deletedById) {
+        const deleterDisplay = deletedByTag ? `${deletedByTag} (ID usuario: ${deletedById})` : `ID usuario: ${deletedById}`;
+        lines.push(`**Eliminado por:** ${neutralizeMentions(deleterDisplay)}`);
     }
 
     const container = new ContainerBuilder()
@@ -25,7 +37,7 @@ function messageDeleteEmbed({ messageId, authorId, authorUsername, channelId, ch
         .addSeparatorComponents(s => s.setDivider(true))
         .addTextDisplayComponents(c => c.setContent(
             content && content.trim()
-                ? `**Contenido**\n${content.trim().slice(0, 1000)}`
+                ? `**Contenido**\n${neutralizeMentions(content.trim().slice(0, 1000))}`
                 : `**Contenido**\n*No disponible (mensaje no estaba en caché)*`
         ));
 
@@ -35,14 +47,27 @@ function messageDeleteEmbed({ messageId, authorId, authorUsername, channelId, ch
 
     const components = [container];
 
+    const rowButtons = [];
     if (messageUrl) {
-        const row = new ActionRowBuilder().addComponents(
+        rowButtons.push(
             new ButtonBuilder()
                 .setLabel('Ir al contexto')
                 .setStyle(ButtonStyle.Link)
                 .setEmoji('🔗')
                 .setURL(messageUrl)
         );
+    }
+    if (deletedById) {
+        rowButtons.push(
+            new ButtonBuilder()
+                .setLabel('Ver perfil de quien lo borró')
+                .setStyle(ButtonStyle.Link)
+                .setEmoji('👤')
+                .setURL(`https://discord.com/users/${deletedById}`)
+        );
+    }
+    if (rowButtons.length) {
+        const row = new ActionRowBuilder().addComponents(...rowButtons);
         components.push(row);
     }
 
@@ -52,11 +77,11 @@ function messageDeleteEmbed({ messageId, authorId, authorUsername, channelId, ch
 function messageUpdateEmbed({ authorId, authorUsername, channelId, channelName, oldContent, newContent, messageUrl, timeStr }) {
     const lines = [];
 
-    const canalDisplay = channelName ? `#${channelName}` : `<#${channelId}>`;
+    const canalDisplay = channelName ? `#${channelName}` : `ID canal: ${channelId}`;
     lines.push(`**Canal:** ${canalDisplay}`);
 
     if (authorId) {
-        const autorDisplay = authorUsername ? `${authorUsername} (<@${authorId}>)` : `<@${authorId}>`;
+        const autorDisplay = authorUsername ? `${authorUsername} (ID usuario: ${authorId})` : `ID usuario: ${authorId}`;
         lines.push(`**Usuario:** ${autorDisplay}`);
     }
 
@@ -67,11 +92,11 @@ function messageUpdateEmbed({ authorId, authorUsername, channelId, channelName, 
         .addTextDisplayComponents(c => c.setContent(lines.join('\n')))
         .addSeparatorComponents(s => s.setDivider(true))
         .addTextDisplayComponents(c => c.setContent(
-            `**Antes**\n${oldContent && oldContent.trim() ? oldContent.trim().slice(0, 1000) : '*No disponible*'}`
+            `**Antes**\n${oldContent && oldContent.trim() ? neutralizeMentions(oldContent.trim().slice(0, 1000)) : '*No disponible*'}`
         ))
         .addSeparatorComponents(s => s.setDivider(false))
         .addTextDisplayComponents(c => c.setContent(
-            `**Después**\n${newContent && newContent.trim() ? newContent.trim().slice(0, 1000) : '*Sin contenido*'}`
+            `**Después**\n${newContent && newContent.trim() ? neutralizeMentions(newContent.trim().slice(0, 1000)) : '*Sin contenido*'}`
         ))
         .addSeparatorComponents(s => s.setDivider(true))
         .addTextDisplayComponents(c => c.setContent(`Editado • ${timeStr}`));
@@ -92,23 +117,50 @@ function messageUpdateEmbed({ authorId, authorUsername, channelId, channelName, 
     return { components, flags: MessageFlags.IsComponentsV2 };
 }
 
-function messageBulkDeleteEmbed({ channelId, count, timeStr, guildId }) {
+function messageBulkDeleteEmbed({ channelId, count, timeStr, guildId, deletedSamples = [], deletedById = null, deletedByTag = null }) {
+    const sampleLines = Array.isArray(deletedSamples)
+        ? deletedSamples.filter(Boolean).slice(0, 8)
+        : [];
+
     const container = new ContainerBuilder()
         .setAccentColor(0xff5555)
         .addTextDisplayComponents(c => c.setContent(`## 🗑️ Mensajes eliminados masivamente`))
         .addSeparatorComponents(s => s.setDivider(true))
-        .addTextDisplayComponents(c => c.setContent(`Se han eliminado **${count}** mensajes en <#${channelId}>.`))
+        .addTextDisplayComponents(c => c.setContent(`Se han eliminado **${count}** mensajes en el canal ID ${channelId}.`))
+        .addTextDisplayComponents(c => c.setContent(
+            deletedById
+                ? `**Eliminado por:** ${neutralizeMentions(deletedByTag ? `${deletedByTag} (ID usuario: ${deletedById})` : `ID usuario: ${deletedById}`)}`
+                : '**Eliminado por:** No disponible.'
+        ))
+        .addTextDisplayComponents(c => c.setContent(
+            sampleLines.length
+                ? `**Muestra de mensajes eliminados:**\n${sampleLines.map((line, i) => `${i + 1}. ${neutralizeMentions(line)}`).join('\n')}`
+                : '**Muestra de mensajes eliminados:**\nNo disponible (mensaje no estaba en caché).'
+        ))
         .addSeparatorComponents(s => s.setDivider(true))
         .addTextDisplayComponents(c => c.setContent(`Eliminado • ${timeStr}`));
     const components = [container];
+    const rowButtons = [];
     if (guildId) {
-        const row = new ActionRowBuilder().addComponents(
+        rowButtons.push(
             new ButtonBuilder()
                 .setLabel('Ir al canal')
                 .setStyle(ButtonStyle.Link)
                 .setEmoji('🔗')
                 .setURL(`https://discord.com/channels/${guildId}/${channelId}`)
         );
+    }
+    if (deletedById) {
+        rowButtons.push(
+            new ButtonBuilder()
+                .setLabel('Ver perfil de quien lo borró')
+                .setStyle(ButtonStyle.Link)
+                .setEmoji('👤')
+                .setURL(`https://discord.com/users/${deletedById}`)
+        );
+    }
+    if (rowButtons.length) {
+        const row = new ActionRowBuilder().addComponents(...rowButtons);
         components.push(row);
     }
     return { components, flags: MessageFlags.IsComponentsV2 };
@@ -143,8 +195,8 @@ function inviteDeleteEmbed({ code, inviterId, channelId, timeStr }) {
         .setAccentColor(0x23272A)
         .addTextDisplayComponents(c => c.setContent(`# Invitación eliminada`))
         .addSeparatorComponents(s => s.setDivider(true))
-        .addTextDisplayComponents(c => c.setContent(`Se ha eliminado la invitación: \`${code}\` en <#${channelId}>`))
-        .addTextDisplayComponents(c => c.setContent(`Invitador: ${inviterId ? `<@${inviterId}>` : 'Desconocido'}`))
+        .addTextDisplayComponents(c => c.setContent(`Se ha eliminado la invitación: \`${code}\` en el canal ID ${channelId}`))
+        .addTextDisplayComponents(c => c.setContent(`Invitador: ${inviterId ? `ID usuario: ${inviterId}` : 'Desconocido'}`))
         .addTextDisplayComponents(c => c.setContent(`Fecha: ${timeStr}`));
     return { components: [container], flags: MessageFlags.IsComponentsV2 };
 }
@@ -154,7 +206,7 @@ function inviteCreateEmbed({ code, inviterId, channelId, timeStr }) {
         .setAccentColor(0x5865F2)
         .addTextDisplayComponents(c => c.setContent(`## 🔗 Invitación creada`))
         .addSeparatorComponents(s => s.setDivider(true))
-        .addTextDisplayComponents(c => c.setContent(`**Código:** \`${code}\`\n**Canal:** <#${channelId}>\n**Creada por:** ${inviterId ? `<@${inviterId}>` : 'Desconocido'}`))
+        .addTextDisplayComponents(c => c.setContent(`**Código:** \`${code}\`\n**Canal:** ID canal: ${channelId}\n**Creada por:** ${inviterId ? `ID usuario: ${inviterId}` : 'Desconocido'}`))
         .addSeparatorComponents(s => s.setDivider(true))
         .addTextDisplayComponents(c => c.setContent(`Creada • ${timeStr}`));
     const components = [container];
@@ -180,7 +232,7 @@ function channelUpdateEmbed({ channelId, oldName, newName, oldType, newType, tim
         .setAccentColor(0xffcc00)
         .addTextDisplayComponents(c => c.setContent(`## ✏️ Canal actualizado`))
         .addSeparatorComponents(s => s.setDivider(true))
-        .addTextDisplayComponents(c => c.setContent(`**Canal:** <#${channelId}>\n${desc}`))
+        .addTextDisplayComponents(c => c.setContent(`**Canal:** ID canal: ${channelId}\n${desc}`))
         .addSeparatorComponents(s => s.setDivider(true))
         .addTextDisplayComponents(c => c.setContent(`Actualizado • ${timeStr}`));
     const components = [container];
@@ -235,7 +287,7 @@ function integrationCreateEmbed({ name, id, type, account, timeStr }) {
 function webhookUpdateEmbed({ oldName, newName, id, oldChannelId, newChannelId, timeStr, guildId }) {
     const lines = [];
     if (oldName !== newName) lines.push(`**Nombre:** \`${oldName}\` → \`${newName}\``);
-    if (oldChannelId !== newChannelId) lines.push(`**Canal:** <#${oldChannelId}> → <#${newChannelId}>`);
+    if (oldChannelId !== newChannelId) lines.push(`**Canal:** ID canal ${oldChannelId} → ID canal ${newChannelId}`);
     const desc = lines.length ? lines.join('\n') : 'Se actualizó el webhook, pero no se detectaron cambios relevantes.';
     const container = new ContainerBuilder()
         .setAccentColor(0xffcc00)
@@ -265,7 +317,7 @@ function webhookDeleteEmbed({ name, id, channelId, timeStr }) {
         .setAccentColor(0xff5555)
         .addTextDisplayComponents(c => c.setContent(`# Webhook eliminado`))
         .addSeparatorComponents(s => s.setDivider(true))
-        .addTextDisplayComponents(c => c.setContent(`Se ha eliminado el webhook **${name}** (ID: ${id}) del canal <#${channelId}>.`))
+        .addTextDisplayComponents(c => c.setContent(`Se ha eliminado el webhook **${name}** (ID: ${id}) del canal ID ${channelId}.`))
         .addSeparatorComponents(s => s.setDivider(true))
         .addTextDisplayComponents(c => c.setContent(`Fecha: ${timeStr}`))
         .addSeparatorComponents(s => s.setDivider(true))
@@ -279,7 +331,7 @@ function webhookCreateEmbed({ name, id, channelId, timeStr, guildId }) {
         .setAccentColor(0x77dd77)
         .addTextDisplayComponents(c => c.setContent(`## 🟢 Webhook creado`))
         .addSeparatorComponents(s => s.setDivider(true))
-        .addTextDisplayComponents(c => c.setContent(`**Nombre:** ${name}\n**Canal:** <#${channelId}>`))
+        .addTextDisplayComponents(c => c.setContent(`**Nombre:** ${name}\n**Canal:** ID canal: ${channelId}`))
         .addSeparatorComponents(s => s.setDivider(true))
         .addTextDisplayComponents(c => c.setContent(`Creado • ${timeStr}`));
     const components = [container];
@@ -388,7 +440,7 @@ function roleCreateEmbed({ roleName, roleId, timeStr }) {
         .setAccentColor(0x57F287)
         .addTextDisplayComponents(c => c.setContent(`## 🟢 Rol creado`))
         .addSeparatorComponents(s => s.setDivider(true))
-        .addTextDisplayComponents(c => c.setContent(`**Nombre:** ${roleName}\n**Mención:** <@&${roleId}>`))
+        .addTextDisplayComponents(c => c.setContent(`**Nombre:** ${roleName}\n**ID rol:** ${roleId}`))
         .addSeparatorComponents(s => s.setDivider(true))
         .addTextDisplayComponents(c => c.setContent(`Creado • ${timeStr}`));
     return { components: [container], flags: MessageFlags.IsComponentsV2 };
@@ -426,15 +478,15 @@ function voiceStateEmbed({ userId, username, type, oldChannelId, oldChannelName,
     const icon = isJoin ? '🟢' : isLeave ? '🔴' : '🔀';
     const title = isJoin ? 'Entró a un canal de voz' : isLeave ? 'Salió de un canal de voz' : 'Cambió de canal de voz';
 
-    const userDisplay = username ? `${username} (<@${userId}>)` : `<@${userId}>`;
+    const userDisplay = username ? `${username} (ID usuario: ${userId})` : `ID usuario: ${userId}`;
     const lines = [`**Usuario:** ${userDisplay}`];
 
     if (isJoin || isMove) {
-        const ch = newChannelName ? `#${newChannelName}` : `<#${newChannelId}>`;
+        const ch = newChannelName ? `#${newChannelName}` : `ID canal: ${newChannelId}`;
         lines.push(`**Canal:** ${ch}`);
     }
     if (isLeave || isMove) {
-        const ch = oldChannelName ? `#${oldChannelName}` : `<#${oldChannelId}>`;
+        const ch = oldChannelName ? `#${oldChannelName}` : `ID canal: ${oldChannelId}`;
         if (isMove) {
             lines.push(`**Antes:** ${ch}`);
         } else {

@@ -105,7 +105,12 @@ async function sendLogToDiscordChannel(levelName, prefix, color, ...msg) {
       const client = getClient();
       if (client && client.channels) {
         const channel = await client.channels.fetch(channelId).catch(() => null);
-        if (channel) channel.send({ embeds: [embed] }).catch(() => { });
+        if (channel) {
+          channel.send({
+            embeds: [embed],
+            allowedMentions: { parse: [] },
+          }).catch(() => { });
+        }
       }
     }
     // Enviar a webhook si está configurado
@@ -115,6 +120,7 @@ async function sendLogToDiscordChannel(levelName, prefix, color, ...msg) {
         username: botName + ' Logger',
         avatarURL: 'https://i.imgur.com/1Q9Z1Zm.png',
         embeds: [embed],
+        allowed_mentions: { parse: [] },
       });
     }
   } catch { }

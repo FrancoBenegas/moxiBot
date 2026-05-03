@@ -9,7 +9,7 @@ function memberJoinEmbed({ userId, timeStr, inviteLine }) {
         .setAccentColor(MEMBER_COLOR)
         .addTextDisplayComponents(c => c.setContent(`# Nuevo usuario en el servidor`))
         .addSeparatorComponents(s => s.setDivider(true))
-        .addTextDisplayComponents(c => c.setContent(`El usuario <@${userId}> se ha unido al servidor.`))
+        .addTextDisplayComponents(c => c.setContent(`El usuario con ID ${userId} se ha unido al servidor.`))
         .addTextDisplayComponents(c => inviteLine ? c.setContent(inviteLine) : c.setContent(''))
         .addTextDisplayComponents(c => c.setContent(`Fecha: ${timeStr}`))
         .addTextDisplayComponents(c => c.setContent(`${MEMBER_FOOTER}`));

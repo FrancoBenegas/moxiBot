@@ -8,7 +8,7 @@ function memberRemoveEmbed({ userId, timeStr }) {
         .setAccentColor(GENERAL_COLOR)
         .addTextDisplayComponents(new TextDisplayBuilder().setContent(`# 🔴 Usuario salió del servidor`))
         .addSeparatorComponents(new SeparatorBuilder())
-        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`El usuario <@${userId}> ha salido del servidor.`))
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`El usuario con ID ${userId} ha salido del servidor.`))
         .addTextDisplayComponents(new TextDisplayBuilder().setContent(`🕒 ${timeStr}`));
     return { content: '', components: [container], flags: MessageFlags.IsComponentsV2 };
 }
@@ -18,7 +18,7 @@ function channelCreateEmbed({ channelId, timeStr, guildId }) {
         .setAccentColor(GENERAL_COLOR)
         .addTextDisplayComponents(new TextDisplayBuilder().setContent(`## 🟢 Canal creado`))
         .addSeparatorComponents(new SeparatorBuilder())
-        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`Se ha creado el canal <#${channelId}>.`))
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`Se ha creado el canal con ID ${channelId}.`))
         .addSeparatorComponents(new SeparatorBuilder())
         .addTextDisplayComponents(new TextDisplayBuilder().setContent(`Creado • ${timeStr}`));
     const components = [container];
@@ -50,7 +50,7 @@ function messageDeleteEmbed({ userId, channelId, timeStr }) {
         .setAccentColor(GENERAL_COLOR)
         .addTextDisplayComponents(new TextDisplayBuilder().setContent(`# 🟠 Mensaje eliminado`))
         .addSeparatorComponents(new SeparatorBuilder())
-        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`Un mensaje de <@${userId}> fue eliminado en <#${channelId}>.`))
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`Un mensaje del usuario ID ${userId} fue eliminado en el canal ID ${channelId}.`))
         .addTextDisplayComponents(new TextDisplayBuilder().setContent(`🕒 ${timeStr}`));
     return { content: '', components: [container], flags: MessageFlags.IsComponentsV2 };
 }
