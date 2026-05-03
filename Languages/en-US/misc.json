@@ -585,5 +585,9 @@
   "PORTAL_NO_CHANNEL": "I couldn't find a valid channel to create the official invite.",
   "PORTAL_ERR": "I couldn't resolve the official invite.",
   "HELP_CATEGORY_CATEGORY_TOOLS": "Tools",
-  "HELP_CATEGORY_CATEGORY_TOOLS_DESC": "Useful tools for your Discord server."
+  "HELP_CATEGORY_CATEGORY_TOOLS_DESC": "Useful tools for your Discord server.",
+  "HELP_CATEGORY_GENSHIN": "Genshin",
+  "HELP_CATEGORY_GENSHIN_DESC": "Commands related to Genshin Impact.",
+  "HELP_CATEGORY_STREAMING": "Streaming",
+  "HELP_CATEGORY_STREAMING_DESC": "Stream alert and live notification commands."
 }

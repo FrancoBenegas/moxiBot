@@ -1,4 +1,4 @@
-{
+﻿{
     "ADDEMOJI_ERROR": "इमोजी जोड़ने में त्रुटि",
     "ADDEMOJI_NAME": "नाम",
     "ADDEMOJI_NO_PERMISSION": "आपके पास इमोजी प्रबंधित करने की अनुमति नहीं है",
@@ -678,5 +678,9 @@
     "PORTAL_STATUS_REUSED": "Reusing official invite",
     "PORTAL_NO_PERMS": "There is no official invite yet. You need permissions to create it.",
     "PORTAL_NO_CHANNEL": "I couldn't find a valid channel to create the official invite.",
-    "PORTAL_ERR": "I couldn't resolve the official invite."
+    "PORTAL_ERR": "I couldn't resolve the official invite.",
+    "HELP_CATEGORY_GENSHIN": "Genshin",
+    "HELP_CATEGORY_GENSHIN_DESC": "Genshin Impact से संबंधित कमांड।",
+    "HELP_CATEGORY_STREAMING": "स्ट्रीमिंग",
+    "HELP_CATEGORY_STREAMING_DESC": "लाइव स्ट्रीम अलर्ट और नोटिफिकेशन कमांड।"
 }

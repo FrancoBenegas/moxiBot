@@ -610,5 +610,7 @@
   "INVITE_OK_STATUS": "INVITE_OK_STATUS",
   "INVITE_OK_REQUESTED_BY": "INVITE_OK_REQUESTED_BY",
   "HELP_CATEGORY_GENSHIN": "Genshin",
-  "HELP_CATEGORY_GENSHIN_DESC": "Comandos relacionados con Genshin Impact."
+  "HELP_CATEGORY_GENSHIN_DESC": "Comandos relacionados con Genshin Impact.",
+  "HELP_CATEGORY_STREAMING": "Streaming",
+  "HELP_CATEGORY_STREAMING_DESC": "Comandos de alertas y notificaciones de streams en directo."
 }

@@ -1,4 +1,4 @@
-{
+﻿{
   "ADDEMOJI_ERROR": "添加表情时出错",
   "ADDEMOJI_NAME": "名称",
   "ADDEMOJI_NO_PERMISSION": "您没有管理表情的权限",
@@ -680,5 +680,9 @@
   "HELP_CATEGORY_CATEGORY_UTILIDAD": "实用工具",
   "HELP_CATEGORY_CATEGORY_UTILIDAD_DESC": "通用实用工具命令。",
   "HELP_CATEGORY_CATEGORY_TOOLS": "工具",
-  "HELP_CATEGORY_CATEGORY_TOOLS_DESC": "您Discord服务器的有用工具。"
+  "HELP_CATEGORY_CATEGORY_TOOLS_DESC": "您Discord服务器的有用工具。",
+  "HELP_CATEGORY_GENSHIN": "原神",
+  "HELP_CATEGORY_GENSHIN_DESC": "与原神（Genshin Impact）相关的命令。",
+  "HELP_CATEGORY_STREAMING": "直播",
+  "HELP_CATEGORY_STREAMING_DESC": "直播提醒和通知命令。"
 }
