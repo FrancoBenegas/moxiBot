@@ -8,20 +8,20 @@ const {
     MediaGalleryItemBuilder,
     PermissionsBitField: { Flags }
 } = require('discord.js');
-const { ButtonBuilder } = require('../../../Util/compatButtonBuilder');
-const moxi = require('../../../i18n');
-const { Bot } = require('../../../Config');
-const { EMOJIS } = require('../../../Util/emojis');
-const GuildData = require('../../../Models/GuildSchema');
-const Welcome = require('../../../Models/WelcomeSchema');
-const { buildSylphaGreeting } = require('../../../Util/sylphacard');
-const { buildDiscordArtsProfile } = require('../../../Util/discordArts');
-const { buildCanvacardWelcomeLeave } = require('../../../Util/canvacard');
-const logger = require('../../../Util/logger');
-const debugHelper = require('../../../Util/debugHelper');
-const { setSectionButtonAccessory } = require('../../../Util/v2SectionAccessory');
-const LANGUAGE_META = require('../../../Languages/language-meta.json');
-const { normalizeDiscordId } = require('../../../Util/idGuards');
+const { ButtonBuilder } = require('../../Util/compatButtonBuilder');
+const moxi = require('../../i18n');
+const { Bot } = require('../../Config');
+const { EMOJIS } = require('../../Util/emojis');
+const GuildData = require('../../Models/GuildSchema');
+const Byes = require('../../Models/ByesSchema');
+const { buildSylphaGreeting } = require('../../Util/sylphacard');
+const { buildDiscordArtsProfile } = require('../../Util/discordArts');
+const { buildCanvacardWelcomeLeave } = require('../../Util/canvacard');
+const logger = require('../../Util/logger');
+const debugHelper = require('../../Util/debugHelper');
+const { setSectionButtonAccessory } = require('../../Util/v2SectionAccessory');
+const LANGUAGE_META = require('../../Languages/language-meta.json');
+const { normalizeDiscordId } = require('../../Util/idGuards');
 
 function toHexColor(value, fallback = '#00d9ff') {
     if (!value && value !== 0) return fallback;
@@ -55,15 +55,14 @@ function panel(Moxi, title, body) {
     return { content: '', components: [container], flags: MessageFlags.IsComponentsV2 };
 }
 
-function getWelcomeTemplateForLang(cfg, lang) {
-    const safeLang = (lang && typeof lang === 'string') ? lang : '';
-    const messages = cfg?.messages;
-    if (messages && typeof messages === 'object') {
-        const fromMap = messages instanceof Map ? messages.get(safeLang) : messages[safeLang];
-        if (fromMap && String(fromMap).trim()) return String(fromMap);
-    }
-    if (cfg?.message && String(cfg.message).trim()) return String(cfg.message);
-    return '';
+function describeMissingPerms(missing) {
+    const map = {
+        ViewChannel: 'Ver canal',
+        SendMessages: 'Enviar mensajes',
+        AttachFiles: 'Adjuntar archivos',
+        EmbedLinks: 'Insertar enlaces',
+    };
+    return (missing || []).map(p => map[p] || p);
 }
 
 function normalizeLangInput(input) {
@@ -81,25 +80,26 @@ function normalizeLangInput(input) {
     return '';
 }
 
-function describeMissingPerms(missing) {
-    const map = {
-        ViewChannel: 'Ver canal',
-        SendMessages: 'Enviar mensajes',
-        AttachFiles: 'Adjuntar archivos',
-        EmbedLinks: 'Insertar enlaces',
-    };
-    return (missing || []).map(p => map[p] || p);
+function getByesTemplateForLang(cfg, lang) {
+    const safeLang = (lang && typeof lang === 'string') ? lang : '';
+    const messages = cfg?.messages;
+    if (messages && typeof messages === 'object') {
+        const fromMap = messages instanceof Map ? messages.get(safeLang) : messages[safeLang];
+        if (fromMap && String(fromMap).trim()) return String(fromMap);
+    }
+    if (cfg?.message && String(cfg.message).trim()) return String(cfg.message);
+    return '';
 }
 
 module.exports = {
-    name: 'welcome',
-    alias: ['bienvenida', 'bienvenidas'],    
+    name: 'byes',
+    alias: ['bye', 'despedida', 'despedidas'],
     Category: function (lang) {
         lang = lang || 'es-ES';
         return moxi.translate('commands:CATEGORY_SISTEMAS', lang) || 'Sistemas';
     },
-    usage: 'welcome set #canal | welcome off | welcome style [sylphacard|discord-arts|canvacard] | welcome message <texto> | welcome message <lang> <texto> | welcome message clear [lang] | welcome test',
-    description: (lang = 'es-ES') => 'Configura el sistema de bienvenidas (sylphacard o discord-arts).',
+    usage: 'byes set #canal | byes off | byes style [sylphacard|discord-arts|canvacard] | byes message <texto> | byes message <lang> <texto> | byes message clear [lang] | byes test',
+    description: () => 'Configura el sistema de despedidas (byes) (sylphacard, discord-arts o canvacard).',
     permissions: {
         User: [Flags.Administrator],
     },
@@ -110,48 +110,47 @@ module.exports = {
         const sub = (args[0] || 'status').toLowerCase();
 
         if (!message.guild || !guildId) return;
-        debugHelper.log('welcome', 'command', { guildId, sub, authorId: message.author?.id, args });
+        debugHelper.log('byes', 'command', { guildId, sub, authorId: message.author?.id, args });
+
 
         if (sub === 'set') {
             const mentioned = message.mentions?.channels?.first?.();
             const raw = args[1];
             const id = mentioned?.id || (raw ? String(raw).replace(/[<#>]/g, '') : '');
             const ch = id ? (message.guild.channels.cache.get(id) || await message.guild.channels.fetch(id).catch(() => null)) : null;
-            if (!ch) {
-                return message.reply(panel(Moxi, 'Welcome', `${EMOJIS.cross} Uso: welcome set #canal`));
-            }
+            if (!ch) return message.reply(panel(Moxi, 'Byes', `${EMOJIS.cross} Uso: byes set #canal`));
 
             try {
                 const now = new Date();
-                await Welcome.updateOne(
+                await Byes.updateOne(
                     { guildID: guildId, type: 'config' },
-                    { $setOnInsert: { guildID: guildId, createdAt: now }, $set: { enabled: true, channelID: ch.id, updatedAt: now, guildName: message.guild.name } },
+                    { $setOnInsert: { guildID: guildId, type: 'config', createdAt: now }, $set: { enabled: true, channelID: ch.id, updatedAt: now, guildName: message.guild.name } },
                     { upsert: true }
                 );
-                try { logger.info && logger.info('[welcome] saved config (set)', { guildID: guildId, channelID: ch.id }); } catch (_) { }
+                try { logger.info && logger.info('[byes] saved config (set)', { guildID: guildId, channelID: ch.id }); } catch (_) { }
+                debugHelper.log('byes', 'saved config (set)', { guildId, channelId: ch.id });
             } catch (err) {
-                debugHelper.error('welcome', 'DB update failed (set channel)', err);
                 return null;
             }
 
-            return message.reply(panel(Moxi, 'Welcome', `${EMOJIS.tick} Canal de bienvenida: <#${ch.id}>`));
+            return message.reply(panel(Moxi, 'Byes', `${EMOJIS.tick} Canal de despedidas: <#${ch.id}>`));
         }
 
         if (sub === 'off' || sub === 'disable') {
             try {
-                if (!guildId) return message.reply(panel(Moxi, 'Welcome', `${EMOJIS.cross} Guild ID no disponible.`));
-                // Safely disable the config for this guild in the dedicated collection
                 const now = new Date();
-                await Welcome.updateOne(
+                await Byes.updateOne(
                     { guildID: guildId, type: 'config' },
-                    { $set: { enabled: false, channelID: null, message: null, updatedAt: now, guildName: message.guild?.name || null } },
+                    { $set: { enabled: false, channelID: null, message: null, updatedAt: now, guildName: message.guild.name } },
                     { upsert: false }
-                ).catch(() => null);
+                );
+                try { logger.info && logger.info('[byes] disabled config (off)', { guildID: guildId }); } catch (_) { }
+                debugHelper.log('byes', 'disabled config (off)', { guildId });
             } catch (err) {
-                debugHelper.error('welcome', 'DB delete failed (off)', err);
                 return null;
             }
-            return message.reply(panel(Moxi, 'Welcome', `${EMOJIS.tick} Sistema de bienvenidas desactivado y configuración eliminada.`));
+
+            return message.reply(panel(Moxi, 'Byes', `${EMOJIS.tick} Sistema de despedidas desactivado.`));
         }
 
         if (sub === 'style' || sub === 'estilo') {
@@ -164,23 +163,19 @@ module.exports = {
                         ? 'sylphacard'
                         : '';
 
-            // Si no se pasa argumento, mostramos selector interactivo (como language)
+            // Sin argumento: selector interactivo
             if (!raw) {
-                const welcomeDocPanel = await Welcome.findOne({ guildID: guildId, type: 'config' }).lean().catch((err) => {
-                    debugHelper.error('welcome', 'DB findOne failed (style panel)', err);
-                    return null;
-                });
-                const cfg = welcomeDocPanel || {};
+                const serverDoc = await Byes.findOne({ guildID: guildId, type: 'config' }).lean().catch(() => null) || await GuildData.findOne({ guildID: guildId }).lean().catch(() => null);
+                const cfg = serverDoc?.Byes ? serverDoc.Byes : serverDoc;
                 let currentStyle = (cfg?.style && typeof cfg.style === 'string') ? cfg.style : 'sylphacard';
 
-                // Generar previews (mejor esfuerzo)
                 const avatarUrl = message.author.displayAvatarURL({ size: 512, extension: 'png', forceStatic: true });
                 const fetchedUser = await message.client.users.fetch(message.author.id, { force: true }).catch(() => null);
                 const userBanner = fetchedUser?.bannerURL?.({ size: 2048, extension: 'png' }) || undefined;
                 const guildBg = message.guild.bannerURL?.({ size: 2048, extension: 'png' }) || message.guild.iconURL?.({ size: 2048, extension: 'png' }) || undefined;
                 const bg = userBanner || guildBg;
 
-                const rawTemplate = getWelcomeTemplateForLang(cfg, lang);
+                const rawTemplate = getByesTemplateForLang(cfg, lang);
                 const msgText = rawTemplate
                     ? applyTemplate(rawTemplate, { user: message.author.username, server: message.guild.name, count: message.guild.memberCount || 0 })
                     : undefined;
@@ -191,7 +186,7 @@ module.exports = {
 
                 try {
                     sylphaBuffer = await buildSylphaGreeting({
-                        type: 'welcome',
+                        type: 'goodbye',
                         username: message.author.username,
                         message: msgText,
                         memberCount: String(message.guild.memberCount || 0),
@@ -205,7 +200,6 @@ module.exports = {
                         imageDarkness: 40,
                     });
                 } catch (err) {
-                    debugHelper.error('welcome', 'sylphacard preview failed', err);
                 }
 
                 try {
@@ -215,24 +209,22 @@ module.exports = {
                         customBackground: bg,
                     });
                 } catch (err) {
-                    debugHelper.error('welcome', 'discord-arts preview failed', err);
                 }
 
                 try {
                     canvaBuffer = await buildCanvacardWelcomeLeave({
-                        type: 'welcome',
+                        type: 'leave',
                         avatarUrl,
                         backgroundUrl: bg,
-                        title: `¡Bienvenid@ ${message.author.username}!`,
+                        title: `¡Adiós ${message.author.username}!`,
                         subtitle: msgText,
                     });
                 } catch (err) {
-                    debugHelper.error('welcome', 'canvacard preview failed', err);
                 }
 
-                const SYLPHA_FILE = 'welcome-style-sylphacard.png';
-                const ARTS_FILE = 'welcome-style-discord-arts.png';
-                const CANVA_FILE = 'welcome-style-canvacard.png';
+                const SYLPHA_FILE = 'byes-style-sylphacard.png';
+                const ARTS_FILE = 'byes-style-discord-arts.png';
+                const CANVA_FILE = 'byes-style-canvacard.png';
 
                 const files = [];
                 if (sylphaBuffer) files.push(new AttachmentBuilder(sylphaBuffer, { name: SYLPHA_FILE }));
@@ -243,13 +235,13 @@ module.exports = {
                     const c = new ContainerBuilder()
                         .setAccentColor(Bot.AccentColor)
                         .addTextDisplayComponents(t => t.setContent(
-                            `**${EMOJIS.info || ''} Selector de estilo de bienvenida**\n\n` +
+                            `**${EMOJIS.info || ''} Selector de estilo de despedida**\n\n` +
                             `Pulsa un botón para elegir el diseño.\n` +
                             `Estilo actual: **${selectedStyle}**`
                         ))
                         .addSeparatorComponents(s => s.setDivider(true));
 
-                    // Opción 1 (Sylphacard)
+                    // Opción 1
                     c.addSectionComponents(section =>
                         setSectionButtonAccessory(
                             section.addTextDisplayComponents(t =>
@@ -259,13 +251,12 @@ module.exports = {
                                 )
                             ),
                             new ButtonBuilder()
-                                .setCustomId('welcome_style_sylphacard')
+                                .setCustomId('byes_style_sylphacard')
                                 .setLabel('Usar Sylphacard')
                                 .setStyle(selectedStyle === 'sylphacard' ? ButtonStyle.Success : ButtonStyle.Primary)
                                 .setDisabled(disabled)
                         )
                     );
-
                     if (hasSylpha) {
                         c.addMediaGalleryComponents(
                             new MediaGalleryBuilder().addItems(
@@ -273,10 +264,9 @@ module.exports = {
                             )
                         );
                     }
-
                     c.addSeparatorComponents(s => s.setDivider(true));
 
-                    // Opción 2 (Discord-Arts)
+                    // Opción 2
                     c.addSectionComponents(section =>
                         setSectionButtonAccessory(
                             section.addTextDisplayComponents(t =>
@@ -286,13 +276,12 @@ module.exports = {
                                 )
                             ),
                             new ButtonBuilder()
-                                .setCustomId('welcome_style_discord-arts')
+                                .setCustomId('byes_style_discord-arts')
                                 .setLabel('Usar Discord-Arts')
                                 .setStyle(selectedStyle === 'discord-arts' ? ButtonStyle.Success : ButtonStyle.Primary)
                                 .setDisabled(disabled)
                         )
                     );
-
                     if (hasArts) {
                         c.addMediaGalleryComponents(
                             new MediaGalleryBuilder().addItems(
@@ -300,10 +289,9 @@ module.exports = {
                             )
                         );
                     }
-
                     c.addSeparatorComponents(s => s.setDivider(true));
 
-                    // Opción 3 (Canvacard)
+                    // Opción 3
                     c.addSectionComponents(section =>
                         setSectionButtonAccessory(
                             section.addTextDisplayComponents(t =>
@@ -313,13 +301,12 @@ module.exports = {
                                 )
                             ),
                             new ButtonBuilder()
-                                .setCustomId('welcome_style_canvacard')
+                                .setCustomId('byes_style_canvacard')
                                 .setLabel('Usar Canvacard')
                                 .setStyle(selectedStyle === 'canvacard' ? ButtonStyle.Success : ButtonStyle.Primary)
                                 .setDisabled(disabled)
                         )
                     );
-
                     if (hasCanva) {
                         c.addMediaGalleryComponents(
                             new MediaGalleryBuilder().addItems(
@@ -330,7 +317,6 @@ module.exports = {
 
                     c.addSeparatorComponents(s => s.setDivider(true))
                         .addTextDisplayComponents(t => t.setContent(`${EMOJIS.copyright} ${Moxi.user.username} • ${new Date().getFullYear()}`));
-
                     return c;
                 };
 
@@ -341,33 +327,25 @@ module.exports = {
                 });
 
                 const filter = (i) => (
-                    (i.customId === 'welcome_style_sylphacard' || i.customId === 'welcome_style_discord-arts' || i.customId === 'welcome_style_canvacard') &&
+                    (i.customId === 'byes_style_sylphacard' || i.customId === 'byes_style_discord-arts' || i.customId === 'byes_style_canvacard') &&
                     i.user?.id === message.author.id
                 );
 
-                const collector = styleMsg.createMessageComponentCollector({
-                    filter,
-                    time: 60000,
-                    max: Infinity,
-                });
+                const collector = styleMsg.createMessageComponentCollector({ filter, time: 60000, max: Infinity });
 
                 collector.on('collect', async (i) => {
-                    const selected = i.customId === 'welcome_style_discord-arts'
+                    const selected = i.customId === 'byes_style_discord-arts'
                         ? 'discord-arts'
-                        : (i.customId === 'welcome_style_canvacard' ? 'canvacard' : 'sylphacard');
+                        : (i.customId === 'byes_style_canvacard' ? 'canvacard' : 'sylphacard');
                     try {
-                        try {
-                            const now = new Date();
-                            await Welcome.updateOne(
-                                { guildID: guildId, type: 'config' },
-                                { $setOnInsert: { guildID: guildId, createdAt: now }, $set: { style: selected, updatedAt: now, guildName: message.guild.name } },
-                                { upsert: true }
-                            );
-                            try { logger.info && logger.info('[welcome] saved config (style via button)', { guildID: guildId, style: selected }); } catch (_) { }
-                        } catch (err) {
-                            debugHelper.error('welcome', 'DB update failed (style via button)', err);
-                            throw err;
-                        }
+                        const now = new Date();
+                        await Byes.updateOne(
+                            { guildID: guildId, type: 'config' },
+                            { $setOnInsert: { guildID: guildId, type: 'config', createdAt: now }, $set: { style: selected, updatedAt: now, guildName: message.guild.name } },
+                            { upsert: true }
+                        );
+                        try { logger.info && logger.info('[byes] saved style (button)', { guildID: guildId, style: selected }); } catch (_) { }
+                        debugHelper.log('byes', 'saved style (button)', { guildId, style: selected });
                         currentStyle = selected;
                         await i.deferUpdate();
                         await styleMsg.edit({
@@ -375,7 +353,6 @@ module.exports = {
                             flags: MessageFlags.IsComponentsV2,
                         });
                     } catch (err) {
-                        debugHelper.error('welcome', 'DB update failed (style via button)', err);
                         await i.reply({
                             content: '',
                             components: [new ContainerBuilder().setAccentColor(Bot.AccentColor).addTextDisplayComponents(t => t.setContent(`${EMOJIS.cross} No se pudo guardar el estilo.`))],
@@ -395,37 +372,26 @@ module.exports = {
             }
 
             if (!normalized) {
-                return message.reply(panel(
-                    Moxi,
-                    'Welcome',
-                    `${EMOJIS.cross} Uso: welcome style [sylphacard|discord-arts|canvacard]`
-                ));
+                return message.reply(panel(Moxi, 'Byes', `${EMOJIS.cross} Uso: byes style [sylphacard|discord-arts|canvacard]`));
             }
 
             try {
                 const now = new Date();
-                await Welcome.updateOne(
+                await Byes.updateOne(
                     { guildID: guildId, type: 'config' },
-                    { $setOnInsert: { guildID: guildId, createdAt: now }, $set: { style: normalized, updatedAt: now, guildName: message.guild.name } },
+                    { $setOnInsert: { guildID: guildId, type: 'config', createdAt: now }, $set: { style: normalized, updatedAt: now, guildName: message.guild.name } },
                     { upsert: true }
                 );
-                try { logger.info && logger.info('[welcome] saved config (style)', { guildID: guildId, style: normalized }); } catch (_) { }
+                try { logger.info && logger.info('[byes] saved style', { guildID: guildId, style: normalized }); } catch (_) { }
+                debugHelper.log('byes', 'saved style', { guildId, style: normalized });
             } catch (err) {
-                debugHelper.error('welcome', 'DB update failed (style)', err);
                 return null;
             }
 
-            return message.reply(panel(Moxi, 'Welcome', `${EMOJIS.tick} Estilo actualizado: **${normalized}**`));
+            return message.reply(panel(Moxi, 'Byes', `${EMOJIS.tick} Estilo actualizado: **${normalized}**`));
         }
 
         if (sub === 'message' || sub === 'msg') {
-            // Formatos soportados:
-            // - welcome message <texto>
-            // - welcome message <lang> <texto>
-            // - welcome message clear
-            // - welcome message clear <lang>
-            // - welcome message <lang> clear
-
             const arg1 = String(args[1] || '').trim();
             const arg2 = String(args[2] || '').trim();
             const clearWords = new Set(['clear', 'remove', 'delete', 'borrar']);
@@ -434,82 +400,60 @@ module.exports = {
 
             const langFromArg1 = normalizeLangInput(arg1);
             const langFromArg2 = normalizeLangInput(arg2);
-
-            let targetLang = '';
-            if (isClear1) {
-                targetLang = langFromArg2 || (arg2 || '').trim() || lang;
-            } else {
-                targetLang = langFromArg1 || (arg1 || '').trim() || lang;
-            }
-            if (typeof targetLang === 'string') targetLang = targetLang.trim();
+            const targetLang = (isClear1 ? (langFromArg2 || lang) : (langFromArg1 || lang));
 
             if (isClear1 || isClear2) {
-                const update = {
-                    $unset: { [`Welcome.messages.${targetLang}`]: '' },
-                    // También limpiamos el fallback antiguo para que no reaparezca el texto.
-                    $set: { 'Welcome.message': '', 'Welcome.updatedAt': new Date() },
-                    $setOnInsert: { guildName: message.guild.name },
-                };
-
                 try {
-                    // On clear we do NOT want to create a new config document if it doesn't exist
                     const now = new Date();
                     const upd = { $set: { message: '', updatedAt: now, guildName: message.guild.name } };
-                    if (targetLang) {
-                        upd.$unset = { [`messages.${targetLang}`]: '' };
-                    }
-                    const res = await Welcome.updateOne({ guildID: guildId, type: 'config' }, upd, { upsert: false });
-                    try { logger.info && logger.info('[welcome] cleared message', { guildID: guildId, targetLang, modifiedCount: res?.modifiedCount ?? res?.nModified }); } catch (_) { }
+                    if (targetLang) upd.$unset = { [`messages.${targetLang}`]: '' };
+                    const res = await Byes.updateOne({ guildID: guildId, type: 'config' }, upd, { upsert: false });
+                    try { logger.info && logger.info('[byes] cleared message', { guildID: guildId, targetLang, modifiedCount: res?.modifiedCount ?? res?.nModified }); } catch (_) { }
+                    debugHelper.log('byes', 'cleared message', { guildId, targetLang, modifiedCount: res?.modifiedCount ?? res?.nModified });
                 } catch (err) {
-                    debugHelper.error('welcome', 'DB update failed (message clear)', err);
                     return null;
                 }
 
-                return message.reply(panel(Moxi, 'Welcome', `${EMOJIS.tick} Mensaje borrado para **${targetLang}**.`));
+                return message.reply(panel(Moxi, 'Byes', `${EMOJIS.tick} Mensaje borrado para **${targetLang}**.`));
             }
 
             const text = langFromArg1 ? args.slice(2).join(' ').trim() : args.slice(1).join(' ').trim();
             if (!text) {
-                return message.reply(panel(Moxi, 'Welcome', `${EMOJIS.cross} Uso: welcome message <texto>\nO: welcome message <lang> <texto>\nO: welcome message clear [lang]\nVariables: {user} {server} {count}`));
+                return message.reply(panel(Moxi, 'Byes', `${EMOJIS.cross} Uso: byes message <texto>\nO: byes message <lang> <texto>\nO: byes message clear [lang]\nVariables: {user} {server} {count}`));
             }
 
             const setObj = {
-                'Welcome.message': text, // compat/backward
-                'Welcome.updatedAt': new Date(),
+                'Byes.message': text, // compat
+                'Byes.updatedAt': new Date(),
             };
-            if (targetLang) setObj[`Welcome.messages.${targetLang}`] = text;
+            if (targetLang) setObj[`Byes.messages.${targetLang}`] = text;
 
             try {
                 const now = new Date();
-                const upd = { $setOnInsert: { guildID: guildId, createdAt: now }, $set: { updatedAt: now, guildName: message.guild.name } };
-                if (setObj['Welcome.message'] !== undefined) upd.$set.message = setObj['Welcome.message'];
-                if (setObj[`Welcome.messages.${targetLang}`]) {
-                    upd.$set[`messages.${targetLang}`] = setObj[`Welcome.messages.${targetLang}`];
-                }
-                const res = await Welcome.updateOne({ guildID: guildId, type: 'config' }, upd, { upsert: true });
-                try { logger.info && logger.info('[welcome] saved message', { guildID: guildId, targetLang, upsertedId: res?.upsertedId ?? null }); } catch (_) { }
+                const upd = { $setOnInsert: { guildID: guildId, type: 'config', createdAt: now }, $set: { updatedAt: now, guildName: message.guild.name } };
+                if (setObj['Byes.message'] !== undefined) upd.$set.message = setObj['Byes.message'];
+                if (setObj[`Byes.messages.${targetLang}`]) upd.$set[`messages.${targetLang}`] = setObj[`Byes.messages.${targetLang}`];
+                const res = await Byes.updateOne({ guildID: guildId, type: 'config' }, upd, { upsert: true });
+                try { logger.info && logger.info('[byes] saved message', { guildID: guildId, targetLang, upsertedId: res?.upsertedId ?? null }); } catch (_) { }
+                debugHelper.log('byes', 'saved message', { guildId, targetLang, upsertedId: res?.upsertedId ?? null });
             } catch (err) {
-                debugHelper.error('welcome', 'DB update failed (message)', err);
                 return null;
             }
-            return message.reply(panel(Moxi, 'Welcome', `${EMOJIS.tick} Mensaje guardado para **${targetLang}**.`));
+
+            return message.reply(panel(Moxi, 'Byes', `${EMOJIS.tick} Mensaje guardado para **${targetLang}**.`));
         }
 
         if (sub === 'test') {
-            const serverDoc = await GuildData.findOne({ guildID: guildId }).lean().catch((err) => {
-                debugHelper.error('welcome', 'DB findOne failed (test)', err);
+            const serverDoc = await Byes.findOne({ guildID: guildId, type: 'config' }).lean().catch((err) => {
+                return null;
+            }) || await GuildData.findOne({ guildID: guildId }).lean().catch((err) => {
                 return null;
             });
-            const welcomeDoc = await Welcome.findOne({ guildID: guildId, type: 'config' }).lean().catch((err) => {
-                debugHelper.error('welcome', 'Welcome.findOne failed (test)', err);
-                return null;
-            });
-            const cfg = welcomeDoc || serverDoc?.Welcome || {};
-            const style = (cfg?.style && typeof cfg.style === 'string') ? cfg.style : 'sylphacard';
+            const cfg = serverDoc?.Byes ? serverDoc.Byes : serverDoc;
             const channelId = cfg?.channelID ? String(cfg.channelID) : message.channel.id;
             const channel = message.guild.channels.cache.get(channelId) || await message.guild.channels.fetch(channelId).catch(() => message.channel);
+            debugHelper.log('byes', 'test resolved channel', { channelId: channel?.id, configuredChannelId: cfg?.channelID });
 
-            debugHelper.log('welcome', 'test resolved channel', { channelId: channel?.id, configuredChannelId: cfg?.channelID });
 
             const me = message.guild.members.me || await message.guild.members.fetch(Moxi.user.id).catch(() => null);
             const perms = me ? channel?.permissionsFor?.(me) : null;
@@ -522,22 +466,23 @@ module.exports = {
             if (!perms || !required.every(p => perms.has(p))) {
                 const missing = perms ? perms.missing(required) : ['ViewChannel', 'SendMessages', 'AttachFiles'];
                 const nice = describeMissingPerms(missing).join(', ');
-                debugHelper.warn('welcome', 'missing perms (test)', { channelId: channel?.id, missing });
-                return message.reply(panel(Moxi, 'Welcome', `${EMOJIS.cross} No puedo enviar la tarjeta en <#${channel?.id || channelId}>\nFaltan permisos: **${nice}**`));
+                return message.reply(panel(Moxi, 'Byes', `${EMOJIS.cross} No puedo enviar la tarjeta en <#${channel?.id || channelId}>\nFaltan permisos: **${nice}**`));
             }
 
             const avatarUrl = message.author.displayAvatarURL({ size: 512, extension: 'png', forceStatic: true });
-
             const fetchedUser = await message.client.users.fetch(message.author.id, { force: true }).catch(() => null);
             const userBanner = fetchedUser?.bannerURL?.({ size: 2048, extension: 'png' }) || undefined;
             const guildBg = message.guild.bannerURL?.({ size: 2048, extension: 'png' }) || message.guild.iconURL?.({ size: 2048, extension: 'png' }) || undefined;
             const bg = userBanner || guildBg;
-            debugHelper.log('welcome', 'test background', { hasUserBanner: !!userBanner, hasGuildBg: !!guildBg });
+
             const username = message.author.username;
             const memberCount = String(message.guild.memberCount || 0);
-            const rawTemplate = getWelcomeTemplateForLang(cfg, lang);
-            debugHelper.log('welcome', 'test template', { lang, hasTemplate: !!rawTemplate });
+
+            const style = (cfg?.style && typeof cfg.style === 'string') ? cfg.style : 'sylphacard';
+
+            const rawTemplate = getByesTemplateForLang(cfg, lang);
             const msgText = rawTemplate ? applyTemplate(rawTemplate, { user: username, server: message.guild.name, count: message.guild.memberCount || 0 }) : undefined;
+            debugHelper.log('byes', 'test template', { lang, hasTemplate: !!rawTemplate });
 
             let buffer;
             try {
@@ -549,15 +494,15 @@ module.exports = {
                     });
                 } else if (style === 'canvacard') {
                     buffer = await buildCanvacardWelcomeLeave({
-                        type: 'welcome',
+                        type: 'leave',
                         avatarUrl,
                         backgroundUrl: bg,
-                        title: `¡Bienvenid@ ${username}!`,
+                        title: `¡Adiós ${username}!`,
                         subtitle: msgText,
                     });
                 } else {
                     buffer = await buildSylphaGreeting({
-                        type: 'welcome',
+                        type: 'goodbye',
                         username,
                         message: msgText,
                         memberCount,
@@ -572,12 +517,11 @@ module.exports = {
                     });
                 }
             } catch (err) {
-                debugHelper.error('welcome', 'card generation failed (test)', { style, err });
 
                 if (style === 'discord-arts' || style === 'canvacard') {
                     try {
                         buffer = await buildSylphaGreeting({
-                            type: 'welcome',
+                            type: 'goodbye',
                             username,
                             message: msgText,
                             memberCount,
@@ -590,43 +534,37 @@ module.exports = {
                             accentColor: toHexColor(Bot?.AccentColor, '#00d9ff'),
                             imageDarkness: 40,
                         });
-                        debugHelper.log('welcome', 'test fallback to sylphacard ok', { bytes: buffer?.length || 0 });
                     } catch (err2) {
-                        debugHelper.error('welcome', 'fallback sylphacard failed (test)', err2);
-                        return message.reply(panel(Moxi, 'Welcome', `${EMOJIS.cross} No se pudo generar la tarjeta con el estilo **${style}**. Revisa la consola para más detalles.`));
+                        return message.reply(panel(Moxi, 'Byes', `${EMOJIS.cross} No se pudo generar la tarjeta con el estilo **${style}**.`));
                     }
                 } else {
-                    return message.reply(panel(Moxi, 'Welcome', `${EMOJIS.cross} No se pudo generar la tarjeta con el estilo **${style}**. Revisa la consola para más detalles.`));
+                    return message.reply(panel(Moxi, 'Byes', `${EMOJIS.cross} No se pudo generar la tarjeta con el estilo **${style}**.`));
                 }
             }
+            debugHelper.log('byes', 'test card generated', { bytes: buffer?.length || 0 });
 
-            debugHelper.log('welcome', 'test card generated', { bytes: buffer?.length || 0 });
 
-            const attachment = new AttachmentBuilder(buffer, { name: 'welcome-test.png' });
-            await channel.send({ content: `<@${message.author.id}>`, files: [attachment] }).catch((err) => {
-                debugHelper.error('welcome', 'send failed (test)', err);
+            const attachment = new AttachmentBuilder(buffer, { name: 'byes-test.png' });
+            await channel.send({ files: [attachment] }).catch((err) => {
                 return null;
             });
-            return message.reply(panel(Moxi, 'Welcome', `${EMOJIS.tick} Test enviado en <#${channel.id}>`));
+
+            return message.reply(panel(Moxi, 'Byes', `${EMOJIS.tick} Test enviado en <#${channel.id}>`));
         }
 
-        // status: prefer dedicated Welcome collection, fallback to embedded GuildData
-        const serverDoc = await GuildData.findOne({ guildID: guildId }).lean().catch((err) => {
-            debugHelper.error('welcome', 'DB findOne failed (status)', err);
+        // status
+        const serverDoc = await Byes.findOne({ guildID: guildId, type: 'config' }).lean().catch((err) => {
             return null;
-        });
-        const welcomeDoc = await Welcome.findOne({ guildID: guildId, type: 'config' }).lean().catch((err) => {
-            debugHelper.error('welcome', 'Welcome.findOne failed (status)', err);
-            return null;
-        });
-        const cfg = welcomeDoc || serverDoc?.Welcome;
+        }) || await GuildData.findOne({ guildID: guildId }).lean().catch(() => null);
+
+        const cfg = serverDoc?.Byes ? serverDoc.Byes : serverDoc;
         const enabled = !!cfg?.enabled;
         const channelId = cfg?.channelID ? String(cfg.channelID) : '';
         const style = (cfg?.style && typeof cfg.style === 'string') ? cfg.style : 'sylphacard';
-        const msgText = getWelcomeTemplateForLang(cfg, lang) || '-';
+        const msgText = getByesTemplateForLang(cfg, lang) || '-';
         return message.reply(panel(
             Moxi,
-            'Welcome',
+            'Byes',
             `${EMOJIS.info || ''} Estado: **${enabled ? 'ON' : 'OFF'}**\n${EMOJIS.channel || ''} Canal: ${channelId ? `<#${channelId}>` : '-'}\n${EMOJIS.edit || ''} Idioma: **${lang}**\n${EMOJIS.edit || ''} Estilo: **${style}**\n${EMOJIS.edit || ''} Mensaje: ${msgText}`.trim()
         ));
     }

@@ -8,20 +8,20 @@ const {
     MediaGalleryItemBuilder,
     PermissionsBitField: { Flags }
 } = require('discord.js');
-const { ButtonBuilder } = require('../../../Util/compatButtonBuilder');
-const moxi = require('../../../i18n');
-const { Bot } = require('../../../Config');
-const { EMOJIS } = require('../../../Util/emojis');
-const GuildData = require('../../../Models/GuildSchema');
-const Welcome = require('../../../Models/WelcomeSchema');
-const { buildSylphaGreeting } = require('../../../Util/sylphacard');
-const { buildDiscordArtsProfile } = require('../../../Util/discordArts');
-const { buildCanvacardWelcomeLeave } = require('../../../Util/canvacard');
-const logger = require('../../../Util/logger');
-const debugHelper = require('../../../Util/debugHelper');
-const { setSectionButtonAccessory } = require('../../../Util/v2SectionAccessory');
-const LANGUAGE_META = require('../../../Languages/language-meta.json');
-const { normalizeDiscordId } = require('../../../Util/idGuards');
+const { ButtonBuilder } = require('../../Util/compatButtonBuilder');
+const moxi = require('../../i18n');
+const { Bot } = require('../../Config');
+const { EMOJIS } = require('../../Util/emojis');
+const GuildData = require('../../Models/GuildSchema');
+const Welcome = require('../../Models/WelcomeSchema');
+const { buildSylphaGreeting } = require('../../Util/sylphacard');
+const { buildDiscordArtsProfile } = require('../../Util/discordArts');
+const { buildCanvacardWelcomeLeave } = require('../../Util/canvacard');
+const logger = require('../../Util/logger');
+const debugHelper = require('../../Util/debugHelper');
+const { setSectionButtonAccessory } = require('../../Util/v2SectionAccessory');
+const LANGUAGE_META = require('../../Languages/language-meta.json');
+const { normalizeDiscordId } = require('../../Util/idGuards');
 
 function toHexColor(value, fallback = '#00d9ff') {
     if (!value && value !== 0) return fallback;

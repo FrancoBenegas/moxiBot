@@ -1,17 +1,17 @@
 const fs = require('fs');
 const path = require('path');
 const { PermissionsBitField: { Flags }, ContainerBuilder, ButtonStyle, MessageFlags, ActionRowBuilder } = require('discord.js');
-const { ButtonBuilder } = require('../../../Util/compatButtonBuilder');
-const moxi = require('../../../i18n');
-const { setGuildLanguage, invalidateGuildSettingsCache } = require('../../../Util/guildSettings');
-const { setUserLanguage, invalidateUserLanguageCache } = require('../../../Util/userLanguage');
-const log = require('../../../Util/logger');
-const { EMOJIS } = require('../../../Util/emojis');
-const { Bot } = require('../../../Config');
-const { buildNoticeContainer, asV2MessageOptions } = require('../../../Util/v2Notice');
+const { ButtonBuilder } = require('../../Util/compatButtonBuilder');
+const moxi = require('../../i18n');
+const { setGuildLanguage, invalidateGuildSettingsCache } = require('../../Util/guildSettings');
+const { setUserLanguage, invalidateUserLanguageCache } = require('../../Util/userLanguage');
+const log = require('../../Util/logger');
+const { EMOJIS } = require('../../Util/emojis');
+const { Bot } = require('../../Config');
+const { buildNoticeContainer, asV2MessageOptions } = require('../../Util/v2Notice');
 
 function loadLanguages() {
-  const metaPath = path.join(__dirname, '../../../Languages/language-meta.json');
+  const metaPath = path.join(__dirname, '../../Languages/language-meta.json');
   const parsed = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
   return parsed.map((lang) => ({
     code: lang.name,
@@ -236,7 +236,7 @@ module.exports = {
     let currentServerLangCode = serverLangCode;
 
     // Obtener idioma personal del usuario (si existe)
-    const { getUserLanguage } = require('../../../Util/userLanguage');
+    const { getUserLanguage } = require('../../Util/userLanguage');
     const userPersonalLang = await getUserLanguage(guildId, userId, '').catch(() => '');
     let currentUserLangCode = userPersonalLang || null;
 
@@ -266,7 +266,7 @@ module.exports = {
     collector.on('collect', async (i) => {
       try {
         // Obtener el idioma personal del usuario que está interactuando
-        const { getUserLanguage } = require('../../../Util/userLanguage');
+        const { getUserLanguage } = require('../../Util/userLanguage');
         const interactorPersonalLang = await getUserLanguage(guildId, i.user?.id, '').catch(() => '');
         const interactorUserLangCode = interactorPersonalLang || null;
 
@@ -400,7 +400,7 @@ module.exports = {
       try {
         const latestServerLang = await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES');
         // Obtener el idioma personal actual del usuario original
-        const { getUserLanguage } = require('../../../Util/userLanguage');
+        const { getUserLanguage } = require('../../Util/userLanguage');
         const finalUserLang = await getUserLanguage(guildId, userId, '').catch(() => '');
         
         const disabled = buildPanel({
