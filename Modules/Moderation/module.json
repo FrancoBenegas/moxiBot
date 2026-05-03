@@ -1,7 +1,33 @@
 {
-    "author":  "MoxiLab",
-    "description":  "Módulo Moderation",
-    "name":  "Moderation",
-    "version":  "1.0.0",
-    "enabled":  true
+  "author": "MoxiLab",
+  "description": "Módulo Moderation",
+  "name": "Moderation",
+  "version": "1.0.0",
+  "enabled": true,
+  "names": {
+    "en-US": "Moderation",
+    "es-ES": "Moderación",
+    "de-DE": "Moderation",
+    "fr-FR": "Modération",
+    "ar-SA": "الإشراف",
+    "hi-IN": "मॉडरेशन",
+    "id-ID": "Moderasi",
+    "it-IT": "Moderazione",
+    "ja-JP": "モデレーション",
+    "ko-KR": "관리",
+    "zh-CN": "管理"
+  },
+  "descriptions": {
+    "en-US": "Bans, mutes, warnings, logs and automod.",
+    "es-ES": "Baneos, muteos, advertencias, logs y automod configurables.",
+    "de-DE": "Bans, Stummschaltungen, Warnungen, Logs und Automod.",
+    "fr-FR": "Bans, mutes, avertissements, logs et automod.",
+    "ar-SA": "حظر وكتم وتحذيرات وسجلات وتعديل تلقائي.",
+    "hi-IN": "बैन, म्यूट, चेतावनी, लॉग और ऑटोमॉड।",
+    "id-ID": "Ban, mute, peringatan, log dan automod.",
+    "it-IT": "Ban, mute, avvertimenti, log e automod.",
+    "ja-JP": "BAN、ミュート、警告、ログ、自動モデレーション。",
+    "ko-KR": "밴, 뮤트, 경고, 로그 및 자동 관리.",
+    "zh-CN": "封禁、静音、警告、日志和自动管理。"
+  }
 }

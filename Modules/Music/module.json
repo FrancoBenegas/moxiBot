@@ -4,10 +4,42 @@
   "description": "Módulo de reproducción de música con Poru y Lavalink",
   "enabled": true,
   "author": "MoxiLab",
-  "dependencies": ["poru", "discord.js"],
-  "permissions": ["CONNECT", "SPEAK"],
+  "dependencies": [
+    "poru",
+    "discord.js"
+  ],
+  "permissions": [
+    "CONNECT",
+    "SPEAK"
+  ],
   "config": {
     "prefix_enabled": true,
     "slash_enabled": true
+  },
+  "names": {
+    "en-US": "Music",
+    "es-ES": "Música",
+    "de-DE": "Musik",
+    "fr-FR": "Musique",
+    "ar-SA": "موسيقى",
+    "hi-IN": "संगीत",
+    "id-ID": "Musik",
+    "it-IT": "Musica",
+    "ja-JP": "音楽",
+    "ko-KR": "음악",
+    "zh-CN": "音乐"
+  },
+  "descriptions": {
+    "en-US": "Play music from YouTube, Spotify and more.",
+    "es-ES": "Reproduce música desde YouTube, Spotify y más en canales de voz.",
+    "de-DE": "Musik von YouTube, Spotify und mehr abspielen.",
+    "fr-FR": "Jouez de la musique depuis YouTube, Spotify et plus.",
+    "ar-SA": "شغّل الموسيقى من YouTube وSpotify وغيرها.",
+    "hi-IN": "YouTube, Spotify और अधिक से संगीत बजाएं।",
+    "id-ID": "Putar musik dari YouTube, Spotify dan lainnya.",
+    "it-IT": "Riproduci musica da YouTube, Spotify e altro.",
+    "ja-JP": "YouTube、Spotifyなどから音楽を再生。",
+    "ko-KR": "YouTube, Spotify 등에서 음악 재생.",
+    "zh-CN": "播放YouTube、Spotify等平台的音乐。"
   }
 }

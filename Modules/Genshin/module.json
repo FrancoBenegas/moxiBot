@@ -1,7 +1,33 @@
 {
-    "author":  "MoxiLab",
-    "description":  "Módulo Genshin",
-    "name":  "Genshin",
-    "version":  "1.0.0",
-    "enabled":  true
+  "author": "MoxiLab",
+  "description": "Módulo Genshin",
+  "name": "Genshin",
+  "version": "1.0.0",
+  "enabled": true,
+  "names": {
+    "en-US": "Genshin",
+    "es-ES": "Genshin",
+    "de-DE": "Genshin",
+    "fr-FR": "Genshin",
+    "ar-SA": "Genshin",
+    "hi-IN": "Genshin",
+    "id-ID": "Genshin",
+    "it-IT": "Genshin",
+    "ja-JP": "原神",
+    "ko-KR": "원신",
+    "zh-CN": "原神"
+  },
+  "descriptions": {
+    "en-US": "Genshin Impact related commands.",
+    "es-ES": "Comandos relacionados con Genshin Impact.",
+    "de-DE": "Genshin Impact Befehle.",
+    "fr-FR": "Commandes liées à Genshin Impact.",
+    "ar-SA": "أوامر تتعلق بـ Genshin Impact.",
+    "hi-IN": "Genshin Impact से संबंधित आदेश।",
+    "id-ID": "Perintah terkait Genshin Impact.",
+    "it-IT": "Comandi relativi a Genshin Impact.",
+    "ja-JP": "原神関連コマンド。",
+    "ko-KR": "원신 관련 명령.",
+    "zh-CN": "原神相关命令。"
+  }
 }

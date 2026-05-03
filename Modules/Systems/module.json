@@ -1,7 +1,33 @@
 {
-    "author":  "MoxiLab",
-    "description":  "Módulo Systems",
-    "name":  "Systems",
-    "version":  "1.0.0",
-    "enabled":  true
+  "author": "MoxiLab",
+  "description": "Módulo Systems",
+  "name": "Systems",
+  "version": "1.0.0",
+  "enabled": true,
+  "names": {
+    "en-US": "Systems",
+    "es-ES": "Sistemas",
+    "de-DE": "Systeme",
+    "fr-FR": "Systèmes",
+    "ar-SA": "الأنظمة",
+    "hi-IN": "सिस्टम",
+    "id-ID": "Sistem",
+    "it-IT": "Sistemi",
+    "ja-JP": "システム",
+    "ko-KR": "시스템",
+    "zh-CN": "系统"
+  },
+  "descriptions": {
+    "en-US": "Advanced server systems.",
+    "es-ES": "Sistemas avanzados del servidor.",
+    "de-DE": "Erweiterte Serversysteme.",
+    "fr-FR": "Systèmes avancés du serveur.",
+    "ar-SA": "أنظمة السيرفر المتقدمة.",
+    "hi-IN": "उन्नत सर्वर सिस्टम।",
+    "id-ID": "Sistem server lanjutan.",
+    "it-IT": "Sistemi server avanzati.",
+    "ja-JP": "高度なサーバーシステム。",
+    "ko-KR": "고급 서버 시스템.",
+    "zh-CN": "高级服务器系统。"
+  }
 }

@@ -1,7 +1,33 @@
 {
-    "author":  "MoxiLab",
-    "description":  "Módulo Tools",
-    "name":  "Tools",
-    "version":  "1.0.0",
-    "enabled":  true
+  "author": "MoxiLab",
+  "description": "Módulo Tools",
+  "name": "Tools",
+  "version": "1.0.0",
+  "enabled": true,
+  "names": {
+    "en-US": "Tools",
+    "es-ES": "Herramientas",
+    "de-DE": "Werkzeuge",
+    "fr-FR": "Outils",
+    "ar-SA": "الأدوات",
+    "hi-IN": "उपकरण",
+    "id-ID": "Alat",
+    "it-IT": "Strumenti",
+    "ja-JP": "ツール",
+    "ko-KR": "도구",
+    "zh-CN": "工具"
+  },
+  "descriptions": {
+    "en-US": "Utility and general purpose tools.",
+    "es-ES": "Herramientas de utilidad de uso general.",
+    "de-DE": "Allgemeine Hilfswerkzeuge.",
+    "fr-FR": "Outils utilitaires à usage général.",
+    "ar-SA": "أدوات متعددة الأغراض.",
+    "hi-IN": "उपयोगिता और सामान्य उद्देश्य उपकरण।",
+    "id-ID": "Alat utilitas dan serba guna.",
+    "it-IT": "Strumenti di utilità generali.",
+    "ja-JP": "汎用ユーティリティツール。",
+    "ko-KR": "유틸리티 및 범용 도구.",
+    "zh-CN": "实用工具和通用工具。"
+  }
 }

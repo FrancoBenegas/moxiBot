@@ -3,5 +3,31 @@
   "version": "1.0.0",
   "description": "Módulo Voice",
   "enabled": true,
-  "author": "MoxiLab"
+  "author": "MoxiLab",
+  "names": {
+    "en-US": "Voice",
+    "es-ES": "Voz",
+    "de-DE": "Stimme",
+    "fr-FR": "Voix",
+    "ar-SA": "الصوت",
+    "hi-IN": "आवाज़",
+    "id-ID": "Suara",
+    "it-IT": "Voce",
+    "ja-JP": "ボイス",
+    "ko-KR": "음성",
+    "zh-CN": "语音"
+  },
+  "descriptions": {
+    "en-US": "Voice channel management.",
+    "es-ES": "Gestión de canales de voz.",
+    "de-DE": "Sprachkanal-Verwaltung.",
+    "fr-FR": "Gestion des salons vocaux.",
+    "ar-SA": "إدارة القنوات الصوتية.",
+    "hi-IN": "वॉयस चैनल प्रबंधन।",
+    "id-ID": "Manajemen saluran suara.",
+    "it-IT": "Gestione dei canali vocali.",
+    "ja-JP": "ボイスチャンネル管理。",
+    "ko-KR": "음성 채널 관리.",
+    "zh-CN": "语音频道管理。"
+  }
 }

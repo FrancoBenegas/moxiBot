@@ -3,5 +3,31 @@
   "version": "1.0.0",
   "description": "Módulo Social",
   "enabled": true,
-  "author": "MoxiLab"
+  "author": "MoxiLab",
+  "names": {
+    "en-US": "Social",
+    "es-ES": "Social",
+    "de-DE": "Sozial",
+    "fr-FR": "Social",
+    "ar-SA": "اجتماعي",
+    "hi-IN": "सामाजिक",
+    "id-ID": "Sosial",
+    "it-IT": "Social",
+    "ja-JP": "ソーシャル",
+    "ko-KR": "소셜",
+    "zh-CN": "社交"
+  },
+  "descriptions": {
+    "en-US": "Social interaction commands.",
+    "es-ES": "Comandos de interacción social.",
+    "de-DE": "Soziale Interaktionsbefehle.",
+    "fr-FR": "Commandes d interaction sociale.",
+    "ar-SA": "أوامر التفاعل الاجتماعي.",
+    "hi-IN": "सामाजिक बातचीत के आदेश।",
+    "id-ID": "Perintah interaksi sosial.",
+    "it-IT": "Comandi di interazione sociale.",
+    "ja-JP": "ソーシャルインタラクションコマンド。",
+    "ko-KR": "소셜 인터랙션 명령.",
+    "zh-CN": "社交互动命令。"
+  }
 }

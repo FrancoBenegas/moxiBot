@@ -3,5 +3,31 @@
   "version": "1.0.0",
   "description": "Módulo Games",
   "enabled": true,
-  "author": "MoxiLab"
+  "author": "MoxiLab",
+  "names": {
+    "en-US": "Games",
+    "es-ES": "Juegos",
+    "de-DE": "Spiele",
+    "fr-FR": "Jeux",
+    "ar-SA": "ألعاب",
+    "hi-IN": "खेल",
+    "id-ID": "Permainan",
+    "it-IT": "Giochi",
+    "ja-JP": "ゲーム",
+    "ko-KR": "게임",
+    "zh-CN": "游戏"
+  },
+  "descriptions": {
+    "en-US": "Mini-games and server activities.",
+    "es-ES": "Minijuegos y actividades del servidor.",
+    "de-DE": "Minispiele und Serveraktivitäten.",
+    "fr-FR": "Mini-jeux et activités du serveur.",
+    "ar-SA": "ألعاب صغيرة وأنشطة السيرفر.",
+    "hi-IN": "मिनी-गेम्स और सर्वर गतिविधियाँ।",
+    "id-ID": "Mini-game dan aktivitas server.",
+    "it-IT": "Mini-giochi e attività del server.",
+    "ja-JP": "ミニゲームとサーバーアクティビティ。",
+    "ko-KR": "미니게임 및 서버 활동.",
+    "zh-CN": "小游戏和服务器活动。"
+  }
 }

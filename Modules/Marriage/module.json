@@ -1,7 +1,33 @@
 {
-    "author":  "MoxiLab",
-    "description":  "Módulo Marriage",
-    "name":  "Marriage",
-    "version":  "1.0.0",
-    "enabled":  true
+  "author": "MoxiLab",
+  "description": "Módulo Marriage",
+  "name": "Marriage",
+  "version": "1.0.0",
+  "enabled": true,
+  "names": {
+    "en-US": "Marriage",
+    "es-ES": "Matrimonio",
+    "de-DE": "Heirat",
+    "fr-FR": "Mariage",
+    "ar-SA": "الزواج",
+    "hi-IN": "विवाह",
+    "id-ID": "Pernikahan",
+    "it-IT": "Matrimonio",
+    "ja-JP": "結婚",
+    "ko-KR": "결혼",
+    "zh-CN": "婚姻"
+  },
+  "descriptions": {
+    "en-US": "Marriage and relationship system.",
+    "es-ES": "Sistema de matrimonio y relaciones.",
+    "de-DE": "Heirats- und Beziehungssystem.",
+    "fr-FR": "Système de mariage et relations.",
+    "ar-SA": "نظام الزواج والعلاقات.",
+    "hi-IN": "विवाह और संबंध प्रणाली।",
+    "id-ID": "Sistem pernikahan dan hubungan.",
+    "it-IT": "Sistema di matrimonio e relazioni.",
+    "ja-JP": "結婚と関係システム。",
+    "ko-KR": "결혼 및 관계 시스템.",
+    "zh-CN": "婚姻和关系系统。"
+  }
 }

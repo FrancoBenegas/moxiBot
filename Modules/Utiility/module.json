@@ -3,5 +3,31 @@
   "version": "1.0.0",
   "description": "Módulo Utiility",
   "enabled": true,
-  "author": "MoxiLab"
+  "author": "MoxiLab",
+  "names": {
+    "en-US": "Utility",
+    "es-ES": "Utilidad",
+    "de-DE": "Dienstprogramm",
+    "fr-FR": "Utilitaire",
+    "ar-SA": "أداة",
+    "hi-IN": "उपयोगिता",
+    "id-ID": "Utilitas",
+    "it-IT": "Utilità",
+    "ja-JP": "ユーティリティ",
+    "ko-KR": "유틸리티",
+    "zh-CN": "实用工具"
+  },
+  "descriptions": {
+    "en-US": "Utility and miscellaneous commands.",
+    "es-ES": "Comandos de utilidad y misceláneos.",
+    "de-DE": "Dienstprogramm- und sonstige Befehle.",
+    "fr-FR": "Commandes utilitaires et diverses.",
+    "ar-SA": "أوامر متنوعة ومساعدة.",
+    "hi-IN": "उपयोगिता और विविध आदेश।",
+    "id-ID": "Perintah utilitas dan lain-lain.",
+    "it-IT": "Comandi di utilità e vari.",
+    "ja-JP": "ユーティリティおよびその他のコマンド。",
+    "ko-KR": "유틸리티 및 기타 명령.",
+    "zh-CN": "实用和杂项命令。"
+  }
 }

@@ -1,7 +1,33 @@
 {
-    "author":  "MoxiLab",
-    "description":  "Módulo Economy",
-    "name":  "Economy",
-    "version":  "1.0.0",
-    "enabled":  true
+  "author": "MoxiLab",
+  "description": "Módulo Economy",
+  "name": "Economy",
+  "version": "1.0.0",
+  "enabled": true,
+  "names": {
+    "en-US": "Economy",
+    "es-ES": "Economía",
+    "de-DE": "Wirtschaft",
+    "fr-FR": "Économie",
+    "ar-SA": "الاقتصاد",
+    "hi-IN": "अर्थव्यवस्था",
+    "id-ID": "Ekonomi",
+    "it-IT": "Economia",
+    "ja-JP": "経済",
+    "ko-KR": "경제",
+    "zh-CN": "经济"
+  },
+  "descriptions": {
+    "en-US": "Virtual currency, shop, bank and daily rewards.",
+    "es-ES": "Sistema de moneda virtual, tienda, banco y recompensas diarias.",
+    "de-DE": "Virtuelle Währung, Shop, Bank und tägliche Belohnungen.",
+    "fr-FR": "Monnaie virtuelle, boutique, banque et récompenses quotidiennes.",
+    "ar-SA": "عملة افتراضية ومتجر وبنك ومكافآت يومية.",
+    "hi-IN": "वर्चुअल मुद्रा, दुकान, बैंक और दैनिक पुरस्कार।",
+    "id-ID": "Mata uang virtual, toko, bank, dan hadiah harian.",
+    "it-IT": "Valuta virtuale, negozio, banca e premi giornalieri.",
+    "ja-JP": "仮想通貨、ショップ、銀行、デイリーリワード。",
+    "ko-KR": "가상 화폐, 상점, 은행 및 일일 보상.",
+    "zh-CN": "虚拟货币、商店、银行和每日奖励。"
+  }
 }

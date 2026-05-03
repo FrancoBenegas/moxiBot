@@ -168,15 +168,15 @@ module.exports = {
                     purgedSlash = purgeTreeCache('Slashcmd');
 
                     const warm = [
-                        path.join(__dirname, '..', '..', 'Eventos', 'InteractionCreate', 'controllers', 'button.js'),
-                        path.join(__dirname, '..', '..', 'Eventos', 'InteractionCreate', 'controllers', 'selectMenu.js'),
-                        path.join(__dirname, '..', '..', 'Eventos', 'InteractionCreate', 'controllers', 'modals'),
+                        path.join(__dirname, '..', '..', '..', 'Eventos', 'InteractionCreate', 'controllers', 'button.js'),
+                        path.join(__dirname, '..', '..', '..', 'Eventos', 'InteractionCreate', 'controllers', 'selectMenu.js'),
+                        path.join(__dirname, '..', '..', '..', 'Eventos', 'InteractionCreate', 'controllers', 'modals'),
                     ];
 
                     cachedHandlersBefore = countCachedModules(warm);
 
                     purgedEvents = purgeTreeCache(path.join('Eventos', 'InteractionCreate', 'controllers'));
-                    purgeRequireCache(path.join(__dirname, '..', '..', 'Util', 'serversPanel.js'));
+                    purgeRequireCache(path.join(__dirname, '..', '..', '..', 'Util', 'serversPanel.js'));
 
                     loadedControllers.total = warm.length;
                     for (const p of warm) {
@@ -186,8 +186,8 @@ module.exports = {
 
                     cachedHandlersAfter = loadedControllers.ok;
 
-                    purgeRequireCache(path.join(__dirname, '..', '..', 'Handlers', 'commands.js'));
-                    const loadCommands = require('../../Handlers/commands.js');
+                    purgeRequireCache(path.join(__dirname, '..', '..', '..', 'Handlers', 'commands.js'));
+                    const loadCommands = require('../../../Handlers/commands.js');
                     await loadCommands(Moxi);
 
                     after = {
@@ -241,15 +241,15 @@ module.exports = {
             if (doSlash) purgedSlash = purgeTreeCache('Slashcmd');
             if (doEvents) {
                 const warm = [
-                    path.join(__dirname, '..', '..', 'Eventos', 'InteractionCreate', 'controllers', 'button.js'),
-                    path.join(__dirname, '..', '..', 'Eventos', 'InteractionCreate', 'controllers', 'selectMenu.js'),
-                    path.join(__dirname, '..', '..', 'Eventos', 'InteractionCreate', 'controllers', 'modals'),
+                    path.join(__dirname, '..', '..', '..', 'Eventos', 'InteractionCreate', 'controllers', 'button.js'),
+                    path.join(__dirname, '..', '..', '..', 'Eventos', 'InteractionCreate', 'controllers', 'selectMenu.js'),
+                    path.join(__dirname, '..', '..', '..', 'Eventos', 'InteractionCreate', 'controllers', 'modals'),
                 ];
 
                 cachedHandlersBefore = countCachedModules(warm);
 
                 purgedEvents = purgeTreeCache(path.join('Eventos', 'InteractionCreate', 'controllers'));
-                purgeRequireCache(path.join(__dirname, '..', '..', 'Util', 'serversPanel.js'));
+                purgeRequireCache(path.join(__dirname, '..', '..', '..', 'Util', 'serversPanel.js'));
 
                 loadedControllers.total = warm.length;
                 for (const p of warm) {
@@ -265,9 +265,9 @@ module.exports = {
             }
 
             if (doLoadCommands) {
-                purgeRequireCache(path.join(__dirname, '..', '..', 'Handlers', 'commands.js'));
+                purgeRequireCache(path.join(__dirname, '..', '..', '..', 'Handlers', 'commands.js'));
 
-                const loadCommands = require('../../Handlers/commands.js');
+                const loadCommands = require('../../../Handlers/commands.js');
                 await loadCommands(Moxi);
             }
 
