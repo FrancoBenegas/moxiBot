@@ -60,7 +60,7 @@ function messageDeleteEmbed({ messageId, authorId, authorUsername, channelId, ch
     if (deletedById) {
         rowButtons.push(
             new ButtonBuilder()
-                .setLabel('Ver perfil de quien lo borró')
+                .setLabel(`${deletedByTag}`)
                 .setStyle(ButtonStyle.Link)
                 .setEmoji('👤')
                 .setURL(`https://discord.com/users/${deletedById}`)
@@ -153,7 +153,7 @@ function messageBulkDeleteEmbed({ channelId, count, timeStr, guildId, deletedSam
     if (deletedById) {
         rowButtons.push(
             new ButtonBuilder()
-                .setLabel('Ver perfil de quien lo borró')
+                .setLabel(`${deletedByTag}`)
                 .setStyle(ButtonStyle.Link)
                 .setEmoji('👤')
                 .setURL(`https://discord.com/users/${deletedById}`)

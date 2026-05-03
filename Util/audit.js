@@ -1,7 +1,8 @@
-const { ContainerBuilder, MessageFlags, MediaGalleryBuilder, MediaGalleryItemBuilder } = require('discord.js');
+const { EmbedBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 const moxi = require('../i18n');
 const { Bot } = require('../Config');
 const { EMOJIS } = require('./emojis');
+const { ButtonBuilder } = require('./compatButtonBuilder');
 const { permissionInfoEmbed } = require('./auditPermissionEmbeds');
 
 function neutralizeMentions(value) {
@@ -32,15 +33,30 @@ async function sendPermissionInfoLog({ client, guild, guildId, moderatorId, reas
 
     const now = new Date();
     const timeStr = now.toISOString().replace('T', ' ').replace('Z', ' UTC');
-    const container = permissionInfoEmbed({
+    const embed = permissionInfoEmbed({
         moderatorId,
         reason: neutralizeMentions(reason || ''),
         timeStr,
     });
+
+    const components = [];
+    const normalizedModeratorId = moderatorId ? String(moderatorId).trim() : '';
+    if (/^\d{15,30}$/.test(normalizedModeratorId)) {
+        components.push(
+            new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setLabel('Ver perfil del moderador')
+                    .setStyle(ButtonStyle.Link)
+                    .setEmoji('👤')
+                    .setURL(`https://discord.com/users/${normalizedModeratorId}`)
+            )
+        );
+    }
+
     await ch.send({
         content: '',
-        components: [container],
-        flags: MessageFlags.IsComponentsV2,
+        embeds: [embed],
+        components,
         allowedMentions: { parse: [] },
     }).catch(() => null);
     return true;
@@ -169,11 +185,10 @@ async function sendAuditLog({ client, guild, guildId, action, moderatorId, targe
     const now = new Date();
     const timeStr = now.toISOString().replace('T', ' ').replace('Z', ' UTC');
 
-    const container = new ContainerBuilder()
-        .setAccentColor(Bot.AccentColor)
-        .addTextDisplayComponents(c => c.setContent(`# ${moxi.translate('audit:AUDIT_LOG_TITLE', lang)}`))
-        .addSeparatorComponents(s => s.setDivider(true))
-        .addTextDisplayComponents(c => c.setContent(
+    const embed = new EmbedBuilder()
+        .setColor(Bot.AccentColor)
+        .setTitle(moxi.translate('audit:AUDIT_LOG_TITLE', lang))
+        .setDescription(
             [
                 `${EMOJIS.shield || ''} ${moxi.translate('audit:AUDIT_LINE_ACTION', lang, { action: actionLabel(action, lang) })}`.trim(),
                 `${EMOJIS.user || ''} ${moxi.translate('audit:AUDIT_LINE_TARGET', lang, { target: userLabelFromId(targetId) })}`.trim(),
@@ -181,19 +196,29 @@ async function sendAuditLog({ client, guild, guildId, action, moderatorId, targe
                 `${EMOJIS.edit || ''} ${moxi.translate('audit:AUDIT_LINE_REASON', lang, { reason: safeReason })}`.trim(),
                 `${EMOJIS.time || ''} ${moxi.translate('audit:AUDIT_LINE_TIME', lang, { time: timeStr })}`.trim(),
             ].filter(Boolean).join('\n')
-        ));
+        );
 
-    const mediaItems = [];
-    if (bannerUrl) mediaItems.push(new MediaGalleryItemBuilder().setURL(bannerUrl));
-    if (avatarUrl) mediaItems.push(new MediaGalleryItemBuilder().setURL(avatarUrl));
-    if (mediaItems.length) {
-        container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(...mediaItems));
+    if (avatarUrl) embed.setThumbnail(avatarUrl);
+    if (bannerUrl) embed.setImage(bannerUrl);
+
+    const components = [];
+    const normalizedModeratorId = moderatorId ? String(moderatorId).trim() : '';
+    if (/^\d{15,30}$/.test(normalizedModeratorId)) {
+        components.push(
+            new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setLabel('Mostrar perfil del moderador')
+                    .setStyle(ButtonStyle.Link)
+                    .setEmoji('👤')
+                    .setURL(`https://discord.com/users/${normalizedModeratorId}`)
+            )
+        );
     }
 
     await ch.send({
         content: '',
-        components: [container],
-        flags: MessageFlags.IsComponentsV2,
+        embeds: [embed],
+        components,
         allowedMentions: { parse: [] },
     }).catch(() => null);
     return true;
