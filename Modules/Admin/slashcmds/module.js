@@ -4,31 +4,26 @@ const {
     MessageFlags,
 } = require('discord.js');
 
-const { SlashCommandBuilder } = require('../../Util/slashCommandBuilder');
-const moxi = require('../../i18n');
-const { Bot } = require('../../Config');
-const { setGuildModuleEnabled, getGuildSettingsCached } = require('../../Util/guildSettings');
+const { SlashCommandBuilder } = require('../../../Util/slashCommandBuilder');
+const moxi = require('../../../i18n');
+const { Bot } = require('../../../Config');
+const { setGuildModuleEnabled, getGuildSettingsCached } = require('../../../Util/guildSettings');
 
 const MODULE_CHOICES = [
-    { name: 'welcome', value: 'welcome' },
-    { name: 'roleplay', value: 'roleplay' },
-    { name: 'economy', value: 'economy' },
-    { name: 'utilities', value: 'utilities' },
-    { name: 'moderation', value: 'moderation' },
-    { name: 'music', value: 'music' },
-    { name: 'ai', value: 'ai' },
-    { name: 'giveaways', value: 'giveaways' },
-    { name: 'tickets', value: 'tickets' },
-    { name: 'logs', value: 'logs' },
-    { name: 'automod', value: 'automod' },
-    { name: 'wiki', value: 'wiki' },
-    { name: 'voice', value: 'voice' },
-    { name: 'fun', value: 'fun' },
-    { name: 'administration', value: 'administration' },
-    { name: 'systems', value: 'systems' },
-    { name: 'streaming', value: 'streaming' },
-    { name: 'genshin', value: 'genshin' },
-    { name: 'matrimonio', value: 'matrimonio' },
+    { name: 'economy',      value: 'economy' },
+    { name: 'fun',          value: 'fun' },
+    { name: 'games',        value: 'games' },
+    { name: 'genshin',      value: 'genshin' },
+    { name: 'matrimonio',   value: 'matrimonio' },
+    { name: 'moderation',   value: 'moderation' },
+    { name: 'music',        value: 'music' },
+    { name: 'social',       value: 'social' },
+    { name: 'streaming',    value: 'streaming' },
+    { name: 'systems',      value: 'systems' },
+    { name: 'tools',        value: 'tools' },
+    { name: 'utiility',     value: 'utiility' },
+    { name: 'verification', value: 'verification' },
+    { name: 'voice',        value: 'voice' },
 ];
 
 function buildPanel({ title, body }) {
