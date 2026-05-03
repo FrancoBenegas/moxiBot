@@ -14,10 +14,42 @@ const fs = require('node:fs');
 const path = require('node:path');
 const logger = require('../Util/logger');
 const moxi = require('../i18n');
-const { getGuildSettingsCached, setGuildModuleEnabled } = require('../Util/guildSettings');
+const {
+  getGuildSettingsCached,
+  setGuildModuleEnabled,
+  setGuildEconomyEnabled,
+  setGuildEconomyChannel,
+  setGuildEconomyExclusive,
+  setGuildAuditChannel,
+  setGuildAuditEnabled,
+  setGuildStreamAlertsChannel,
+  setGuildStreamAlertsEnabled,
+  setGuildStreamAlertEventEnabled,
+  setGuildMarriageEnabled,
+  setGuildMarriageChannel,
+  setGuildMarriageExclusive,
+  setGuildMarriageProposalsEnabled,
+  setGuildMarriageProposalTimeout,
+  setGuildMarriageCustomAnniversaryEnabled,
+  setGuildMarriageAnniversariesEnabled,
+  setGuildMarriageAnnounceAnniversaries,
+  setGuildMarriageTreeEnabled,
+  setGuildMarriageDivorcesEnabled,
+  setGuildMarriageDivorceMutualConfirm,
+} = require('../Util/guildSettings');
 const { buildDisabledMusicSessionContainer, buildActiveMusicSessionContainer } = require('../Components/V2/musicControlsComponent');
 const { formatSessionEndedFooter } = require('../Util/seasonBrand');
 const { buildActiveMusicPanelData } = require('../Util/musicPanelAutoUpdater');
+const {
+  getGuildConfig: getModerationConfig,
+  upsertGuildConfig: updateModerationConfig,
+  listRules: listModerationRules,
+  upsertRule: addOrUpdateRule,
+  removeRule: deleteModerationRule,
+  listModActions,
+  listRiskUsers,
+  getModerationStats,
+} = require('../Util/moderationEngineStorage');
 
 const PORT = Number(process.env.BOT_API_PORT ?? 3099);
 const SECRET = (process.env.BOT_API_SECRET ?? '').trim();
@@ -514,6 +546,511 @@ function startWebApi(Moxi) {
       }
       return;
     }
+
+    const guildChannelsMatch = url.pathname.match(/^\/api\/guilds\/([^/]+)\/channels$/);
+    if (guildChannelsMatch && req.method === 'GET') {
+      try {
+        const guildId = guildChannelsMatch[1];
+        const guild = Moxi?.guilds?.cache?.get(guildId);
+        if (!guild) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Guild not found' }));
+          return;
+        }
+        const ALLOWED_TYPES = new Set([0, 5, 10, 11, 12, 15]); // GUILD_TEXT, NEWS, NEWS_THREAD, PUBLIC_THREAD, PRIVATE_THREAD, FORUM
+        const items = [...guild.channels.cache.values()]
+          .filter((ch) => ALLOWED_TYPES.has(ch.type))
+          .map((ch) => ({ id: ch.id, name: ch.name, type: ch.type, parentId: ch.parentId ?? null }))
+          .sort((a, b) => a.name.localeCompare(b.name));
+        const body = JSON.stringify({ items });
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+        res.end(body);
+      } catch (err) {
+        logger.error('[webApi] Error al serializar channels:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Internal error' }));
+      }
+      return;
+    }
+
+    const guildRolesMatch = url.pathname.match(/^\/api\/guilds\/([^/]+)\/roles$/);
+    if (guildRolesMatch && req.method === 'GET') {
+      try {
+        const guildId = guildRolesMatch[1];
+        const guild = Moxi?.guilds?.cache?.get(guildId);
+        if (!guild) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Guild not found' }));
+          return;
+        }
+        const items = [...guild.roles.cache.values()]
+          .filter((r) => !r.managed && r.name !== '@everyone')
+          .map((r) => ({ id: r.id, name: r.name, color: r.color, position: r.position }))
+          .sort((a, b) => b.position - a.position);
+        const body = JSON.stringify({ items });
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+        res.end(body);
+      } catch (err) {
+        logger.error('[webApi] Error al serializar roles:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Internal error' }));
+      }
+      return;
+    }
+
+    const guildMembersMatch = url.pathname.match(/^\/api\/guilds\/([^/]+)\/members$/);
+    if (guildMembersMatch && req.method === 'GET') {
+      try {
+        const guildId = guildMembersMatch[1];
+        const guild = Moxi?.guilds?.cache?.get(guildId);
+        if (!guild) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Guild not found' }));
+          return;
+        }
+        const limitParam = parseInt(new URLSearchParams(url.search).get('limit') ?? '100', 10);
+        const limit = Math.min(isNaN(limitParam) ? 100 : limitParam, 500);
+        // Fetch members from Discord API to populate cache
+        await guild.members.fetch({ limit });
+        const items = [...guild.members.cache.values()]
+          .filter((m) => !m.user.bot)
+          .slice(0, limit)
+          .map((m) => ({
+            id: m.id,
+            username: m.user.username,
+            displayName: m.displayName,
+            avatar: m.user.avatar ?? null,
+          }));
+        const body = JSON.stringify({ items });
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+        res.end(body);
+      } catch (err) {
+        logger.error('[webApi] Error al serializar members:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Internal error' }));
+      }
+      return;
+    }
+
+    const moderationSettingsMatch = url.pathname.match(/^\/api\/guilds\/([^/]+)\/moderation-settings$/);
+    if (moderationSettingsMatch && req.method === 'PUT') {
+      try {
+        const guildId = moderationSettingsMatch[1];
+        const payload = await readJsonBody(req);
+        const results = {};
+        if (typeof payload?.enabled === 'boolean') {
+          results.enabled = await setGuildAuditEnabled(guildId, payload.enabled);
+        }
+        if ('channelId' in payload) {
+          results.channelId = await setGuildAuditChannel(guildId, payload.channelId || null);
+        }
+        const guildName = Moxi?.guilds?.cache?.get(guildId)?.name ?? guildId;
+        logger.info(`[MODERATION SETTINGS] Actualizado en "${guildName}"`, results);
+        const body = JSON.stringify({ ok: true, guildId, results });
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+        res.end(body);
+      } catch (err) {
+        logger.error('[webApi] Error al actualizar moderation settings:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Internal error' }));
+      }
+          const moderationRulesMatch = url.pathname.match(/^\/api\/guilds\/([^/]+)\/moderation-rules$/);
+          if (moderationRulesMatch && req.method === 'GET') {
+            try {
+              const guildId = moderationRulesMatch[1];
+              const rules = await listModerationRules({ guildId, enabledOnly: false });
+              const body = JSON.stringify({
+                ok: true,
+                guildId,
+                count: rules.length,
+                items: rules,
+              });
+              res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+              res.end(body);
+            } catch (err) {
+              logger.error('[webApi] Error al listar reglas de moderación:', err);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Internal error' }));
+            }
+            return;
+          }
+
+          if (moderationRulesMatch && req.method === 'POST') {
+            try {
+              const guildId = moderationRulesMatch[1];
+              const payload = await readJsonBody(req);
+              if (!payload || typeof payload !== 'object' || !payload.type || !payload.pattern) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'type y pattern son requeridos' }));
+                return;
+              }
+              const newRule = await addOrUpdateRule({ guildId, rule: payload });
+              const body = JSON.stringify({ ok: true, guildId, rule: newRule });
+              res.writeHead(201, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+              res.end(body);
+            } catch (err) {
+              logger.error('[webApi] Error al crear regla de moderación:', err);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Internal error' }));
+            }
+            return;
+          }
+
+          const moderationRuleIdMatch = url.pathname.match(/^\/api\/guilds\/([^/]+)\/moderation-rules\/([^/]+)$/);
+          if (moderationRuleIdMatch && req.method === 'PUT') {
+            try {
+              const guildId = moderationRuleIdMatch[1];
+              const ruleId = moderationRuleIdMatch[2];
+              const payload = await readJsonBody(req);
+              const updatedRule = await addOrUpdateRule({ guildId, rule: { id: ruleId, ...payload } });
+              const body = JSON.stringify({ ok: true, guildId, rule: updatedRule });
+              res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+              res.end(body);
+            } catch (err) {
+              logger.error('[webApi] Error al actualizar regla de moderación:', err);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Internal error' }));
+            }
+            return;
+          }
+
+          if (moderationRuleIdMatch && req.method === 'DELETE') {
+            try {
+              const guildId = moderationRuleIdMatch[1];
+              const ruleId = moderationRuleIdMatch[2];
+              const deleted = await deleteModerationRule({ guildId, ruleId });
+              const body = JSON.stringify({ ok: deleted, guildId, ruleId });
+              res.writeHead(deleted ? 200 : 404, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+              res.end(body);
+            } catch (err) {
+              logger.error('[webApi] Error al eliminar regla de moderación:', err);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Internal error' }));
+            }
+            return;
+          }
+      return;
+    }
+
+    const streamingSettingsMatch = url.pathname.match(/^\/api\/guilds\/([^/]+)\/streaming-settings$/);
+    if (streamingSettingsMatch && req.method === 'PUT') {
+      try {
+        const guildId = streamingSettingsMatch[1];
+        const payload = await readJsonBody(req);
+        const results = {};
+        if (typeof payload?.enabled === 'boolean') {
+          results.enabled = await setGuildStreamAlertsEnabled(guildId, payload.enabled);
+        }
+        if ('channelId' in payload) {
+          results.channelId = await setGuildStreamAlertsChannel(guildId, payload.channelId || null);
+        }
+        for (const event of ['start', 'live', 'end']) {
+          const key = `notify_${event}`;
+          if (typeof payload?.[key] === 'boolean') {
+            results[key] = await setGuildStreamAlertEventEnabled(guildId, event, payload[key]);
+          }
+        }
+        const guildName = Moxi?.guilds?.cache?.get(guildId)?.name ?? guildId;
+        logger.info(`[STREAMING SETTINGS] Actualizado en "${guildName}"`, results);
+        const body = JSON.stringify({ ok: true, guildId, results });
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+        res.end(body);
+      } catch (err) {
+        logger.error('[webApi] Error al actualizar streaming settings:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Internal error' }));
+      }
+      return;
+    }
+
+    const marriageSettingsMatch = url.pathname.match(/^\/api\/guilds\/([^/]+)\/marriage-settings$/);
+    if (marriageSettingsMatch && req.method === 'GET') {
+      try {
+        const guildId = marriageSettingsMatch[1];
+        const settings = await getGuildSettingsCached(guildId);
+        const body = JSON.stringify({
+          ok: true,
+          enabled: settings?.marriageEnabled ?? true,
+          channelId: settings?.marriageChannelId ?? null,
+          exclusive: settings?.marriageExclusive ?? false,
+          proposalsEnabled: settings?.marriageProposalsEnabled ?? true,
+          proposalTimeoutHours: settings?.marriageProposalTimeoutHours ?? 48,
+          customAnniversaryEnabled: settings?.marriageCustomAnniversaryEnabled ?? true,
+          anniversariesEnabled: settings?.marriageAnniversariesEnabled ?? true,
+          announceAnniversaries: settings?.marriageAnnounceAnniversaries ?? true,
+          treeEnabled: settings?.marriageTreeEnabled ?? true,
+          divorcesEnabled: settings?.marriageDivorcesEnabled ?? true,
+          divorceMutualConfirm: settings?.marriageDivorceMutualConfirm ?? false,
+        });
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+        res.end(body);
+      } catch (err) {
+        logger.error('[webApi] Error al leer marriage settings:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Internal error' }));
+      }
+      return;
+    }
+    if (marriageSettingsMatch && req.method === 'PUT') {
+      try {
+        const guildId = marriageSettingsMatch[1];
+        const payload = await readJsonBody(req);
+        const results = {};
+
+        if (typeof payload?.enabled === 'boolean') results.enabled = await setGuildMarriageEnabled(guildId, payload.enabled);
+        if ('channelId' in payload) results.channelId = await setGuildMarriageChannel(guildId, payload.channelId || null);
+        if (typeof payload?.exclusive === 'boolean') results.exclusive = await setGuildMarriageExclusive(guildId, payload.exclusive);
+        if (typeof payload?.proposalsEnabled === 'boolean') results.proposalsEnabled = await setGuildMarriageProposalsEnabled(guildId, payload.proposalsEnabled);
+        if ('proposalTimeoutHours' in payload) results.proposalTimeoutHours = await setGuildMarriageProposalTimeout(guildId, payload.proposalTimeoutHours);
+        if (typeof payload?.customAnniversaryEnabled === 'boolean') results.customAnniversaryEnabled = await setGuildMarriageCustomAnniversaryEnabled(guildId, payload.customAnniversaryEnabled);
+        if (typeof payload?.anniversariesEnabled === 'boolean') results.anniversariesEnabled = await setGuildMarriageAnniversariesEnabled(guildId, payload.anniversariesEnabled);
+        if (typeof payload?.announceAnniversaries === 'boolean') results.announceAnniversaries = await setGuildMarriageAnnounceAnniversaries(guildId, payload.announceAnniversaries);
+        if (typeof payload?.treeEnabled === 'boolean') results.treeEnabled = await setGuildMarriageTreeEnabled(guildId, payload.treeEnabled);
+        if (typeof payload?.divorcesEnabled === 'boolean') results.divorcesEnabled = await setGuildMarriageDivorcesEnabled(guildId, payload.divorcesEnabled);
+        if (typeof payload?.divorceMutualConfirm === 'boolean') results.divorceMutualConfirm = await setGuildMarriageDivorceMutualConfirm(guildId, payload.divorceMutualConfirm);
+
+        const guildName = Moxi?.guilds?.cache?.get(guildId)?.name ?? guildId;
+        logger.info(`[MARRIAGE SETTINGS] Actualizado en "${guildName}"`, results);
+        const body = JSON.stringify({ ok: true, guildId, results });
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+        res.end(body);
+      } catch (err) {
+        logger.error('[webApi] Error al actualizar marriage settings:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Internal error' }));
+      }
+      return;
+    }
+
+    const economySettingsMatch = url.pathname.match(/^\/api\/guilds\/([^/]+)\/economy-settings$/);
+    if (economySettingsMatch && req.method === 'GET') {
+      try {
+        const guildId = economySettingsMatch[1];
+        const settings = await getGuildSettingsCached(guildId);
+        const body = JSON.stringify({
+          ok: true,
+          enabled: settings?.economyEnabled ?? true,
+          channelId: settings?.economyChannelId ?? null,
+          exclusive: settings?.economyExclusive ?? false,
+        });
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+        res.end(body);
+      } catch (err) {
+        logger.error('[webApi] Error al leer economy settings:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Internal error' }));
+      }
+      return;
+    }
+    if (economySettingsMatch && req.method === 'PUT') {
+      try {
+        const guildId = economySettingsMatch[1];
+        const payload = await readJsonBody(req);
+        const results = {};
+
+        if (typeof payload?.enabled === 'boolean') {
+          results.enabled = await setGuildEconomyEnabled(guildId, payload.enabled);
+        }
+        if ('channelId' in payload) {
+          results.channelId = await setGuildEconomyChannel(guildId, payload.channelId || null);
+        }
+        if (typeof payload?.exclusive === 'boolean') {
+          results.exclusive = await setGuildEconomyExclusive(guildId, payload.exclusive);
+        }
+
+        const guildName = Moxi?.guilds?.cache?.get(guildId)?.name ?? guildId;
+        logger.info(`[ECONOMY SETTINGS] Actualizado en "${guildName}"`, results);
+        const body = JSON.stringify({ ok: true, guildId, results });
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+        res.end(body);
+      } catch (err) {
+        logger.error('[webApi] Error al actualizar economy settings:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Internal error' }));
+      }
+          const moderationSettingsMatch = url.pathname.match(/^\/api\/guilds\/([^/]+)\/moderation-settings$/);
+          if (moderationSettingsMatch && req.method === 'GET') {
+            try {
+              const guildId = moderationSettingsMatch[1];
+              const config = await getModerationConfig({ guildId });
+              const rules = await listModerationRules({ guildId, enabledOnly: false });
+              const body = JSON.stringify({
+                ok: true,
+                guildId,
+                config,
+                rules,
+              });
+              res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+              res.end(body);
+            } catch (err) {
+              logger.error('[webApi] Error al leer moderation settings:', err);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Internal error' }));
+            }
+            return;
+          }
+
+          if (moderationSettingsMatch && req.method === 'PUT') {
+            try {
+              const guildId = moderationSettingsMatch[1];
+              const payload = await readJsonBody(req);
+              const results = {};
+
+              if (typeof payload?.enabled === 'boolean') {
+                results.enabled = await updateModerationConfig({ guildId, patch: { enabled: payload.enabled } });
+              }
+              if ('logChannelId' in payload) {
+                results.logChannelId = await updateModerationConfig({ guildId, patch: { logChannelId: payload.logChannelId || null } });
+              }
+              if ('muteRoleId' in payload) {
+                results.muteRoleId = await updateModerationConfig({ guildId, patch: { muteRoleId: payload.muteRoleId || null } });
+              }
+              if (typeof payload?.defenseMode === 'string') {
+                results.defenseMode = await updateModerationConfig({ guildId, patch: { defenseMode: payload.defenseMode } });
+              }
+              if (payload.thresholds && typeof payload.thresholds === 'object') {
+                results.thresholds = await updateModerationConfig({ guildId, patch: { thresholds: payload.thresholds } });
+              }
+              if (payload.timeouts && typeof payload.timeouts === 'object') {
+                results.timeouts = await updateModerationConfig({ guildId, patch: { timeouts: payload.timeouts } });
+              }
+              if (payload.antiRaid && typeof payload.antiRaid === 'object') {
+                results.antiRaid = await updateModerationConfig({ guildId, patch: { antiRaid: payload.antiRaid } });
+              }
+              if (payload.limits && typeof payload.limits === 'object') {
+                results.limits = await updateModerationConfig({ guildId, patch: { limits: payload.limits } });
+              }
+              if (Array.isArray(payload?.allowLinksChannels)) {
+                results.allowLinksChannels = await updateModerationConfig({ guildId, patch: { allowLinksChannels: payload.allowLinksChannels } });
+              }
+              if (Array.isArray(payload?.allowInvitesChannels)) {
+                results.allowInvitesChannels = await updateModerationConfig({ guildId, patch: { allowInvitesChannels: payload.allowInvitesChannels } });
+              }
+              if (Array.isArray(payload?.exemptRoles)) {
+                results.exemptRoles = await updateModerationConfig({ guildId, patch: { exemptRoles: payload.exemptRoles } });
+              }
+
+              const guildName = Moxi?.guilds?.cache?.get(guildId)?.name ?? guildId;
+              logger.info(`[MODERATION SETTINGS] Actualizado en "${guildName}"`, results);
+              const body = JSON.stringify({ ok: true, guildId, results });
+              res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+              res.end(body);
+            } catch (err) {
+              logger.error('[webApi] Error al actualizar moderation settings:', err);
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Internal error' }));
+            }
+            return;
+          }
+      return;
+    }
+
+        const moderationStatsMatch = url.pathname.match(/^\/api\/guilds\/([^/]+)\/moderation-stats$/);
+        if (moderationStatsMatch && req.method === 'GET') {
+          try {
+            const guildId = moderationStatsMatch[1];
+            const days = Number(url.searchParams.get('days') || 7);
+            const stats = await getModerationStats({ guildId, days });
+            if (!stats) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Invalid guildId' }));
+              return;
+            }
+            const body = JSON.stringify({ ok: true, ...stats });
+            res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+            res.end(body);
+          } catch (err) {
+            logger.error('[webApi] Error al leer moderation stats:', err);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Internal error' }));
+          }
+          return;
+        }
+
+        const moderationActionsMatch = url.pathname.match(/^\/api\/guilds\/([^/]+)\/moderation-actions$/);
+        if (moderationActionsMatch && req.method === 'GET') {
+          try {
+            const guildId = moderationActionsMatch[1];
+            const limit = Number(url.searchParams.get('limit') || 50);
+            const userId = url.searchParams.get('userId') || '';
+            const action = url.searchParams.get('action') || '';
+            const items = await listModActions({ guildId, limit, userId, action });
+            const body = JSON.stringify({ ok: true, guildId, count: items.length, items });
+            res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+            res.end(body);
+          } catch (err) {
+            logger.error('[webApi] Error al leer moderation actions:', err);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Internal error' }));
+          }
+          return;
+        }
+
+        const moderationUsersMatch = url.pathname.match(/^\/api\/guilds\/([^/]+)\/moderation-users$/);
+        if (moderationUsersMatch && req.method === 'GET') {
+          try {
+            const guildId = moderationUsersMatch[1];
+            const limit = Number(url.searchParams.get('limit') || 50);
+            const minRisk = Number(url.searchParams.get('minRisk') || 1);
+            const items = await listRiskUsers({ guildId, limit, minRiskScore: minRisk });
+            const body = JSON.stringify({ ok: true, guildId, count: items.length, items });
+            res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+            res.end(body);
+          } catch (err) {
+            logger.error('[webApi] Error al leer moderation users:', err);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Internal error' }));
+          }
+          return;
+        }
+
+        const moderationBansMatch = url.pathname.match(/^\/api\/guilds\/([^/]+)\/moderation-bans$/);
+        if (moderationBansMatch && req.method === 'GET') {
+          try {
+            const guildId = moderationBansMatch[1];
+            const guild = Moxi?.guilds?.cache?.get(guildId);
+            if (!guild) {
+              res.writeHead(404, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Guild not found' }));
+              return;
+            }
+
+            const limit = Math.max(1, Math.min(500, Number(url.searchParams.get('limit') || 100)));
+            const query = String(url.searchParams.get('q') || '').trim().toLowerCase();
+            const bans = await guild.bans.fetch({ limit }).catch(() => null);
+            if (!bans) {
+              res.writeHead(403, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Missing BanMembers permission for bot' }));
+              return;
+            }
+
+            let items = [...bans.values()].map((ban) => ({
+              userId: ban.user?.id || null,
+              username: ban.user?.username || null,
+              globalName: ban.user?.globalName || null,
+              displayName: ban.user?.displayName || null,
+              reason: ban.reason || null,
+            }));
+
+            if (query) {
+              items = items.filter((x) => {
+                const haystack = [x.userId, x.username, x.globalName, x.displayName, x.reason]
+                  .map((v) => String(v || '').toLowerCase())
+                  .join(' ');
+                return haystack.includes(query);
+              });
+            }
+
+            const body = JSON.stringify({ ok: true, guildId, count: items.length, items });
+            res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
+            res.end(body);
+          } catch (err) {
+            logger.error('[webApi] Error al leer moderation bans:', err);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Internal error' }));
+          }
+          return;
+        }
 
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Not found' }));
