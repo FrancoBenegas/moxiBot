@@ -1,0 +1,7 @@
+{
+  "name": "Voice",
+  "version": "1.0.0",
+  "description": "Módulo Voice",
+  "enabled": true,
+  "author": "MoxiLab"
+}

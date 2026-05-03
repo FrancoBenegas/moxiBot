@@ -1,0 +1,13 @@
+{
+  "name": "Music",
+  "version": "1.0.0",
+  "description": "Módulo de reproducción de música con Poru y Lavalink",
+  "enabled": true,
+  "author": "MoxiLab",
+  "dependencies": ["poru", "discord.js"],
+  "permissions": ["CONNECT", "SPEAK"],
+  "config": {
+    "prefix_enabled": true,
+    "slash_enabled": true
+  }
+}

@@ -1,0 +1,7 @@
+// Placeholder para comandos de música (se migran desde Comandos/Music)
+// Este archivo es solo para referencia
+
+module.exports = {
+  // Los comandos de música actuales se migran aquí
+  // Estructura: name, alias, description, execute, etc.
+};
