@@ -78,12 +78,34 @@ async function getOrCreateEconomyRaw(userId) {
     return Economy.findOne({ userId: uid });
 }
 
-async function getGlobalBalanceRank(balance) {
+async function getGlobalBalanceRank({ balance, bank, sakuras } = {}) {
     await ensureMongoConnection();
     const { Economy } = require('../Models/EconomySchema');
+
     const b = Number(balance);
-    const safe = Number.isFinite(b) ? b : 0;
-    const higher = await Economy.countDocuments({ balance: { $gt: safe } });
+    const bk = Number(bank);
+    const sk = Number(sakuras);
+
+    const safeBalance = Number.isFinite(b) ? b : 0;
+    const safeBank = Number.isFinite(bk) ? bk : 0;
+    const safeSakuras = Number.isFinite(sk) ? sk : 0;
+    const totalWealth = safeBalance + safeBank + safeSakuras;
+
+    const higher = await Economy.countDocuments({
+        $expr: {
+            $gt: [
+                {
+                    $add: [
+                        { $ifNull: ['$balance', 0] },
+                        { $ifNull: ['$bank', 0] },
+                        { $ifNull: ['$sakuras', 0] },
+                    ],
+                },
+                totalWealth,
+            ],
+        },
+    });
+
     return Math.max(1, (higher || 0) + 1);
 }
 
@@ -100,7 +122,7 @@ async function buildBalanceMessage({ guildId, lang, viewerId, targetUser } = {})
     const bank = eco?.bank ?? 0;
     const bankInfo = getBankInfo(eco);
     const sakuras = eco?.sakuras ?? 0;
-    const rank = await getGlobalBalanceRank(balance);
+    const rank = await getGlobalBalanceRank({ balance, bank, sakuras });
 
     const titleName = targetUser?.username || 'Usuario';
     const title = tr('TITLE', { user: titleName });
