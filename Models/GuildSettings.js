@@ -643,6 +643,55 @@ async function setGuildUpdatesLastAnnouncedCommit(guildId, commitHash) {
   return result.matchedCount > 0 || result.upsertedCount > 0;
 }
 
+async function setGuildAutoPurgeConfig(guildId, patch = {}) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+
+  const $set = {};
+  const $unset = {};
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'enabled')) {
+    $set.AutoPurgeEnabled = !!patch.enabled;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'intervalHours')) {
+    const raw = Number.parseInt(String(patch.intervalHours ?? '').trim(), 10);
+    const interval = Number.isFinite(raw) ? Math.max(1, Math.min(168, raw)) : 24;
+    $set.AutoPurgeIntervalHours = interval;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'channels')) {
+    const channels = Array.isArray(patch.channels)
+      ? patch.channels.map((id) => normalizeDiscordId(id)).filter(Boolean)
+      : [];
+    $set.AutoPurgeChannels = [...new Set(channels)];
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'lastRunAt')) {
+    if (patch.lastRunAt) {
+      const dateValue = new Date(patch.lastRunAt);
+      if (Number.isFinite(dateValue.getTime())) {
+        $set.AutoPurgeLastRunAt = dateValue;
+      }
+    } else {
+      $unset.AutoPurgeLastRunAt = '';
+    }
+  }
+
+  const update = {
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  if (Object.keys($set).length) update.$set = $set;
+  if (Object.keys($unset).length) update.$unset = $unset;
+
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
 async function setGuildUpdatesChannel(guildId, channelId) {
   guildId = safeGuildId(guildId);
   if (!guildId) return false;
@@ -725,6 +774,7 @@ module.exports = {
   setGuildUpdatesAutoEnabled,
   setGuildUpdatesLastAnnouncedVersion,
   setGuildUpdatesLastAnnouncedCommit,
+  setGuildAutoPurgeConfig,
   setGuildUpdatesChannel,
   setGuildUpdatesAutoEnabled,
   setGuildUpdatesLastAnnouncedVersion,
