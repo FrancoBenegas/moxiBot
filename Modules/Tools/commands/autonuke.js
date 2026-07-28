@@ -60,7 +60,7 @@ module.exports = {
             .setLabel(moxi.translate('AUTONUKE_CANCEL', lang) || moxi.translate('AUTONUKE_CANCEL', 'es-ES') || 'Cancelar')
             .setStyle(2); // Secondary
         const row = new ActionRowBuilder().addComponents(confirmBtn, cancelBtn);
-        const buildAutonukeConfirmEmbed = require('../../Components/V2/autonukeConfirmEmbed');
+        const buildAutonukeConfirmEmbed = require('../../../Components/V2/autonukeConfirmEmbed');
         const confirmContainer = buildAutonukeConfirmEmbed({ lang, channelId: channel.id });
         const replyPayload = {
             content: '',
@@ -95,7 +95,7 @@ module.exports = {
                     return;
                 }
 
-                const buildAutonukeEmbed = require('../../Components/V2/autonukeEmbed');
+                const buildAutonukeEmbed = require('../../../Components/V2/autonukeEmbed');
                 let cloneOptions = { name: channel.name, parent: channel.parent };
                 if (channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement) {
                     cloneOptions = {
