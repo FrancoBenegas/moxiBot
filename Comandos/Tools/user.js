@@ -5,6 +5,7 @@ const moxi = require('../../i18n');
 const { EMOJIS } = require('../../Util/emojis');
 const { Bot } = require('../../Config');
 const { buildNoticeContainer, asV2MessageOptions } = require('../../Util/v2Notice');
+const { getUserPrefix } = require('../../Util/userPrefix');
 
 
 
@@ -15,6 +16,20 @@ function buildUserPermsButton(guildId, userId, lang) {
         .setCustomId(`user_perms:${guildId}:${userId}`)
         .setLabel(label)
         .setStyle(ButtonStyle.Secondary);
+}
+
+function buildUserPrefixButtons(ownerId) {
+    const changeButton = new ButtonBuilder()
+        .setCustomId(`user_prefix:${ownerId}:custom`)
+        .setLabel('✏️ Cambiar prefijo')
+        .setStyle(ButtonStyle.Primary);
+
+    const resetButton = new ButtonBuilder()
+        .setCustomId(`user_prefix:${ownerId}:reset`)
+        .setLabel('Reset')
+        .setStyle(ButtonStyle.Secondary);
+
+    return { changeButton, resetButton };
 }
 
 
@@ -116,6 +131,20 @@ module.exports = {
         const permsButton = buildUserPermsButton(message.guild?.id, targetUser.id, lang);
         if (permsButton) {
             container.addActionRowComponents(row => row.addComponents(permsButton));
+        }
+
+        if (targetUser.id === message.author.id) {
+            const currentUserPrefix = await getUserPrefix(message.guild?.id, message.author?.id, '').catch(() => '');
+            const { changeButton, resetButton } = buildUserPrefixButtons(message.author.id);
+
+            container
+                .addSeparatorComponents(s => s.setDivider(true))
+                .addTextDisplayComponents(c => c.setContent('## Tu prefijo personal'))
+                .addTextDisplayComponents(c => c.setContent(currentUserPrefix
+                    ? `Actual: **\`${currentUserPrefix}\`**`
+                    : 'No tienes prefijo personal configurado (usas el del servidor).'));
+
+            container.addActionRowComponents(row => row.addComponents(changeButton, resetButton));
         }
 
         await message.reply({ content: '', components: [container], flags: MessageFlags.IsComponentsV2 });

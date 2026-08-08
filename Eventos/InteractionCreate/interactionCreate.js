@@ -4,6 +4,7 @@ const moxi = require('../../i18n');
 const { getGuildSettingsCached } = require('../../Util/guildSettings');
 const debugHelper = require('../../Util/debugHelper');
 const { trackBotUserUsage } = require('../../Util/botUsageTracker');
+const { resolveBlacklistBlock, logBlacklistHit } = require('../../Util/blacklistStorage');
 
 Moxi.on("interactionCreate", async (interaction) => {
   if (interaction.channel.type === 'dm') return;
@@ -65,6 +66,80 @@ Moxi.on("interactionCreate", async (interaction) => {
   }
 
   try {
+    const isCommand = Boolean(interaction.isCommand && interaction.isCommand());
+    const isAutocomplete = Boolean(interaction.isAutocomplete && interaction.isAutocomplete());
+    if (!isCommand) {
+      const guildId = interaction.guildId || interaction.guild?.id || null;
+      const userId = interaction.user?.id || null;
+      if (guildId && userId) {
+        const roleIds = Array.from(interaction?.member?.roles?.cache?.keys?.() || []);
+        const action = isAutocomplete
+          ? 'autocomplete'
+          : (interaction.isButton?.() ? 'button'
+            : (interaction.isModalSubmit?.() ? 'modal'
+              : (interaction.isStringSelectMenu?.() ? 'select'
+                : 'interaction')));
+        const block = await resolveBlacklistBlock({
+          guildId,
+          userId,
+          action,
+          commandName: interaction.commandName || interaction.customId || null,
+          roleIds,
+        });
+        if (block?.blocked && block.entry) {
+          await logBlacklistHit({
+            client: Moxi,
+            userId,
+            guildId,
+            action,
+            source: 'interaction',
+            commandName: interaction.commandName || interaction.customId || null,
+            entry: block.entry,
+          });
+
+          if (isAutocomplete) return;
+
+          const t = (key, fallback) => {
+            const out = interaction.translate ? interaction.translate(key) : moxi.translate(key, interaction.lang || 'es-ES');
+            return (out && out !== key) ? out : fallback;
+          };
+
+          const details = [];
+          if (block.entry.reason) {
+            details.push(`${t('misc:BLACKLIST_REASON', 'Motivo')}: ${block.entry.reason}`);
+          }
+          if (typeof block.entry.level === 'number') {
+            details.push(`${t('misc:BLACKLIST_LEVEL', 'Nivel')}: ${block.entry.level}`);
+          }
+          if (block.entry.expiresAt) {
+            const ts = Math.floor(new Date(block.entry.expiresAt).getTime() / 1000);
+            if (ts) details.push(`${t('misc:BLACKLIST_EXPIRES', 'Expira')}: <t:${ts}:R>`);
+          }
+
+          let content = '';
+          if (block.targetType === 'guild') {
+            content = t('misc:BLACKLIST_GUILD_BLOCKED', 'Este servidor está en blacklist global y no puedes usar el bot aquí.');
+          } else if (block.scope === 'global') {
+            content = t('misc:BLACKLIST_GLOBAL_BLOCKED', 'Estás en blacklist global y no puedes usar el bot.');
+          } else {
+            content = t('misc:BLACKLIST_LOCAL_BLOCKED', 'Estás en blacklist de este servidor y no puedes usar el bot.');
+          }
+
+          if (details.length) content += `\n${details.join('\n')}`;
+
+          await safeRespond(interaction, {
+            content,
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+      }
+    }
+  } catch {
+    // best-effort
+  }
+
+  try {
     // Autocomplete (slash options)
     if (interaction.isAutocomplete && interaction.isAutocomplete()) {
       const slashcmd = Moxi.slashcommands.get(interaction.commandName);
@@ -112,6 +187,9 @@ Moxi.on("interactionCreate", async (interaction) => {
           'autoplay',
           'vol_up',
           'vol_down',
+          'seek_back',
+          'seek_forward',
+          'stop',
         ]);
         if (musicIds.has(baseId)) return;
       } catch { }

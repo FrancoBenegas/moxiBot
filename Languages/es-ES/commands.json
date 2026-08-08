@@ -8,6 +8,9 @@
     "CATEGORY_MUSICA": "Música",
     "CATEGORY_FUN": "Diversión",
     "CATEGORY_GAMES": "Juegos",
+    "CATEGORY_GENSHIN": "Genshin",
+    "CATEGORY_MARRIAGE": "Matrimonio",
+    "CATEGORY_SISTEMAS": "Sistemas",
     "CATEGORY_UTILIDAD": "Utilidad",
     "CATEGORY_ROOT": "Propietario",
     "CMD_TAROT_DESC": "Saca una carta del tarot",
@@ -127,5 +130,16 @@
     "CMD_COINFLIP_DESC": "Lanza una moneda (cara o cruz).",
     "CMD_DICE_DESC": "Tira un dado (puedes elegir lados).",
     "CMD_8BALL_DESC": "Hazle una pregunta a la Bola 8 mágica.",
-    "CMD_SHIP_DESC": "Calcula la compatibilidad entre dos personas."
+    "CMD_SHIP_DESC": "Calcula la compatibilidad entre dos personas.",
+    "CMD_BIRTHDAY_DESC": "Módulo de cumpleaños del perfil.",
+    "CMD_QUITARFONDO_DESC": "Quita el fondo de una imagen (PNG transparente).",
+    "CMD_QUITARFONDO_TITLE": "Quitar fondo",
+    "CMD_QUITARFONDO_UNSUPPORTED": "Tu entorno actual no soporta fetch/FormData para este comando.",
+    "CMD_QUITARFONDO_MISSING_KEY": "Falta configurar la variable de entorno REMOVEBG_API_KEY para usar este comando.",
+    "CMD_QUITARFONDO_USAGE": "Uso: quitarfondo <url> o adjunta una imagen junto al comando.",
+    "CMD_QUITARFONDO_PROCESSING": "Procesando imagen, espera un momento...",
+    "CMD_QUITARFONDO_DEFAULT_API_ERROR": "No se pudo procesar la imagen.",
+    "CMD_QUITARFONDO_API_ERROR": "No se pudo quitar el fondo: {{reason}}",
+    "CMD_QUITARFONDO_SUCCESS": "Listo, aqui tienes tu imagen sin fondo:",
+    "CMD_QUITARFONDO_RUNTIME_ERROR": "Error al quitar el fondo: {{reason}}"
 }

@@ -1,8 +1,6 @@
-const { MessageFlags } = require('discord.js');
 const { SlashCommandBuilder } = require('../../Util/slashCommandBuilder');
 const moxi = require('../../i18n');
-const { buildWipPayload } = require('../../Util/wip');
-const { WIP_SLASH_DESC, WIP_SLASH_DESC_LOCALIZATIONS } = require('../../Util/slashI18n');
+const { buildProfileMessage } = require('../../Util/profileView');
 
 module.exports = {
     cooldown: 0,
@@ -12,18 +10,22 @@ module.exports = {
     },
     data: new SlashCommandBuilder()
         .setName('profile')
-        .setDescription(WIP_SLASH_DESC)
-        .setDescriptionLocalizations(WIP_SLASH_DESC_LOCALIZATIONS),
+        .setDescription('Muestra un perfil completo del usuario')
+        .addUserOption((opt) =>
+            opt
+                .setName('usuario')
+                .setDescription('Usuario (opcional)')
+                .setRequired(false)
+        ),
 
     async run(Moxi, interaction) {
         const guildId = interaction.guildId || interaction.guild?.id;
         const lang = await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES');
-        return interaction.reply({
-            ...buildWipPayload({
-                lang,
-                title: 'Profile',
-            }),
-            flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
-        });
+        const target = interaction.options.getUser('usuario') || interaction.user;
+        const member = interaction.guild?.members?.cache?.get?.(target.id)
+            || await interaction.guild?.members?.fetch?.(target.id).catch(() => null)
+            || null;
+        const payload = await buildProfileMessage({ guild: interaction.guild, guildId, lang, targetUser: target, targetMember: member, viewerId: interaction.user.id, page: 'overview' });
+        return interaction.reply(payload);
     },
 };

@@ -4,15 +4,24 @@ const { Bot } = require('../Config');
 const logger = require('../Util/logger');
 const moxi = require('../i18n');
 const { sendVoteShare } = require('../Util/sendVoteShare');
+const { getMusicPanelMessage, stopMusicPanelAutoUpdate } = require('../Util/musicPanelAutoUpdater');
+const { setGuildMusicPanelActive } = require('../Util/guildSettings');
 
 module.exports = async (client, player) => {
 	logger.info(`[QUEUE END] El bot se ha desconectado del canal de voz en guild: ${player.guildId}`);
 
 	if (!player) return;
+	stopMusicPanelAutoUpdate(player);
+	await setGuildMusicPanelActive(player.guildId || player.guild?.id, false).catch(() => null);
 
 	try {
-		const lastSession = await player.get('lastSessionData');
-		if (client.previousMessage && lastSession) {
+		const manualStop = await Promise.resolve(player.get('__moxiManualStop')).catch(() => false);
+		if (manualStop) {
+			logger.info(`[QUEUE END] Saltando update visual por stop manual en guild: ${player.guildId}`);
+		} else {
+		const lastSession = await Promise.resolve(player.get('lastSessionData')).catch(() => null);
+		const panelMessage = getMusicPanelMessage(player) || client.previousMessage;
+		if (panelMessage && lastSession) {
 			const disabledContainer = buildDisabledMusicSessionContainer({
 				title: lastSession.title,
 				info: lastSession.info,
@@ -20,10 +29,11 @@ module.exports = async (client, player) => {
 				footerText: '_**Moxi Studios**_ - Sesión Finalizada',
 			});
 
-			await client.previousMessage.edit({
+			await panelMessage.edit({
 				components: [disabledContainer],
 				flags: MessageFlags.IsComponentsV2,
 			});
+		}
 		}
 	} catch (error) {
 		logger.error(`[QUEUE END] Error actualizando el mensaje de colas finalizada: ${error.message}`);

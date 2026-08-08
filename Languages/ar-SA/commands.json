@@ -8,6 +8,8 @@
     "CATEGORY_MUSICA": "الموسيقى",
     "CATEGORY_FUN": "مرح",
     "CATEGORY_GAMES": "ألعاب",
+    "CATEGORY_MARRIAGE": "الزواج",
+    "CATEGORY_SISTEMAS": "الأنظمة",
     "CATEGORY_ROOT": "المالك",
     "CMD_MINESWEEPER_DESC": "ابدأ لعبة كانسة الألغام",
     "CMD_RPS_DESC": "العب حجر ورقة مقص",
@@ -114,5 +116,15 @@
     "CMD_COINFLIP_DESC": "ارمِ عملة (وجه أم كتابة).",
     "CMD_DICE_DESC": "ارمِ نردًا (يمكن اختيار عدد الأوجه).",
     "CMD_8BALL_DESC": "اسأل كرة 8 السحرية سؤالاً.",
-    "CMD_SHIP_DESC": "يحسب التوافق بين شخصين."
+    "CMD_SHIP_DESC": "يحسب التوافق بين شخصين.",
+    "CMD_QUITARFONDO_DESC": "يزيل خلفية الصورة (PNG شفاف).",
+    "CMD_QUITARFONDO_TITLE": "إزالة الخلفية",
+    "CMD_QUITARFONDO_UNSUPPORTED": "بيئة التشغيل الحالية لا تدعم fetch/FormData لهذا الأمر.",
+    "CMD_QUITARFONDO_MISSING_KEY": "متغير البيئة REMOVEBG_API_KEY غير مُعد لهذا الأمر.",
+    "CMD_QUITARFONDO_USAGE": "الاستخدام: quitarfondo <url> أو أرفق صورة مع الأمر.",
+    "CMD_QUITARFONDO_PROCESSING": "جارٍ معالجة الصورة، يرجى الانتظار...",
+    "CMD_QUITARFONDO_DEFAULT_API_ERROR": "تعذر معالجة الصورة.",
+    "CMD_QUITARFONDO_API_ERROR": "تعذر إزالة الخلفية: {{reason}}",
+    "CMD_QUITARFONDO_SUCCESS": "تم، هذه هي صورتك بدون خلفية:",
+    "CMD_QUITARFONDO_RUNTIME_ERROR": "حدث خطأ أثناء إزالة الخلفية: {{reason}}"
 }

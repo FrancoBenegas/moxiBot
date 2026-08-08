@@ -11,8 +11,12 @@ const moxi = require("../../i18n");
 const { Bot } = require("../../Config");
 const { EMOJIS } = require("../../Util/emojis");
 const ms = require("ms");
-const { buildActiveMusicSessionContainer } = require("../../Components/V2/musicControlsComponent");
 const { ButtonBuilder } = require("../../Util/compatButtonBuilder");
+const { resolveBlacklistBlock, logBlacklistHit } = require("../../Util/blacklistStorage");
+const { renderActiveMusicPanel, seekMusicPanelTimeline, setMusicPanelMessage, setMusicPanelPaused, stopMusicPanelAutoUpdate } = require('../../Util/musicPanelAutoUpdater');
+const { buildDisabledMusicSessionContainer } = require('../../Components/V2/musicControlsComponent');
+const { formatSessionEndedFooter } = require('../../Util/seasonBrand');
+const { getGuildSettingsCached, setGuildMusicPanelActive } = require('../../Util/guildSettings');
 
 function v2Flags() {
     return MessageFlags.Ephemeral | MessageFlags.IsComponentsV2;
@@ -69,29 +73,8 @@ async function tryUpdateMainPanel(interaction, player, lang, extraLine) {
     try {
         if (!interaction.message) return;
         if (!player || !player.currentTrack || !player.currentTrack.info) return;
-
-        const track = player.currentTrack;
-        const solicitud = track?.info?.requester?.tag || track?.info?.requester?.username || "Moxi Autoplay";
-
-        const title = `${EMOJIS.nowPlayingAnim} ${moxi.translate('MUSIC_NOW_PLAYING', lang)} [${track.info.title}](${track.info.uri})`;
-        const infoBase = `**${moxi.translate('MUSIC_QUEUE_COUNT', lang)}** \`${player.queue.length}\`\n**${moxi.translate('MUSIC_REQUESTED_BY', lang)}** \`${solicitud}\``;
-        const info = extraLine ? `${infoBase}\n${extraLine}` : infoBase;
-
-        const imageUrl =
-            interaction.message.attachments?.first()?.url ||
-            track.info.image ||
-            undefined;
-
-        const container = buildActiveMusicSessionContainer({
-            title,
-            info,
-            imageUrl,
-        });
-
-        await interaction.message.edit({
-            components: [container],
-            flags: MessageFlags.IsComponentsV2,
-        });
+        setMusicPanelMessage(player, interaction.message);
+        await renderActiveMusicPanel({ client: Moxi, player, message: interaction.message, extraLine, force: true });
     } catch (_) {
         // Si no se puede editar el panel (permisos, mensaje antiguo, etc.), ignoramos.
     }
@@ -102,6 +85,64 @@ Moxi.on("interactionCreate", async (interaction) => {
     if (interaction.isButton()) {
         // Si este listener está registrado 2+ veces (hot reload), evitamos doble acknowledge.
         if (interaction.deferred || interaction.replied) return;
+
+        try {
+            const guildId = interaction.guild?.id || null;
+            const userId = interaction.user?.id || null;
+            if (guildId && userId) {
+                const roleIds = Array.from(interaction?.member?.roles?.cache?.keys?.() || []);
+                const block = await resolveBlacklistBlock({
+                    guildId,
+                    userId,
+                    action: 'music',
+                    commandName: interaction.customId || null,
+                    roleIds,
+                });
+                if (block?.blocked && block.entry) {
+                    await logBlacklistHit({
+                        client: Moxi,
+                        userId,
+                        guildId,
+                        action: 'music-button',
+                        source: 'interaction',
+                        commandName: interaction.customId || null,
+                        entry: block.entry,
+                    });
+
+                    const lang = await moxi.guildLang(interaction.guild?.id, process.env.DEFAULT_LANG || 'es-ES');
+                    const t = (key, fallback) => {
+                        const out = moxi.translate(key, lang);
+                        return (out && out !== key) ? out : fallback;
+                    };
+
+                    let msg = '';
+                    if (block.targetType === 'guild') {
+                        msg = t('misc:BLACKLIST_GUILD_BLOCKED', 'Este servidor está en blacklist global y no puedes usar el bot aquí.');
+                    } else if (block.scope === 'global') {
+                        msg = t('misc:BLACKLIST_GLOBAL_BLOCKED', 'Estás en blacklist global y no puedes usar el bot.');
+                    } else {
+                        msg = t('misc:BLACKLIST_LOCAL_BLOCKED', 'Estás en blacklist de este servidor y no puedes usar el bot.');
+                    }
+
+                    const details = [];
+                    if (block.entry.reason) {
+                        details.push(`${t('misc:BLACKLIST_REASON', 'Motivo')}: ${block.entry.reason}`);
+                    }
+                    if (typeof block.entry.level === 'number') {
+                        details.push(`${t('misc:BLACKLIST_LEVEL', 'Nivel')}: ${block.entry.level}`);
+                    }
+                    if (block.entry.expiresAt) {
+                        const ts = Math.floor(new Date(block.entry.expiresAt).getTime() / 1000);
+                        if (ts) details.push(`${t('misc:BLACKLIST_EXPIRES', 'Expira')}: <t:${ts}:R>`);
+                    }
+                    if (details.length) msg += `\n${details.join('\n')}`;
+
+                    return safeReply(interaction, { components: [buildV2Notice(msg)], flags: v2Flags() });
+                }
+            }
+        } catch {
+            // best-effort
+        }
 
         // Botones deshabilitados del panel V2 anterior (por seguridad)
         if (typeof interaction.customId === 'string' && interaction.customId.endsWith('_d')) {
@@ -128,6 +169,7 @@ Moxi.on("interactionCreate", async (interaction) => {
                 return interaction.editReply({ components: [buildV2Notice(moxi.translate('MUSIC_NOT_SEEKABLE', lang))], flags: v2Flags() });
             } else {
                 await player.seekTo(0);
+                seekMusicPanelTimeline(player, 0);
                 await tryUpdateMainPanel(interaction, player, lang, moxi.translate('MUSIC_TRACK_REPEATED', lang));
                 return interaction.editReply({ components: [buildV2Notice(moxi.translate('MUSIC_TRACK_REPEATED', lang))], flags: v2Flags() });
             }
@@ -149,10 +191,12 @@ Moxi.on("interactionCreate", async (interaction) => {
                 });
             if (player.isPaused) {
                 player.pause(false)
+                setMusicPanelPaused(player, false);
                 await tryUpdateMainPanel(interaction, player, lang, moxi.translate('MUSIC_MUSIC_RESUMED', lang));
                 return safeReply(interaction, { components: [buildV2Notice(moxi.translate('MUSIC_MUSIC_RESUMED', lang))], flags: v2Flags() });
             } else {
                 player.pause(true);
+                setMusicPanelPaused(player, true);
                 await tryUpdateMainPanel(interaction, player, lang, moxi.translate('MUSIC_MUSIC_PAUSED', lang));
                 return safeReply(interaction, { components: [buildV2Notice(moxi.translate('MUSIC_MUSIC_PAUSED', lang))], flags: v2Flags() });
             }
@@ -271,6 +315,46 @@ Moxi.on("interactionCreate", async (interaction) => {
             return safeReply(interaction, { components: [buildV2Notice(moxi.translate('MUSIC_VOLUME_UP', lang, { vol: newVol }))], flags: v2Flags() });
         }
 
+        if (interaction.customId === "seek_back" || interaction.customId === "seek_forward") {
+            const lang = await moxi.guildLang(interaction.guild?.id, process.env.DEFAULT_LANG || 'es-ES');
+            const player = Moxi.poru.players.get(interaction.guild.id);
+            if (!player) {
+                return safeReply(interaction, { components: [buildV2Notice(moxi.translate('MUSIC_NO_MUSIC_PLAYING', lang))], flags: v2Flags() });
+            }
+
+            const memberChannel = interaction.member.voice.channelId;
+            const botChannel = interaction.guild.members.me.voice.channelId;
+            if (!memberChannel || memberChannel !== botChannel) {
+                return safeReply(interaction, { components: [buildV2Notice(moxi.translate('MUSIC_SAME_VOICE_CHANNEL', lang))], flags: v2Flags() });
+            }
+
+            const current = player.currentTrack?.info;
+            if (!current) {
+                return safeReply(interaction, { components: [buildV2Notice(moxi.translate('MUSIC_NO_MUSIC_PLAYING', lang))], flags: v2Flags() });
+            }
+
+            if (current.isStream || current.isSeekable === false) {
+                return safeReply(interaction, { components: [buildV2Notice(moxi.translate('MUSIC_NOT_SEEKABLE', lang))], flags: v2Flags() });
+            }
+
+            const stepMs = 10_000;
+            const direction = interaction.customId === 'seek_forward' ? 1 : -1;
+            const duration = Number(current.length) || 0;
+            const currentPos = Number(player.position) || 0;
+            const maxSeek = duration > 1_500 ? (duration - 1_000) : duration;
+            const target = Math.max(0, Math.min(maxSeek, currentPos + (direction * stepMs)));
+
+            await player.seekTo(target);
+            seekMusicPanelTimeline(player, target);
+
+            const notice = direction > 0
+                ? `Adelantado a ${ms(target)}.`
+                : `Retrocedido a ${ms(target)}.`;
+
+            await tryUpdateMainPanel(interaction, player, lang, notice);
+            return safeReply(interaction, { components: [buildV2Notice(notice)], flags: v2Flags() });
+        }
+
         // --- BAJAR VOLUMEN ---
         if (interaction.customId === "vol_down") {
             const lang = await moxi.guildLang(interaction.guild?.id, process.env.DEFAULT_LANG || 'es-ES');
@@ -290,6 +374,82 @@ Moxi.on("interactionCreate", async (interaction) => {
             player.setVolume(newVol);
             await tryUpdateMainPanel(interaction, player, lang, moxi.translate('MUSIC_CURRENT_VOLUME', lang, { volume: newVol }));
             return safeReply(interaction, { components: [buildV2Notice(moxi.translate('MUSIC_VOLUME_DOWN', lang, { vol: newVol }))], flags: v2Flags() });
+        }
+
+        if (interaction.customId === 'stop') {
+            const lang = await moxi.guildLang(interaction.guild?.id, process.env.DEFAULT_LANG || 'es-ES');
+            const guard = ensureSameVoiceChannel(interaction, lang);
+            if (guard) return safeReply(interaction, guard);
+
+            const player = Moxi.poru.players.get(interaction.guild.id);
+            if (!player) {
+                return safeReply(interaction, { components: [buildV2Notice(moxi.translate('MUSIC_NO_MUSIC_PLAYING', lang))], flags: v2Flags() });
+            }
+
+            // Restaurar panel fijo a estado inactivo si estaba activo
+            const guildId = interaction.guild.id;
+            const guildSettings = await getGuildSettingsCached(guildId).catch(() => null);
+            const fixedPanelEnabled = !!guildSettings?.MusicFixedPanelEnabled;
+            const fixedPanelChannelId = String(guildSettings?.MusicFixedPanelChannelId || '');
+            const fixedPanelMessageId = String(guildSettings?.MusicFixedPanelMessageId || '');
+
+            stopMusicPanelAutoUpdate(player);
+
+            // Marca este stop como manual para evitar que queueEnd reescriba
+            // el panel fijo con la card de la ultima cancion.
+            try {
+                await Promise.resolve(player?.set?.('__moxiManualStop', true));
+            } catch {
+                // ignore
+            }
+
+            if (fixedPanelEnabled && fixedPanelChannelId && fixedPanelMessageId) {
+                try {
+                    const panelChannel = interaction.guild.channels.cache.get(fixedPanelChannelId)
+                        || await interaction.guild.channels.fetch(fixedPanelChannelId).catch(() => null);
+                    if (panelChannel?.isTextBased?.()) {
+                        const panelMsg = await panelChannel.messages.fetch(fixedPanelMessageId).catch(() => null);
+                        if (panelMsg) {
+                            const configuredImage = String(guildSettings?.MusicFixedPanelImageUrl || '').trim()
+                                || String(process.env.MUSIC_FALLBACK_IMAGE_URL || '').trim()
+                                || Moxi?.user?.displayAvatarURL?.({ extension: 'png', size: 1024 })
+                                || null;
+                            const idleContainer = buildDisabledMusicSessionContainer({
+                                title: '## Panel de musica fijo',
+                                info: 'Escribe aqui el nombre de una cancion para reproducirla automaticamente.\nLos comandos de musica tambien funcionan normalmente.',
+                                imageUrl: configuredImage,
+                                footerText: formatSessionEndedFooter(),
+                            });
+                            await panelMsg.edit({
+                                content: '',
+                                components: [idleContainer],
+                                flags: MessageFlags.IsComponentsV2,
+                            }).catch(() => null);
+                        }
+                    }
+                } catch { /* ignore */ }
+                await setGuildMusicPanelActive(guildId, false).catch(() => null);
+            } else if (Moxi.previousMessage) {
+                // Panel normal: deshabilitar botones del último mensaje
+                try {
+                    const lastSession = await player.get('lastSessionData').catch(() => null);
+                    if (lastSession) {
+                        const disabledContainer = buildDisabledMusicSessionContainer({
+                            title: lastSession.title,
+                            info: lastSession.info,
+                            imageUrl: lastSession.imageUrl,
+                            footerText: formatSessionEndedFooter(),
+                        });
+                        await Moxi.previousMessage.edit({
+                            components: [disabledContainer],
+                            flags: MessageFlags.IsComponentsV2,
+                        }).catch(() => null);
+                    }
+                } catch { /* ignore */ }
+            }
+
+            await player.destroy();
+            return safeReply(interaction, { components: [buildV2Notice(moxi.translate('MUSIC_PLAYER_DISCONNECTED', lang))], flags: v2Flags() });
         }
 
     }

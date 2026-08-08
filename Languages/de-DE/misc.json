@@ -1,4 +1,4 @@
-{
+﻿{
     "AUTONUKE_TITLE": "Kanal-Wiedergeburt",
     "AUTONUKE_DESCRIPTION": "Jedes Ende ist ein neuer Anfang. Der Kanal wird für neue Geschichten neu geboren.",
     "EXECUTED_BY": "Ausgeführt von:",
@@ -136,6 +136,19 @@
     "HELP_CATEGORY_GAMES_DESC": "Spiele: minesweeper, rps, tictactoe.",
     "HELP_CATEGORY_WELCOME": "Willkommenssystem",
     "HELP_CATEGORY_WELCOME_DESC": "Befehle zum Konfigurieren von Willkommensnachrichten und Einstellungen.",
+    "HELP_CATEGORY_SYSTEMS": "Systeme",
+    "HELP_CATEGORY_SYSTEMS_DESC": "Systeme fur Begruessung und Abschied.",
+    "BLACKLIST_GUIDE_TITLE": "Blacklist-FAQ",
+    "BLACKLIST_GUIDE_DESC": "Haufige Fragen zur lokalen und globalen Blacklist.",
+    "BLACKLIST_GUIDE_FAQ": "Haufige Fragen:",
+    "BLACKLIST_GUIDE_FAQ_1": "• Was blockiert die lokale Blacklist? Nur diesen Server.",
+    "BLACKLIST_GUIDE_FAQ_2": "• Was blockiert die globale Blacklist? Alle Server und ganze Server.",
+    "BLACKLIST_GUIDE_FAQ_3": "• Wie setzt man Dauer und Level? Verwenden Sie dur= (12h, 7d) und level= (1-5).",
+    "BLACKLIST_GUIDE_FAQ_4": "• Wie begrenzt man Aktionen? actions=all, command, message, interaction, music.",
+    "BLACKLIST_GUIDE_FAQ_5": "• Beispiele fur actions=? actions=command,interaction oder actions=message.",
+    "BLACKLIST_GUIDE_FAQ_6": "• Wie aktiviert man Logs? Verwenden Sie log #kanal oder log off zum Deaktivieren.",
+    "BLACKLIST_GUIDE_FAQ_7": "• Wie nutzt man bypass? Verwenden Sie bypass add|remove user/role/cmd <wert>.",
+    "BLACKLIST_GUIDE_FAQ_8": "• Wer darf global nutzen? Nur der echte Bot-Owner.",
     "GAMES_MINESWEEPER_TITLE": "Minesweeper",
     "GAMES_MINESWEEPER_HELP": "Klicken zum Öffnen • 🚩-Modus zum Markieren",
     "GAMES_MINESWEEPER_PLAYING": "Spiel läuft.",
@@ -665,5 +678,9 @@
     "PORTAL_STATUS_REUSED": "Reusing official invite",
     "PORTAL_NO_PERMS": "There is no official invite yet. You need permissions to create it.",
     "PORTAL_NO_CHANNEL": "I couldn't find a valid channel to create the official invite.",
-    "PORTAL_ERR": "I couldn't resolve the official invite."
+    "PORTAL_ERR": "I couldn't resolve the official invite.",
+    "HELP_CATEGORY_GENSHIN": "Genshin",
+    "HELP_CATEGORY_GENSHIN_DESC": "Befehle rund um Genshin Impact.",
+    "HELP_CATEGORY_STREAMING": "Streaming",
+    "HELP_CATEGORY_STREAMING_DESC": "Befehle für Stream-Benachrichtigungen und Live-Alerts."
 }

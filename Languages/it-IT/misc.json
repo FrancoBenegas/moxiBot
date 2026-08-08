@@ -1,4 +1,4 @@
-{
+﻿{
     "ADDEMOJI_ERROR": "Errore nell'aggiunta dell'emoji",
     "ADDEMOJI_NAME": "Nome",
     "ADDEMOJI_NO_PERMISSION": "Non hai il permesso di gestire le emoji",
@@ -137,6 +137,19 @@
     "HELP_CATEGORY_GAMES_DESC": "Giochi: minesweeper, rps, tictactoe.",
     "HELP_CATEGORY_WELCOME": "Sistema di benvenuto",
     "HELP_CATEGORY_WELCOME_DESC": "Comandi per configurare messaggi e impostazioni di benvenuto.",
+    "HELP_CATEGORY_SYSTEMS": "Sistemi",
+    "HELP_CATEGORY_SYSTEMS_DESC": "Sistemi di benvenuto e di addio.",
+    "BLACKLIST_GUIDE_TITLE": "FAQ Blacklist",
+    "BLACKLIST_GUIDE_DESC": "Domande frequenti sulla blacklist locale e globale.",
+    "BLACKLIST_GUIDE_FAQ": "Domande frequenti:",
+    "BLACKLIST_GUIDE_FAQ_1": "• Cosa blocca la blacklist locale? Solo questo server.",
+    "BLACKLIST_GUIDE_FAQ_2": "• Cosa blocca la blacklist globale? Tutti i server e server completi.",
+    "BLACKLIST_GUIDE_FAQ_3": "• Come impostare durata e livello? Usa dur= (12h, 7d) e level= (1-5).",
+    "BLACKLIST_GUIDE_FAQ_4": "• Come limitare le azioni? actions=all, command, message, interaction, music.",
+    "BLACKLIST_GUIDE_FAQ_5": "• Esempi di actions=? actions=command,interaction o actions=message.",
+    "BLACKLIST_GUIDE_FAQ_6": "• Come attivare i log? Usa log #canale o log off per disattivare.",
+    "BLACKLIST_GUIDE_FAQ_7": "• Come usare bypass? Usa bypass add|remove user/role/cmd <valore>.",
+    "BLACKLIST_GUIDE_FAQ_8": "• Chi puo usare il globale? Solo il vero owner del bot.",
     "GAMES_MINESWEEPER_TITLE": "Campo Minato",
     "GAMES_MINESWEEPER_HELP": "Clicca per aprire • Modalità 🚩 per segnare",
     "GAMES_MINESWEEPER_PLAYING": "Partita in corso.",
@@ -665,5 +678,9 @@
     "PORTAL_STATUS_REUSED": "Reusing official invite",
     "PORTAL_NO_PERMS": "There is no official invite yet. You need permissions to create it.",
     "PORTAL_NO_CHANNEL": "I couldn't find a valid channel to create the official invite.",
-    "PORTAL_ERR": "I couldn't resolve the official invite."
+    "PORTAL_ERR": "I couldn't resolve the official invite.",
+    "HELP_CATEGORY_GENSHIN": "Genshin",
+    "HELP_CATEGORY_GENSHIN_DESC": "Comandi relativi a Genshin Impact.",
+    "HELP_CATEGORY_STREAMING": "Streaming",
+    "HELP_CATEGORY_STREAMING_DESC": "Comandi per notifiche e avvisi di stream live."
 }

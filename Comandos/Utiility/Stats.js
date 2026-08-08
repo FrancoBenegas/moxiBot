@@ -33,7 +33,7 @@ function formatRelativeTime(date, locale) {
 
 module.exports = {
     name: 'stats',
-    alias: ['estadisticas', 'profile', 'información'],
+    alias: ['estadisticas', 'información'],
     description: (lang = 'es-ES') => moxi.translate('commands:CMD_STATS_DESC', lang) || 'Muestra estadísticas detalladas de un usuario',
     usage: 'stats [usuario]',
     Category: function (lang) {

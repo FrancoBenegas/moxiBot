@@ -1,5 +1,9 @@
+const { stopMusicPanelAutoUpdate } = require('../Util/musicPanelAutoUpdater');
+
 module.exports = async (Moxi, player) => {
     if (!player) return;
+
+    stopMusicPanelAutoUpdate(player);
 
     if (player.message) await player.message.delete().catch(() => { });
 

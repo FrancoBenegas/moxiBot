@@ -1,17 +1,21 @@
 // Evento: canal eliminado
 const { channelDeleteEmbed } = require('../../../Util/auditGeneralEmbeds');
 const { resolveAuditConfig } = require('../../../Util/audit');
+const auditLogDebug = require('../../../Util/auditLogDebug');
 
 module.exports = async (channel) => {
-    if (!channel.guild) return;
-    const auditLogDebug = require('../../../Util/auditLogDebug');
-    auditLogDebug('channelDelete', { guildId: channel.guild.id, channelId: channel.id });
-    const { lang, channelId, enabled } = await resolveAuditConfig(channel.guild.id, 'es-ES');
-    if (!enabled || !channelId) return;
-    const ch = channel.guild.channels.cache.get(channelId);
-    if (!ch || typeof ch.send !== 'function') return;
-    const now = new Date();
-    const timeStr = now.toISOString().replace('T', ' ').replace('Z', ' UTC');
-    const v2 = channelDeleteEmbed({ channelName: channel.name, timeStr });
-    await ch.send(v2).catch(() => null);
+    try {
+        if (!channel.guild) return;
+        const { channelId, enabled } = await resolveAuditConfig(channel.guild.id, 'es-ES');
+        if (!enabled || !channelId) return;
+        const ch = channel.guild.channels.cache.get(channelId)
+            || await channel.guild.channels.fetch(channelId).catch(() => null);
+        if (!ch || typeof ch.send !== 'function') return;
+        const now = new Date();
+        const timeStr = now.toISOString().replace('T', ' ').replace('Z', ' UTC');
+        await ch.send(channelDeleteEmbed({ channelName: channel.name, timeStr }))
+            .catch(err => auditLogDebug('channelDelete', 'fallo al enviar:', err?.message || err));
+    } catch (err) {
+        auditLogDebug('channelDelete', 'error inesperado:', err?.message || err);
+    }
 };

@@ -12,6 +12,35 @@ function makeResponder(message) {
     const ttlMs = Number(process.env.PREFIX_EPHEMERAL_DELETE_MS ?? 8000);
     let lastBotMessage = null;
 
+    function isUnknownMessageReference(error) {
+        const code = Number(error?.code);
+        const raw = String(error?.rawError?.message || error?.message || '');
+        return code === 50035 && /MESSAGE_REFERENCE_UNKNOWN_MESSAGE|Unknown message/i.test(raw);
+    }
+
+    function stripMessageReference(payload) {
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload;
+        // eslint-disable-next-line no-unused-vars
+        const { messageReference, message_reference, ...rest } = payload;
+        return rest;
+    }
+
+    async function sendWithoutReference(payload) {
+        if (!message?.channel || typeof message.channel.send !== 'function') {
+            throw new Error('Canal no disponible para enviar respuesta');
+        }
+        return message.channel.send(stripMessageReference(payload));
+    }
+
+    async function sendBestEffort(payload) {
+        try {
+            return await message.reply(payload);
+        } catch (error) {
+            if (!isUnknownMessageReference(error)) throw error;
+            return sendWithoutReference(payload);
+        }
+    }
+
     async function scheduleDelete(msg) {
         if (!msg || !Number.isFinite(ttlMs) || ttlMs <= 0) return;
         setTimeout(() => {
@@ -22,7 +51,7 @@ function makeResponder(message) {
     return {
         // En prefix no existe ephemeral: emulamos con auto-delete.
         reply: async (payload) => {
-            const sent = await message.reply(payload);
+            const sent = await sendBestEffort(payload);
             lastBotMessage = sent;
             await scheduleDelete(sent);
             return sent;
@@ -32,7 +61,7 @@ function makeResponder(message) {
                 const edited = await lastBotMessage.edit(payload).catch(() => null);
                 if (edited) return edited;
             }
-            const sent = await message.reply(payload);
+            const sent = await sendBestEffort(payload);
             lastBotMessage = sent;
             await scheduleDelete(sent);
             return sent;
@@ -49,7 +78,7 @@ module.exports = {
         lang = lang || 'es-ES';
         return moxi.translate('commands:CATEGORY_MUSICA', lang);
     },
-    usage: 'play <canción> <plataforma>',
+    usage: 'play <canción> [youtube|spotify|soundcloud]',
     description: function (lang) { return moxi.translate('commands:CMD_PLAY_DESC', lang || 'es-ES'); },
     async execute(Moxi, message, args) {
         const guildId = message.guild?.id;
@@ -85,11 +114,22 @@ module.exports = {
             );
         }
 
-        // Permite: .play <texto con espacios> [spotify|youtube]
+        // Permite: .play <texto con espacios> [spotify|youtube|soundcloud]
+        // Default robusto: YouTube. Solo usar Spotify por defecto cuando
+        // el input sea claramente un enlace/URI de Spotify.
         const last = String(args[args.length - 1] || '').toLowerCase();
-        const hasPlatform = last === 'spotify' || last === 'youtube';
-        const platform = hasPlatform ? last : 'spotify';
+        const normalizedPlatform = (value) => {
+            if (value === 'spotify' || value === 'sp') return 'spotify';
+            if (value === 'youtube' || value === 'yt') return 'youtube';
+            if (value === 'soundcloud' || value === 'sc' || value === 'sound') return 'soundcloud';
+            return null;
+        };
+        const parsedPlatform = normalizedPlatform(last);
+        const hasPlatform = Boolean(parsedPlatform);
         const track = (hasPlatform ? args.slice(0, -1) : args).join(' ').trim();
+        const looksLikeSpotify = /^spotify:/i.test(track) || /(?:https?:\/\/)?(?:open\.)?spotify\.com\//i.test(track);
+        const looksLikeSoundCloud = /(?:https?:\/\/)?(?:www\.)?soundcloud\.com\//i.test(track);
+        const platform = hasPlatform ? parsedPlatform : (looksLikeSpotify ? 'spotify' : (looksLikeSoundCloud ? 'soundcloud' : 'youtube'));
         const responder = makeResponder(message);
         // Simula la estructura de interaction para reutilizar la lógica
         const fakeInteraction = {

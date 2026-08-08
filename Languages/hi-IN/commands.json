@@ -7,7 +7,7 @@
     "CATEGORY_ECONOMIA": "अर्थव्यवस्था",
     "CATEGORY_MUSICA": "संगीत",
     "CATEGORY_FUN": "मज़ा",
-    "CATEGORY_GAMES": "गेम्स",
+    "CATEGORY_GAMES": "गेम्स",    "CATEGORY_MARRIAGE": "विवुह",    "CATEGORY_SISTEMAS": "सिस्टम",
     "CATEGORY_ROOT": "मालिक",
     "CMD_MINESWEEPER_DESC": "माइन्सवीपर गेम शुरू करें",
     "CMD_RPS_DESC": "पत्थर-कागज़-कैंची खेलें",
@@ -114,5 +114,15 @@
     "CMD_COINFLIP_DESC": "सिक्का उछालें (हेड्स/टेल्स)।",
     "CMD_DICE_DESC": "पासा रोल करें (वैकल्पिक रूप से साइड्स चुनें)।",
     "CMD_8BALL_DESC": "मैजिक 8-बॉल से एक सवाल पूछें।",
-    "CMD_SHIP_DESC": "दो लोगों के बीच संगतता निकालता है।"
+    "CMD_SHIP_DESC": "दो लोगों के बीच संगतता निकालता है।",
+    "CMD_QUITARFONDO_DESC": "छवि का बैकग्राउंड हटाता है (पारदर्शी PNG)।",
+    "CMD_QUITARFONDO_TITLE": "बैकग्राउंड हटाएं",
+    "CMD_QUITARFONDO_UNSUPPORTED": "आपका वर्तमान रनटाइम इस कमांड के लिए fetch/FormData सपोर्ट नहीं करता।",
+    "CMD_QUITARFONDO_MISSING_KEY": "इस कमांड के लिए REMOVEBG_API_KEY environment variable सेट नहीं है।",
+    "CMD_QUITARFONDO_USAGE": "उपयोग: quitarfondo <url> या कमांड के साथ एक इमेज अटैच करें।",
+    "CMD_QUITARFONDO_PROCESSING": "इमेज प्रोसेस हो रही है, कृपया प्रतीक्षा करें...",
+    "CMD_QUITARFONDO_DEFAULT_API_ERROR": "इमेज को प्रोसेस नहीं किया जा सका।",
+    "CMD_QUITARFONDO_API_ERROR": "बैकग्राउंड नहीं हटाया जा सका: {{reason}}",
+    "CMD_QUITARFONDO_SUCCESS": "हो गया, यह रही आपकी बिना बैकग्राउंड वाली इमेज:",
+    "CMD_QUITARFONDO_RUNTIME_ERROR": "बैकग्राउंड हटाते समय त्रुटि: {{reason}}"
 }

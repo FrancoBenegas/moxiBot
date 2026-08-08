@@ -1,15 +1,14 @@
 const fs = require('fs');
 const path = require('path');
-const { PermissionsBitField: { Flags }, ContainerBuilder, ButtonStyle, MessageFlags } = require('discord.js');
+const { PermissionsBitField: { Flags }, ContainerBuilder, ButtonStyle, MessageFlags, ActionRowBuilder } = require('discord.js');
 const { ButtonBuilder } = require('../../Util/compatButtonBuilder');
 const moxi = require('../../i18n');
 const { setGuildLanguage, invalidateGuildSettingsCache } = require('../../Util/guildSettings');
-const { setUserLanguage } = require('../../Util/userLanguage');
+const { setUserLanguage, invalidateUserLanguageCache } = require('../../Util/userLanguage');
 const log = require('../../Util/logger');
 const { EMOJIS } = require('../../Util/emojis');
 const { Bot } = require('../../Config');
 const { buildNoticeContainer, asV2MessageOptions } = require('../../Util/v2Notice');
-const { setSectionButtonAccessory } = require('../../Util/v2SectionAccessory');
 
 function loadLanguages() {
   const metaPath = path.join(__dirname, '../../Languages/language-meta.json');
@@ -39,90 +38,96 @@ function isServerScopeToken(value) {
   return ['server', 'servidor', 'guild', 'global'].includes(v);
 }
 
-function buildPanel({ lang, serverLangCode, languages, botUsername, page = 0, pageSize = 5, disableAll = false }) {
+function buildPanel({ lang, serverLangCode, userLangCode, languages, botUsername, page = 0, pageSize = 5, disableAll = false }) {
   const safePageSize = Number.isFinite(pageSize) && pageSize > 0 ? Math.trunc(pageSize) : 5;
   const totalPages = Math.max(1, Math.ceil(languages.length / safePageSize));
   const safePage = Math.min(Math.max(0, Number(page) || 0), totalPages - 1);
   const start = safePage * safePageSize;
   const pageItems = languages.slice(start, start + safePageSize);
   const serverSelectedName = languages.find((l) => l.code === serverLangCode)?.name || serverLangCode;
+  const userSelectedName = userLangCode ? (languages.find((l) => l.code === userLangCode)?.name || userLangCode) : null;
+  
   const container = new ContainerBuilder()
     .setAccentColor(Bot.AccentColor)
     .addTextDisplayComponents((c) =>
       c.setContent(
-        `**${EMOJIS.earth} ${moxi.translate('LANGUAGE_SELECTION', lang)}**\n\n`
-        + `${moxi.translate('LANGUAGE_DESCRIPTION', lang)}\n`
-        + `Cada usuario puede elegir su idioma con el botón \`Usuario\`.\n`
-        + `El botón \`Servidor\` solo funciona para admins.\n\n`
-        + `**${EMOJIS.book} ${moxi.translate('AVAILABLE_LANGUAGES', lang) || 'Idiomas disponibles'}** (página ${safePage + 1}/${totalPages})\n${'─'.repeat(30)}`
+        `${EMOJIS.earth} **${moxi.translate('LANGUAGE_SELECTION', lang)}**\n\n`
+        + `${moxi.translate('LANGUAGE_DESCRIPTION', lang)}\n\n`
+        + `**${EMOJIS.info} Tu configuración actual:**\n`
+        + `• **Tu idioma personal:** ${userSelectedName ? `${userSelectedName} (${userLangCode})` : `No configurado - usando idioma del servidor`}\n`
+        + `• **Idioma del servidor:** ${serverSelectedName} (${serverLangCode})\n\n`
+        + `**${EMOJIS.info} Opciones:**\n`
+        + `• \`Usuario\`: Cambia solo tu idioma personal\n`
+        + `• \`Servidor\`: Cambia el idioma del servidor (solo admins)\n\n`
+        + `**${EMOJIS.book} Idiomas disponibles** • Página ${safePage + 1}/${totalPages}`
       )
     );
 
-  container.addSectionComponents((section) =>
-    setSectionButtonAccessory(
-      section.addTextDisplayComponents((text) =>
-        text.setContent('◀ Página anterior')
-      ),
-      new ButtonBuilder()
-        .setCustomId('lang_page_prev')
-        .setLabel('Anterior')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(disableAll || safePage <= 0)
-    )
-  );
-
-  container.addSectionComponents((section) =>
-    setSectionButtonAccessory(
-      section.addTextDisplayComponents((text) =>
-        text.setContent('Página siguiente ▶')
-      ),
-      new ButtonBuilder()
-        .setCustomId('lang_page_next')
-        .setLabel('Siguiente')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(disableAll || safePage >= totalPages - 1)
-    )
-  );
-
+  // Cada idioma con sus botones
   for (const langItem of pageItems) {
     const serverSelected = serverLangCode === langItem.code;
-    const title = `${langItem.emoji} **${langItem.name}** (${langItem.code})${serverSelected ? ` ${EMOJIS.tick}` : ''}`;
+    const userSelected = userLangCode === langItem.code;
+    
+    let statusText = '';
+    if (serverSelected && userSelected) {
+      statusText = `${EMOJIS.tick} **Tu idioma personal Y del servidor**`;
+    } else if (userSelected) {
+      statusText = `${EMOJIS.tick} **Tu idioma personal**`;
+    } else if (serverSelected) {
+      statusText = `${EMOJIS.tick} **Idioma del servidor**`;
+    } else {
+      statusText = '• Idioma disponible';
+    }
+    
+    container
+      .addSeparatorComponents((s) => s.setDivider(true))
+      .addTextDisplayComponents((c) =>
+        c.setContent(
+          `${langItem.emoji} **${langItem.name}** \`${langItem.code}\`\n`
+          + statusText
+        )
+      );
 
-    container.addSectionComponents((section) =>
-      setSectionButtonAccessory(
-        section.addTextDisplayComponents((text) =>
-          text.setContent(`${title}\n- Usuario: cambia solo tu idioma`) 
-        ),
-        new ButtonBuilder()
-          .setCustomId(`lang_user_${langItem.code}`)
-          .setLabel('Usuario')
-          .setStyle(ButtonStyle.Danger)
-          .setDisabled(disableAll)
-      )
+    const langRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`lang_user_${langItem.code}`)
+        .setLabel(userSelected ? '✓ Tu idioma' : '👤 Usuario')
+        .setStyle(userSelected ? ButtonStyle.Success : ButtonStyle.Primary)
+        .setDisabled(disableAll),
+      new ButtonBuilder()
+        .setCustomId(`lang_server_${langItem.code}`)
+        .setLabel(serverSelected ? '✓ Activo' : '🌐 Servidor')
+        .setStyle(serverSelected ? ButtonStyle.Success : ButtonStyle.Secondary)
+        .setDisabled(disableAll)
     );
-
-    container.addSectionComponents((section) =>
-      setSectionButtonAccessory(
-        section.addTextDisplayComponents((text) =>
-          text.setContent(`- Servidor: cambia idioma global del bot`) 
-        ),
-        new ButtonBuilder()
-          .setCustomId(`lang_server_${langItem.code}`)
-          .setLabel(serverSelected ? 'Activo' : 'Servidor')
-          .setStyle(serverSelected ? ButtonStyle.Success : ButtonStyle.Secondary)
-          .setDisabled(disableAll)
-      )
-    );
+    container.addActionRowComponents(() => langRow);
   }
 
   container
-    .addTextDisplayComponents((c) =>
-      c.setContent(`${'─'.repeat(30)}\n**Idioma actual del servidor:** ${serverSelectedName} (${serverLangCode})`)
-    )
     .addSeparatorComponents((s) => s.setDivider(true))
     .addTextDisplayComponents((c) =>
-      c.setContent(`${EMOJIS.copyright} ${botUsername} • ${new Date().getFullYear()}`)
+      c.setContent(
+        `**Servidor:** ${serverSelectedName} (${serverLangCode})\n`
+        + `${EMOJIS.copyright} ${botUsername} • ${new Date().getFullYear()}`
+      )
     );
+
+  // Navegación en la parte inferior (solo si hay múltiples páginas)
+  if (totalPages > 1) {
+    const navRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('lang_page_prev')
+        .setLabel('◀ Anterior')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(disableAll || safePage <= 0),
+      new ButtonBuilder()
+        .setCustomId('lang_page_next')
+        .setLabel('Siguiente ▶')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(disableAll || safePage >= totalPages - 1)
+    );
+    container.addActionRowComponents(() => navRow);
+  }
 
   return { container, page: safePage, totalPages };
 }
@@ -216,6 +221,9 @@ module.exports = {
         })));
       }
 
+      // Invalidar caché para aplicar el cambio inmediatamente
+      invalidateUserLanguageCache(guildId, userId);
+
       return message.reply(asV2MessageOptions(buildNoticeContainer({
         emoji: EMOJIS.tick,
         text: `Tu idioma personal ahora es **${targetLang.name}** (${targetLang.code}).`,
@@ -223,13 +231,19 @@ module.exports = {
     }
 
     const serverLangCode = await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES');
-    const PAGE_SIZE = 5;
+    const PAGE_SIZE = 3;
     let currentPage = 0;
     let currentServerLangCode = serverLangCode;
+
+    // Obtener idioma personal del usuario (si existe)
+    const { getUserLanguage } = require('../../Util/userLanguage');
+    const userPersonalLang = await getUserLanguage(guildId, userId, '').catch(() => '');
+    let currentUserLangCode = userPersonalLang || null;
 
     const panelResult = buildPanel({
       lang: fallbackLang,
       serverLangCode: currentServerLangCode,
+      userLangCode: currentUserLangCode,
       languages,
       botUsername: Moxi.user.username,
       page: currentPage,
@@ -251,12 +265,18 @@ module.exports = {
 
     collector.on('collect', async (i) => {
       try {
+        // Obtener el idioma personal del usuario que está interactuando
+        const { getUserLanguage } = require('../../Util/userLanguage');
+        const interactorPersonalLang = await getUserLanguage(guildId, i.user?.id, '').catch(() => '');
+        const interactorUserLangCode = interactorPersonalLang || null;
+
         if (i.customId === 'lang_page_prev' || i.customId === 'lang_page_next') {
           currentPage += (i.customId === 'lang_page_prev' ? -1 : 1);
           const viewerLang = await moxi.userLang(guildId, i.user?.id, currentServerLangCode);
           const nextPanel = buildPanel({
             lang: viewerLang,
             serverLangCode: currentServerLangCode,
+            userLangCode: interactorUserLangCode,
             languages,
             botUsername: Moxi.user.username,
             page: currentPage,
@@ -318,6 +338,7 @@ module.exports = {
           const nextPanel = buildPanel({
             lang: await moxi.userLang(guildId, i.user?.id, currentServerLangCode),
             serverLangCode: currentServerLangCode,
+            userLangCode: interactorUserLangCode,
             languages,
             botUsername: Moxi.user.username,
             page: currentPage,
@@ -331,7 +352,7 @@ module.exports = {
           }).catch(() => null);
 
           return i.followUp({
-            content: `Idioma del servidor actualizado a **${selectedLang.name}** (${selectedLang.code}).`,
+            content: `✅ Idioma del servidor actualizado a **${selectedLang.name}** (${selectedLang.code}).`,
             flags: MessageFlags.Ephemeral,
           }).catch(() => null);
         }
@@ -344,8 +365,27 @@ module.exports = {
           }).catch(() => null);
         }
 
-        return i.reply({
-          content: `Tu idioma personal ahora es **${selectedLang.name}** (${selectedLang.code}).`,
+        // Invalidar caché para que el cambio se aplique inmediatamente
+        invalidateUserLanguageCache(guildId, i.user?.id);
+
+        // Actualizar el panel para mostrar el nuevo idioma
+        const updatedPanel = buildPanel({
+          lang: await moxi.userLang(guildId, i.user?.id, currentServerLangCode),
+          serverLangCode: currentServerLangCode,
+          userLangCode: selectedCode, // Mostrar el nuevo idioma personal
+          languages,
+          botUsername: Moxi.user.username,
+          page: currentPage,
+          pageSize: PAGE_SIZE,
+        });
+
+        await i.update({
+          components: [updatedPanel.container],
+          flags: MessageFlags.IsComponentsV2,
+        }).catch(() => null);
+
+        return i.followUp({
+          content: `✅ Tu idioma personal ahora es **${selectedLang.name}** (${selectedLang.code}).\n\n¡El panel se ha actualizado para reflejar tu configuración actual!`,
           flags: MessageFlags.Ephemeral,
         }).catch(() => null);
       } catch (err) {
@@ -359,9 +399,14 @@ module.exports = {
     collector.on('end', async () => {
       try {
         const latestServerLang = await moxi.guildLang(guildId, process.env.DEFAULT_LANG || 'es-ES');
+        // Obtener el idioma personal actual del usuario original
+        const { getUserLanguage } = require('../../Util/userLanguage');
+        const finalUserLang = await getUserLanguage(guildId, userId, '').catch(() => '');
+        
         const disabled = buildPanel({
           lang: latestServerLang,
           serverLangCode: latestServerLang,
+          userLangCode: finalUserLang || null,
           languages,
           botUsername: Moxi.user.username,
           page: currentPage,

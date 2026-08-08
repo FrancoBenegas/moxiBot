@@ -1,8 +1,10 @@
-const { ContainerBuilder, LinkButtonBuilder, MessageFlags } = require('discord.js');
+const { ContainerBuilder, MessageFlags } = require('discord.js');
+const { ButtonBuilder, ButtonStyle } = require('../../Util/compatButtonBuilder');
 const { EMOJIS } = require('../../Util/emojis');
 const { Bot } = require('../../Config');
+const { getSeasonBadge } = require('../../Util/seasonBrand');
 
-async function panelV2({ client: Moxi, message, prefix }) {
+async function panelV2({ client: Moxi, message, prefix, serverPrefix, userPrefix }) {
     const moxi = require('../../i18n');
     const lang = await moxi.guildLang(message.guild?.id, process.env.DEFAULT_LANG || 'es-ES');
     let panel;
@@ -13,31 +15,28 @@ async function panelV2({ client: Moxi, message, prefix }) {
     }
     const langName = moxi.translate('LANGUAGE_NAME', lang) || lang;
     const mention = `<@${Moxi.user.id}>`;
-    const envPrefix = (typeof process.env.PREFIX === 'string' && process.env.PREFIX.trim())
-        ? process.env.PREFIX.trim()
-        : ((Array.isArray(Bot?.Prefix) && Bot.Prefix[0]) ? Bot.Prefix[0] : '.');
-
-    const isEnvPrefix = String(prefix || '') === String(envPrefix || '');
-    const fallbackEnv = 'Prefix source: **ENV (.env)**';
-    const fallbackCustom = 'Prefix source: **Server custom setting**';
-    const rawPrefixSource = isEnvPrefix ? panel.prefix_source_env : panel.prefix_source_custom;
-    const prefixSource = (typeof rawPrefixSource === 'string' && rawPrefixSource.trim())
-        ? rawPrefixSource
-        : (isEnvPrefix ? fallbackEnv : fallbackCustom);
 
     const replacements = {
         mention,
         lang,
         langName,
-        prefix,
+        prefix: serverPrefix || prefix || '',
+        userPrefix: userPrefix || '',
     };
     function t(str) {
         return str.replace(/\{\{(\w+)\}\}/g, (_, k) => replacements[k] || '');
     }
+
+    const appId = String(process.env.CLIENT_ID || Moxi?.user?.id || '1456441655769956436').trim();
+    const inviteUrl = `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(appId)}&permissions=8&integration_type=0&scope=bot%20applications.commands`;
+
     const container = new ContainerBuilder()
         .setAccentColor(Bot.AccentColor)
         .addTextDisplayComponents(c =>
             c.setContent(t(panel.greeting))
+        )
+        .addTextDisplayComponents(c =>
+            c.setContent(`> Estación activa: **${getSeasonBadge()}**`)
         )
         .addTextDisplayComponents(c =>
             c.setContent(t(panel.lang_label))
@@ -45,19 +44,24 @@ async function panelV2({ client: Moxi, message, prefix }) {
         .addSeparatorComponents(s => s.setDivider(true))
         .addTextDisplayComponents(c =>
             c.setContent(t(panel.prefix_label))
-        )
-        .addTextDisplayComponents(c =>
-            c.setContent(prefixSource)
-        )
+        );
+
+    if (userPrefix && panel.user_prefix_label) {
+        container.addTextDisplayComponents(c =>
+            c.setContent(t(panel.user_prefix_label))
+        );
+    }
+
+    container
         .addTextDisplayComponents(c =>
             c.setContent(t(panel.forgot_prefix))
         )
         .addSeparatorComponents(s => s.setDivider(true))
         .addActionRowComponents(row =>
             row.addComponents(
-                new LinkButtonBuilder().setLabel(t(panel.invite)).setURL('https://discord.com/oauth2/authorize?client_id=1456441655769956436&permissions=8&integration_type=0&scope=bot'),
-                new LinkButtonBuilder().setLabel(t(panel.support)).setURL('https://discord.gg/tu-servidor'),
-                new LinkButtonBuilder().setLabel(t(panel.web)).setURL('https://moxilab.net')
+                new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel(t(panel.invite)).setURL(inviteUrl),
+                new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel(t(panel.support)).setURL('https://discord.gg/tu-servidor'),
+                new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel(t(panel.web)).setURL('https://moxilab.net')
             )
         )
         .addSeparatorComponents(s => s.setDivider(true))

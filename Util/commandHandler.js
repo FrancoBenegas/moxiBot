@@ -6,7 +6,7 @@ const Config = require('../Config');
 const { shouldBlockByTimeGate, buildBlockedMessage } = require('./timeGate');
 const { runWithCommandContext } = require('./commandContext');
 const { getGuildSettingsCached } = require('./guildSettings');
-const { isUserLocallyBlacklisted, isUserGloballyBlacklisted } = require('./blacklistStorage');
+const { resolveBlacklistBlock, logBlacklistHit } = require('./blacklistStorage');
 const { isDiscordOnlyOwner } = require('./ownerPermissions');
 const { checkCommandPermissions } = require('./commandPermissions');
 const { getMaintenanceStateCached } = require('./maintenanceMode');
@@ -38,6 +38,136 @@ function resolveCommandName(comando) {
     if (typeof comando.name === 'string' && comando.name) return comando.name;
     if (comando.data && typeof comando.data.name === 'string' && comando.data.name) return comando.data.name;
     return 'unknown';
+}
+
+function normalizeText(value) {
+    return String(value ?? '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9\s-]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function normalizeModuleId(value) {
+    const key = normalizeText(value);
+    if (!key) return '';
+
+    const aliases = new Map([
+        ['welcome', 'welcome'],
+        ['bienvenida', 'welcome'],
+        ['sistema de bienvenida', 'welcome'],
+        ['roleplay', 'roleplay'],
+        ['rol', 'roleplay'],
+        ['economia', 'economy'],
+        ['economy', 'economy'],
+        ['utilidades', 'utilities'],
+        ['utilidad', 'utilities'],
+        ['herramientas', 'utilities'],
+        ['utilities', 'utilities'],
+        ['moderacion', 'moderation'],
+        ['moderation', 'moderation'],
+        ['musica', 'music'],
+        ['music', 'music'],
+        ['ia', 'ai'],
+        ['inteligencia artificial', 'ai'],
+        ['ai', 'ai'],
+        ['sorteos', 'giveaways'],
+        ['giveaways', 'giveaways'],
+        ['tickets', 'tickets'],
+        ['soporte', 'tickets'],
+        ['logs', 'logs'],
+        ['registros', 'logs'],
+        ['automod', 'automod'],
+        ['automoderacion', 'automod'],
+        ['wiki', 'wiki'],
+        ['voz', 'voice'],
+        ['voice', 'voice'],
+        ['owner', 'owner'],
+        ['propietario', 'owner'],
+        ['fun', 'fun'],
+        ['diversion', 'fun'],
+        ['juegos', 'fun'],
+        ['administracion', 'administration'],
+        ['administration', 'administration'],
+        ['sistema', 'systems'],
+        ['sistemas', 'systems'],
+        ['systems', 'systems'],
+        ['streaming', 'streaming'],
+        ['genshin', 'genshin'],
+        ['matrimonio', 'matrimonio'],
+        ['marriage', 'matrimonio'],
+        ['games', 'fun'],
+        ['juegos', 'fun'],
+        ['social', 'social'],
+        ['verification', 'verification'],
+        ['verificacion', 'verification'],
+    ]);
+
+    return aliases.get(key) ?? key.replace(/\s+/g, '-');
+}
+
+function resolveModuleIdFromSourcePath(sourceFile) {
+    const source = String(sourceFile || '').trim();
+    if (!source) return '';
+
+    const rootFolders = new Set(['comandos', 'slashcmd', 'modules']);
+    const structuralFolders = new Set(['commands', 'slashcmds']);
+    const genericFallbackMap = new Map([
+        ['tools', 'utilities'],
+        ['utiility', 'utilities'],
+        ['admin', 'administration'],
+        ['root', 'owner'],
+    ]);
+    const segments = source
+        .split(/[\\/]/g)
+        .map((segment) => segment.replace(/\.[^.]+$/, '').trim())
+        .filter(Boolean);
+
+    const rootIndex = segments.findIndex((segment) => {
+        const normalizedSegment = normalizeText(segment);
+        return rootFolders.has(normalizedSegment);
+    });
+
+    const searchStart = rootIndex >= 0 ? rootIndex + 1 : 0;
+    let genericFallback = '';
+
+    for (let index = searchStart; index < segments.length; index += 1) {
+        const segment = segments[index];
+        const normalizedSegment = normalizeText(segment);
+        if (!normalizedSegment || structuralFolders.has(normalizedSegment)) continue;
+
+        if (!genericFallback && genericFallbackMap.has(normalizedSegment)) {
+            genericFallback = genericFallbackMap.get(normalizedSegment) || '';
+            continue;
+        }
+
+        const id = normalizeModuleId(segment);
+        if (id) return id;
+    }
+
+    return genericFallback;
+}
+
+function resolveCommandModuleId(comando) {
+    try {
+        const sourceFromPath = resolveModuleIdFromSourcePath(comando?.__sourceFile);
+        if (sourceFromPath) return sourceFromPath;
+
+        if (typeof comando?.Category === 'function') {
+            const category = comando.Category('es-ES');
+            const id = normalizeModuleId(category);
+            if (id) return id;
+        }
+        if (typeof comando?.category === 'string') {
+            const id = normalizeModuleId(comando.category);
+            if (id) return id;
+        }
+    } catch {
+        // ignore
+    }
+    return '';
 }
 
 function summarizeArgs(args) {
@@ -329,6 +459,27 @@ async function shouldBlockByMaintenanceGate(Moxi, ctx, comando) {
     };
 }
 
+async function shouldBlockByModuleGate(ctx, comando) {
+    const guildId = ctx?.guildId || ctx?.guild?.id || null;
+    if (!guildId) return { shouldBlock: false };
+
+    const moduleId = resolveCommandModuleId(comando);
+    if (!moduleId) return { shouldBlock: false };
+
+    const settings = await getGuildSettingsCached(guildId).catch(() => null);
+    if (settings && ctx?.guild) ctx.guild.settings = settings;
+
+    const moduleStates = (settings && typeof settings.ModuleStates === 'object' && settings.ModuleStates)
+        ? settings.ModuleStates
+        : {};
+
+    if (Object.prototype.hasOwnProperty.call(moduleStates, moduleId) && moduleStates[moduleId] === false) {
+        return { shouldBlock: true, moduleId };
+    }
+
+    return { shouldBlock: false };
+}
+
 // Handler global para comandos prefix y slash
 // Uso: require y llama a handleCommand(client, ctx, args, comando)
 
@@ -355,21 +506,55 @@ module.exports = async function handleCommand(Moxi, ctx, args, comando) {
                 const isOwner = await isDiscordOnlyOwner({ client: Moxi, userId }).catch(() => false);
 
                 if (!isOwner) {
-                    const blockedGlobal = await isUserGloballyBlacklisted({ userId });
-                    const blockedLocal = guildId
-                        ? await isUserLocallyBlacklisted({ guildId, userId })
-                        : false;
-
-                    if (blockedGlobal || blockedLocal) {
+                    const roleIds = Array.from(ctx?.member?.roles?.cache?.keys?.() || []);
+                    const block = await resolveBlacklistBlock({
+                        guildId,
+                        userId,
+                        action: 'command',
+                        commandName,
+                        roleIds,
+                    });
+                    if (block?.blocked && block.entry) {
                         const lang = await getLangForCtx(ctx);
                         const t = (key, fallback) => {
                             const out = moxi.translate(key, lang);
                             return (out && out !== key) ? out : fallback;
                         };
 
-                        const content = blockedGlobal
-                            ? t('misc:BLACKLIST_GLOBAL_BLOCKED', 'Estás en blacklist global y no puedes usar comandos.')
-                            : t('misc:BLACKLIST_LOCAL_BLOCKED', 'Estás en blacklist de este servidor y no puedes usar comandos.');
+                        const details = [];
+                        if (block.entry.reason) {
+                            details.push(`${t('misc:BLACKLIST_REASON', 'Motivo')}: ${block.entry.reason}`);
+                        }
+                        if (typeof block.entry.level === 'number') {
+                            details.push(`${t('misc:BLACKLIST_LEVEL', 'Nivel')}: ${block.entry.level}`);
+                        }
+                        if (block.entry.expiresAt) {
+                            const ts = Math.floor(new Date(block.entry.expiresAt).getTime() / 1000);
+                            if (ts) {
+                                details.push(`${t('misc:BLACKLIST_EXPIRES', 'Expira')}: <t:${ts}:R>`);
+                            }
+                        }
+
+                        let content = '';
+                        if (block.targetType === 'guild') {
+                            content = t('misc:BLACKLIST_GUILD_BLOCKED', 'Este servidor está en blacklist global y no puedes usar comandos aquí.');
+                        } else if (block.scope === 'global') {
+                            content = t('misc:BLACKLIST_GLOBAL_BLOCKED', 'Estás en blacklist global y no puedes usar comandos.');
+                        } else {
+                            content = t('misc:BLACKLIST_LOCAL_BLOCKED', 'Estás en blacklist de este servidor y no puedes usar comandos.');
+                        }
+
+                        if (details.length) content += `\n${details.join('\n')}`;
+
+                        await logBlacklistHit({
+                            client: Moxi,
+                            userId,
+                            guildId,
+                            action: 'command',
+                            source: isInteraction ? 'interaction' : 'message',
+                            commandName,
+                            entry: block.entry,
+                        });
 
                         return await replyBlocked(Moxi, ctx, {
                             content,
@@ -460,6 +645,18 @@ module.exports = async function handleCommand(Moxi, ctx, args, comando) {
         // best-effort: si falla el gate, no bloqueamos
     }
     // --- FIN ECONOMY GATE ---
+
+    // --- MODULE GATE (módulo desactivado en el servidor) ---
+    try {
+        const moduleGate = await shouldBlockByModuleGate(ctx, comando);
+        if (moduleGate?.shouldBlock) {
+            const content = `El módulo \`${moduleGate.moduleId}\` está desactivado en este servidor.`;
+            return await replyBlocked(Moxi, ctx, { content, isInteraction });
+        }
+    } catch {
+        // best-effort: si falla el gate, no bloqueamos
+    }
+    // --- FIN MODULE GATE ---
 
     // --- TIME GATE (bloqueo por horario) ---
     try {

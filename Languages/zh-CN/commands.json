@@ -7,7 +7,7 @@
     "CATEGORY_ECONOMIA": "经济",
     "CATEGORY_MUSICA": "音乐",
     "CATEGORY_FUN": "娱乐",
-    "CATEGORY_GAMES": "游戏",
+    "CATEGORY_GAMES": "游戏",    "CATEGORY_MARRIAGE": "婚下",    "CATEGORY_SISTEMAS": "系统",
     "CATEGORY_ROOT": "所有者",
     "CMD_MINESWEEPER_DESC": "开始一局扫雷游戏",
     "CMD_RPS_DESC": "玩石头剪刀布",
@@ -114,5 +114,15 @@
     "CMD_COINFLIP_DESC": "抛硬币（正面/反面）。",
     "CMD_DICE_DESC": "掷骰子（可选面数）。",
     "CMD_8BALL_DESC": "向魔法8球提问。",
-    "CMD_SHIP_DESC": "计算两个人之间的匹配度。"
+    "CMD_SHIP_DESC": "计算两个人之间的匹配度。",
+    "CMD_QUITARFONDO_DESC": "移除图片背景（透明 PNG）。",
+    "CMD_QUITARFONDO_TITLE": "移除背景",
+    "CMD_QUITARFONDO_UNSUPPORTED": "当前运行环境不支持该命令所需的 fetch/FormData。",
+    "CMD_QUITARFONDO_MISSING_KEY": "此命令缺少 REMOVEBG_API_KEY 环境变量配置。",
+    "CMD_QUITARFONDO_USAGE": "用法：quitarfondo <url>，或在命令中附带一张图片。",
+    "CMD_QUITARFONDO_PROCESSING": "正在处理图片，请稍候...",
+    "CMD_QUITARFONDO_DEFAULT_API_ERROR": "无法处理该图片。",
+    "CMD_QUITARFONDO_API_ERROR": "无法移除背景：{{reason}}",
+    "CMD_QUITARFONDO_SUCCESS": "完成，以下是去除背景后的图片：",
+    "CMD_QUITARFONDO_RUNTIME_ERROR": "移除背景时发生错误：{{reason}}"
 }

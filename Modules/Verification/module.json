@@ -1,0 +1,33 @@
+{
+  "author": "MoxiLab",
+  "description": "Módulo Verification",
+  "name": "Verification",
+  "version": "1.0.0",
+  "enabled": true,
+  "names": {
+    "en-US": "Verification",
+    "es-ES": "Verificación",
+    "de-DE": "Verifizierung",
+    "fr-FR": "Vérification",
+    "ar-SA": "التحقق",
+    "hi-IN": "सत्यापन",
+    "id-ID": "Verifikasi",
+    "it-IT": "Verifica",
+    "ja-JP": "認証",
+    "ko-KR": "인증",
+    "zh-CN": "验证"
+  },
+  "descriptions": {
+    "en-US": "Image captcha member verification.",
+    "es-ES": "Sistema de verificación de miembros con captcha de imagen.",
+    "de-DE": "Bild-Captcha-Mitgliederverifizierung.",
+    "fr-FR": "Vérification des membres par captcha image.",
+    "ar-SA": "نظام التحقق من الأعضاء بالكابتشا الصوري.",
+    "hi-IN": "इमेज कैप्चा सदस्य सत्यापन।",
+    "id-ID": "Verifikasi anggota captcha gambar.",
+    "it-IT": "Verifica membri con captcha immagine.",
+    "ja-JP": "画像キャプチャ会員認証。",
+    "ko-KR": "이미지 캡차 회원 인증.",
+    "zh-CN": "图像验证码会员验证。"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "author": "MoxiLab",
+  "description": "Módulo Streaming",
+  "name": "Streaming",
+  "version": "1.0.0",
+  "enabled": true,
+  "names": {
+    "en-US": "Streaming",
+    "es-ES": "Streaming",
+    "de-DE": "Streaming",
+    "fr-FR": "Streaming",
+    "ar-SA": "البث",
+    "hi-IN": "स्ट्रीमिंग",
+    "id-ID": "Streaming",
+    "it-IT": "Streaming",
+    "ja-JP": "配信",
+    "ko-KR": "스트리밍",
+    "zh-CN": "直播"
+  },
+  "descriptions": {
+    "en-US": "Stream alerts and Twitch/YouTube notifications.",
+    "es-ES": "Alertas de stream y notificaciones de Twitch/YouTube.",
+    "de-DE": "Stream-Benachrichtigungen für Twitch/YouTube.",
+    "fr-FR": "Alertes de stream et notifications Twitch/YouTube.",
+    "ar-SA": "تنبيهات البث وإشعارات Twitch/YouTube.",
+    "hi-IN": "स्ट्रीम अलर्ट और Twitch/YouTube सूचनाएं।",
+    "id-ID": "Peringatan stream dan notifikasi Twitch/YouTube.",
+    "it-IT": "Avvisi di stream e notifiche Twitch/YouTube.",
+    "ja-JP": "配信アラートとTwitch/YouTube通知。",
+    "ko-KR": "스트림 알림 및 Twitch/YouTube 알림.",
+    "zh-CN": "直播提醒和Twitch/YouTube通知。"
+  }
+}

@@ -4,8 +4,13 @@ const { EMOJIS } = require("../../Util/emojis");
 const Config = require("../../Config");
 const { ensureMongoConnection } = require('../../Util/mongoConnect');
 const { restoreTimers } = require('../../Util/timerStorage');
-const { syncCommandRegistry } = require('../../Util/commandRegistry');
 const { normalizeDiscordId } = require('../../Util/idGuards');
+const { startBirthdayAnnouncements } = require('../../Util/birthdayAnnouncements');
+const { startAnniversaryAnnouncements } = require('../../Util/anniversaryAnnouncements');
+const { startStreamAlerts } = require('../../Util/streamAlerts');
+const { refreshSeasonStyle } = require('../../Util/seasonStyle');
+const { runAutoUpdateAnnouncements } = require('../../Util/releaseUpdates');
+const { startAutoPurge } = require('../../Util/autoPurge');
 
 function isPrimaryShard(client) {
     try {
@@ -67,6 +72,9 @@ module.exports = async (Moxi) => {
     }
 
     const moxi = require("../../i18n");
+
+    // Aplica estilo estacional global al arrancar (best-effort).
+    await refreshSeasonStyle().catch(() => null);
     const globalPrefix = (Array.isArray(Config?.Bot?.Prefix) && Config.Bot.Prefix[0])
         ? Config.Bot.Prefix[0]
         : (process.env.PREFIX || '.');
@@ -122,8 +130,7 @@ module.exports = async (Moxi) => {
         try {
             await ensureMongoConnection();
 
-            // Sincronizar (upsert) todos los comandos a MongoDB (best-effort)
-            syncCommandRegistry(Moxi, { deleteMissing: true }).catch(() => null);
+            // CommandRegistry sync se realiza en initializeModules (sistema modular)
 
             // Restaurar timers persistidos (best-effort) una vez Mongo está listo.
             restoreTimers(async (guildId, channelId, userId, minutos) => {
@@ -148,6 +155,25 @@ module.exports = async (Moxi) => {
                     // noop
                 }
             }).catch(() => null);
+
+            // Anuncios automáticos de cumpleaños (deduplicados por día/usuario/servidor).
+            if (isPrimaryShard(Moxi)) {
+                startBirthdayAnnouncements(Moxi, {
+                    timezone: Config?.TimeGates?.timezone || 'Europe/Madrid',
+                });
+
+                startAnniversaryAnnouncements(Moxi, {
+                    timezone: Config?.TimeGates?.timezone || 'Europe/Madrid',
+                });
+
+                startStreamAlerts(Moxi);
+
+                // Auto anuncio de updates por servidor (si esta configurado).
+                runAutoUpdateAnnouncements(Moxi).catch(() => null);
+
+                // Limpieza automática configurable por servidor (cada 24h por canales seleccionados).
+                startAutoPurge(Moxi);
+            }
         } catch (error) {
             logger.error(`${EMOJIS.cross} Error crítico al conectar a MongoDB:`);
             logger.error(error?.message || error);
@@ -199,6 +225,14 @@ module.exports = async (Moxi) => {
         try { clearInterval(Moxi.__statusInterval); } catch { }
     }
     Moxi.__statusInterval = setInterval(updateStatus, 5000);
+
+    // Recalcula el estilo estacional cada 6h para capturar cambios de fecha/estación.
+    if (Moxi.__seasonStyleInterval) {
+        try { clearInterval(Moxi.__seasonStyleInterval); } catch { }
+    }
+    Moxi.__seasonStyleInterval = setInterval(() => {
+        refreshSeasonStyle().catch(() => null);
+    }, 6 * 60 * 60 * 1000);
 
     logger.startup(`${EMOJIS.butter} Conectado como ${Moxi.user.tag}`);
     logger.divider();

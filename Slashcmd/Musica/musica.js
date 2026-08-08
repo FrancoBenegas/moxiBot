@@ -1,8 +1,6 @@
 const {
     MessageFlags,
-    ContainerBuilder,
-    TextDisplayBuilder,
-    SeparatorBuilder,
+    EmbedBuilder,
     ChannelType
 } = require("discord.js");
 
@@ -79,12 +77,63 @@ function extractSpotifyArtistId(normalizedSpotify) {
     return m ? m[1] : '';
 }
 
+const SPOTIFY_ALL_MARKETS = [
+    'US', 'CA', 'MX', 'CR', 'SV', 'GT', 'HN', 'NI', 'PA', 'AR', 'BR', 'CL', 'CO', 'CU', 'DO', 'EC', 'PE', 'PY', 'UY', 'VE',
+    'AT', 'BE', 'FR', 'DE', 'IE', 'IT', 'LU', 'NL', 'PT', 'ES', 'CH', 'GB', 'BG', 'HR', 'CZ', 'DK', 'EE', 'FI', 'GR', 'HU',
+    'LV', 'LT', 'MT', 'PL', 'RO', 'SK', 'SI', 'SE', 'TR', 'UA', 'IS', 'NO', 'LI', 'CY', 'BH', 'IL', 'JO', 'KW', 'LB', 'OM',
+    'QA', 'SA', 'AE', 'AZ', 'KZ', 'BD', 'IN', 'PK', 'LK', 'BN', 'KH', 'ID', 'LA', 'MY', 'MM', 'PH', 'SG', 'TH', 'VN', 'CN',
+    'HK', 'JP', 'KR', 'MO', 'TW', 'AU', 'FJ', 'NZ', 'EG', 'GH', 'KE', 'NG', 'TN', 'ZA'
+];
+
+function parseSpotifyMarkets(rawValue) {
+    const raw = typeof rawValue === 'string' ? rawValue.trim().toUpperCase() : '';
+    if (!raw) return [];
+    return raw
+        .split(/[\s,;]+/)
+        .map((m) => m.trim())
+        .filter((m) => /^[A-Z]{2}$/.test(m));
+}
+
+function getSpotifyMarketMaxAttempts() {
+    const raw = Number(process.env.SPOTIFY_MARKET_MAX_TRIES);
+    if (!Number.isFinite(raw)) return 20;
+    return Math.min(100, Math.max(1, Math.floor(raw)));
+}
+
 function getSpotifyMarketCandidates() {
-    const raw = typeof process.env.SPOTIFY_MARKET === 'string' ? process.env.SPOTIFY_MARKET.trim().toUpperCase() : '';
-    const envMarket = /^[A-Z]{2}$/.test(raw) ? raw : '';
-    const candidates = [envMarket, 'US', 'ES'].filter(Boolean);
-    // unique preserving order
-    return Array.from(new Set(candidates));
+    const envSingle = parseSpotifyMarkets(process.env.SPOTIFY_MARKET)[0] || '';
+    const envList = parseSpotifyMarkets(process.env.SPOTIFY_MARKETS);
+    const preferred = envList.length ? envList : [envSingle].filter(Boolean);
+
+    const candidates = [
+        ...preferred,
+        'US', 'ES', 'GB', 'CA', 'MX', 'BR', 'JP', 'KR',
+        ...SPOTIFY_ALL_MARKETS,
+    ];
+
+    const unique = Array.from(new Set(candidates));
+    return unique.slice(0, getSpotifyMarketMaxAttempts());
+}
+
+function compactMarkets(markets, { preview = 8 } = {}) {
+    if (!Array.isArray(markets) || !markets.length) return 'US, ES';
+    if (markets.length <= preview) return markets.join(', ');
+    const head = markets.slice(0, preview).join(', ');
+    return `${head} (+${markets.length - preview} más)`;
+}
+
+function buildSpotifyMarketsHint(markets = getSpotifyMarketCandidates()) {
+    return `Mercados probados: ${compactMarkets(markets)}. Puedes fijarlo con SPOTIFY_MARKET=US (o ES).`;
+}
+
+function buildSpotifyMarketRestrictionMessage({ title = '', status = '403/404', markets = getSpotifyMarketCandidates() } = {}) {
+    const statusText = String(status || '403/404');
+    const titleText = String(title || '').trim();
+    const firstLine = titleText
+        ? `Parece público (${titleText}), pero Spotify API devolvió ${statusText}.`
+        : `Parece público, pero Spotify API devolvió ${statusText}.`;
+
+    return `${firstLine}\n${buildSpotifyMarketsHint(markets)}\nEsto puede ser una restricción de Spotify. Prueba con SPOTIFY_MARKET=US o usa YouTube.`;
 }
 
 async function getSpotifyTrackMeta(trackId) {
@@ -92,17 +141,28 @@ async function getSpotifyTrackMeta(trackId) {
     if (!id) return null;
     const token = await getSpotifyApiToken();
     if (!token) return null;
-    const res = await axios.get(`https://api.spotify.com/v1/tracks/${encodeURIComponent(id)}`,
-        {
-            headers: { Authorization: `Bearer ${token}` },
-            params: { market: getSpotifyMarketCandidates()[0] || 'US' },
-            timeout: 12_000,
+    const markets = getSpotifyMarketCandidates();
+    for (const market of markets) {
+        try {
+            const res = await axios.get(`https://api.spotify.com/v1/tracks/${encodeURIComponent(id)}`,
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                    params: { market },
+                    timeout: 12_000,
+                }
+            );
+            const name = String(res?.data?.name || '').trim();
+            const artists = Array.isArray(res?.data?.artists) ? res.data.artists.map(a => String(a?.name || '').trim()).filter(Boolean) : [];
+            if (!name) continue;
+            debugHelper.log('spotify-market', 'track meta resolved', { trackId: id, market });
+            return { name, artists };
+        } catch (e) {
+            const status = e?.response?.status;
+            if ((status === 403 || status === 404) && markets.length > 1) continue;
+            throw e;
         }
-    );
-    const name = String(res?.data?.name || '').trim();
-    const artists = Array.isArray(res?.data?.artists) ? res.data.artists.map(a => String(a?.name || '').trim()).filter(Boolean) : [];
-    if (!name) return null;
-    return { name, artists };
+    }
+    return null;
 }
 
 async function getSpotifyPlaylistMetaAndTracks(playlistId, { maxTracks = 25 } = {}) {
@@ -161,6 +221,7 @@ async function getSpotifyPlaylistMetaAndTracks(playlistId, { maxTracks = 25 } = 
                 offset += limit;
             }
 
+            debugHelper.log('spotify-market', 'playlist resolved', { playlistId: id, market, tracks: tracks.length });
             return { name, tracks, market };
         } catch (e) {
             lastErr = e;
@@ -210,6 +271,7 @@ async function searchSpotifyPlaylistByTitle(title, { limit = 5 } = {}) {
             || pool.find((p) => String(p?.owner?.display_name || '').toLowerCase().includes('spotify'));
         const picked = spotifyOwned || pool[0];
         if (!picked) continue;
+        debugHelper.log('spotify-market', 'playlist by title resolved', { title: q, market, pickedId: String(picked.id) });
         return {
             id: String(picked.id),
             name: String(picked.name || '').trim(),
@@ -276,6 +338,7 @@ async function getSpotifyAlbumMetaAndTracks(albumId, { maxTracks = 25 } = {}) {
                 offset += limit;
             }
 
+            debugHelper.log('spotify-market', 'album resolved', { albumId: id, market, tracks: tracks.length });
             return { name, tracks, market };
         } catch (e) {
             lastErr = e;
@@ -330,6 +393,7 @@ async function getSpotifyArtistMetaAndTopTracks(artistId, { maxTracks = 15 } = {
                 if (tracks.length >= maxTracks) break;
             }
 
+            debugHelper.log('spotify-market', 'artist top-tracks resolved', { artistId: id, market, tracks: tracks.length });
             return { name, tracks, market };
         } catch (e) {
             lastErr = e;
@@ -433,6 +497,20 @@ function normalizeSpotifyIdentifier(input) {
     }
 }
 
+async function waitForVoiceHandshake(player, { timeoutMs = 7000, intervalMs = 150 } = {}) {
+    const startedAt = Date.now();
+
+    while ((Date.now() - startedAt) < timeoutMs) {
+        const voice = player?.connection?.voice;
+        const nodeSessionId = player?.node?.sessionId;
+        const ready = Boolean(nodeSessionId && voice?.sessionId && voice?.endpoint && voice?.token);
+        if (ready) return true;
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+
+    return false;
+}
+
 
 
 module.exports = {
@@ -453,7 +531,8 @@ module.exports = {
             .addStringOption(pl => pl.setName("platform")
                 .setDescription(moxi.translate('commands:OPT_PLATFORM_DESC', 'es-ES') || 'Elige una plataforma para reproducir música')
                 .addChoices({ name: "YouTube", value: "youtube" })
-                .addChoices({ name: "Spotify", value: "spotify" }).setRequired(true)))
+                .addChoices({ name: "Spotify", value: "spotify" })
+                .addChoices({ name: "SoundCloud", value: "soundcloud" }).setRequired(true)))
 
         .addSubcommand(subcommand => subcommand
             .setName("pause")
@@ -514,34 +593,31 @@ module.exports = {
         debugHelper.log('music', 'slash run start', { guildId, requesterId, subcommand });
 
         function v2Flags() {
-            return MessageFlags.Ephemeral | MessageFlags.IsComponentsV2;
+            return MessageFlags.Ephemeral;
         }
 
         function buildV2Notice(text) {
-            return new ContainerBuilder()
-                .setAccentColor(Bot.AccentColor)
-                .addTextDisplayComponents(
-                    new TextDisplayBuilder().setContent(String(text || ''))
-                );
+            const color = typeof Bot.AccentColor === 'number' ? Bot.AccentColor & 0xffffff : 0xffb6e6;
+            return new EmbedBuilder()
+                .setColor(color)
+                .setDescription(String(text || ''));
         }
 
         function buildV2Message(lines) {
-            const container = new ContainerBuilder().setAccentColor(Bot.AccentColor);
-            for (const line of (lines || []).filter(Boolean)) {
-                container.addTextDisplayComponents(new TextDisplayBuilder().setContent(String(line)));
-                container.addSeparatorComponents(new SeparatorBuilder());
-            }
-            return container;
+            const color = typeof Bot.AccentColor === 'number' ? Bot.AccentColor & 0xffffff : 0xffb6e6;
+            return new EmbedBuilder()
+                .setColor(color)
+                .setDescription((lines || []).filter(Boolean).join('\n\n'));
         }
 
         function ensureVoice({ requireSameChannel = true } = {}) {
             if (!memberVoiceId) {
                 debugHelper.warn('music', 'voice not joined', voiceContext);
-                return { components: [buildV2Notice(moxi.translate('MUSIC_JOIN_VOICE', lang))], flags: v2Flags() };
+                return { embeds: [buildV2Notice(moxi.translate('MUSIC_JOIN_VOICE', lang))], flags: v2Flags() };
             }
             if (requireSameChannel && botVoiceId && botVoiceId !== memberVoiceId) {
                 debugHelper.warn('music', 'voice channel mismatch', voiceContext);
-                return { components: [buildV2Notice(moxi.translate('MUSIC_SAME_VOICE_CHANNEL', lang))], flags: v2Flags() };
+                return { embeds: [buildV2Notice(moxi.translate('MUSIC_SAME_VOICE_CHANNEL', lang))], flags: v2Flags() };
             }
             return null;
         }
@@ -562,7 +638,7 @@ module.exports = {
                     if (!canConnect || !canSpeak) {
                         debugHelper.warn('play', 'missing voice perms', { guildId, requesterId, canConnect, canSpeak });
                         await interaction.reply({
-                            components: [buildV2Notice(moxi.translate('MUSIC_MISSING_PERMS', lang) || 'No tengo permisos para Conectar/Hablar en ese canal.')],
+                            embeds: [buildV2Notice(moxi.translate('MUSIC_MISSING_PERMS', lang) || 'No tengo permisos para Conectar/Hablar en ese canal.')],
                             flags: v2Flags(),
                         });
                         return;
@@ -574,14 +650,18 @@ module.exports = {
 
             // Ephemeral debe establecerse en la respuesta inicial (deferReply),
             // luego editReply heredará ese estado.
-            await interaction.deferReply({ ephemeral: true, flags: MessageFlags.IsComponentsV2 });
+            await interaction.deferReply({ ephemeral: true });
             const requestedTrack = interaction.options.getString("track");
             const lugar = interaction.options.getString("platform");
             debugHelper.log('play', 'start', { guildId, requesterId, track: requestedTrack, platform: lugar });
 
             // YouTube: ytsearch
-            // Spotify: spsearch (lavasrc). Para URLs/URIs de Spotify, Poru enviará el identificador tal cual.
-            const source = lugar === 'youtube' ? 'ytsearch' : 'spsearch';
+            // Spotify: spsearch (lavasrc)
+            // SoundCloud: scsearch (texto) o URL directa (sin source)
+            let source;
+            if (lugar === 'youtube') source = 'ytsearch';
+            else if (lugar === 'spotify') source = 'spsearch';
+            else if (lugar === 'soundcloud') source = 'scsearch';
 
             const normalizedSpotify = lugar === 'spotify' ? normalizeSpotifyIdentifier(requestedTrack) : null;
             // Importante: si el usuario pega un enlace open.spotify.com, preferimos pasar la URL tal cual
@@ -597,11 +677,20 @@ module.exports = {
                     // ignore
                 }
             }
+            if (lugar === 'soundcloud') {
+                const isUrl = /^https?:\/\//i.test(String(requestedTrack || '').trim());
+                if (isUrl) {
+                    // Para enlaces directos de SoundCloud, dejar que Lavalink resuelva por URL.
+                    source = undefined;
+                }
+            }
             if (normalizedSpotify) {
                 debugHelper.log('play', 'normalized spotify identifier', { guildId, requesterId, from: requestedTrack, to: normalizedSpotify });
             }
 
-            const res = await Moxi.poru.resolve({ query, source, requester: interaction.member });
+            const resolvePayload = { query, requester: interaction.member };
+            if (source) resolvePayload.source = source;
+            const res = await Moxi.poru.resolve(resolvePayload);
             const computeFlags = (r) => {
                 const raw = String(r?.loadType ?? '');
                 const lower = raw.toLowerCase();
@@ -682,14 +771,41 @@ module.exports = {
                 }
             }
 
+            // Fallback genérico: para texto libre en Spotify (sin URL/URI),
+            // intentar YouTube para evitar que /play falle cuando spsearch no responde.
+            if ((isLoadFailed || isNoMatches) && lugar === 'spotify' && !looksLikeSpotifyTrack && !looksLikeSpotifyPlaylist && !looksLikeSpotifyAlbum && !looksLikeSpotifyArtist) {
+                try {
+                    const ytQuery = String(requestedTrack || '').trim();
+                    if (ytQuery) {
+                        debugHelper.warn('play', 'spotify text search failed; fallback to ytsearch', { guildId, requesterId, ytQuery });
+                        const trySources = ['ytsearch', 'ytmsearch'];
+                        for (const src of trySources) {
+                            const ytRes = await Moxi.poru.resolve({ query: ytQuery, source: src, requester: interaction.member });
+                            const ytType = String(ytRes?.loadType ?? '');
+                            const ytLower = ytType.toLowerCase();
+                            const ytUpper = ytType.toUpperCase();
+                            const ytFailed = ytLower === 'error' || ytUpper === 'LOAD_FAILED';
+                            const ytEmpty = ytLower === 'empty' || ytUpper === 'NO_MATCHES';
+                            if (!ytFailed && !ytEmpty) {
+                                Object.assign(res, ytRes);
+                                ({ rawLoadType, isLoadFailed, isNoMatches, isPlaylistLoaded } = computeFlags(res));
+                                debugHelper.warn('play', 'spotify text fallback resolved via', { guildId, requesterId, source: src });
+                                break;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    debugHelper.warn('play', 'spotify text fallback failed', { guildId, requesterId, message: e?.message });
+                }
+            }
+
             // Fallback Spotify (playlist/álbum/artista) -> YouTube: con client_credentials intentamos
             // leer la colección pública desde Spotify API y convertirla a búsquedas de YouTube.
             if ((isLoadFailed || isNoMatches) && (looksLikeSpotifyPlaylist || looksLikeSpotifyAlbum || looksLikeSpotifyArtist)) {
                 const creds = getSpotifyClientCreds();
                 if (!creds) {
                     return interaction.editReply({
-                        components: [buildV2Notice('Para reproducir playlists/álbumes/artistas de Spotify necesito SPOTIFY_CLIENT_ID y SPOTIFY_CLIENT_SECRET configurados.\nAlternativa: usa YouTube o pega el nombre a buscar.')],
-                        flags: v2Flags(),
+                        embeds: [buildV2Notice('Para reproducir playlists/álbumes/artistas de Spotify necesito SPOTIFY_CLIENT_ID y SPOTIFY_CLIENT_SECRET configurados.\nAlternativa: usa YouTube o pega el nombre a buscar.')],
                     });
                 }
 
@@ -700,14 +816,12 @@ module.exports = {
 
                 if (!id) {
                     return interaction.editReply({
-                        components: [buildV2Notice('No pude leer el ID de ese enlace de Spotify. Prueba a pegar el enlace completo de Spotify (open.spotify.com/...).')],
-                        flags: v2Flags(),
+                        embeds: [buildV2Notice('No pude leer el ID de ese enlace de Spotify. Prueba a pegar el enlace completo de Spotify (open.spotify.com/...).')],
                     });
                 }
 
                 await interaction.editReply({
-                    components: [buildV2Notice(`Cargando ${kind} de Spotify (fallback a YouTube)…`)],
-                    flags: MessageFlags.IsComponentsV2,
+                    embeds: [buildV2Notice(`Cargando ${kind} de Spotify (fallback a YouTube)…`)],
                 });
 
                 let meta;
@@ -721,7 +835,6 @@ module.exports = {
                     const oembedTitle = await getSpotifyOEmbedTitle(requestedTrack);
                     const oembedOk = Boolean(oembedTitle);
                     const markets = getSpotifyMarketCandidates();
-                    const marketsHint = markets.length ? `\nMercados probados: ${markets.join(', ')}. Puedes fijarlo con SPOTIFY_MARKET=US (o ES).` : '';
 
                     // Caso especial: algunas playlists editoriales públicas dan 404/403 con client_credentials.
                     // Intentamos encontrar una alternativa accesible por título y reproducirla.
@@ -751,33 +864,104 @@ module.exports = {
                     } else if (status === 404 || status === 403) {
                         if (!oembedOk) {
                             return interaction.editReply({
-                                components: [buildV2Notice(`No puedo reproducir ese ${kind} de Spotify.\nSi es privado o no es accesible públicamente, no tengo acceso. Hazlo público o usa YouTube.`)],
-                                flags: v2Flags(),
+                                embeds: [buildV2Notice(`No puedo reproducir ese ${kind} de Spotify.\nSi es privado o no es accesible públicamente, no tengo acceso. Hazlo público o usa YouTube.`)],
+                            });
+                        }
+
+                        // Último fallback: si Spotify API no deja leer la colección por región/permisos,
+                        // intentamos resolver por título en YouTube para no cortar el comando.
+                        try {
+                            const ytQuery = String(oembedTitle || '').trim();
+                            if (ytQuery) {
+                                const trySources = ['ytsearch', 'ytmsearch'];
+                                for (const src of trySources) {
+                                    const ytRes = await Moxi.poru.resolve({ query: ytQuery, source: src, requester: interaction.member });
+                                    const ytType = String(ytRes?.loadType ?? '');
+                                    const ytLower = ytType.toLowerCase();
+                                    const ytUpper = ytType.toUpperCase();
+                                    const ytFailed = ytLower === 'error' || ytUpper === 'LOAD_FAILED';
+                                    const ytEmpty = ytLower === 'empty' || ytUpper === 'NO_MATCHES';
+                                    if (ytFailed || ytEmpty) continue;
+
+                                    player = Moxi.poru.createConnection({
+                                        guildId: interaction.guildId,
+                                        voiceChannel: interaction.member.voice.channelId,
+                                        textChannel: interaction.channel.id,
+                                        deaf: true,
+                                    });
+
+                                    const ytTracks = Array.isArray(ytRes?.tracks) ? ytRes.tracks : [];
+                                    let added = 0;
+                                    for (const t of ytTracks) {
+                                        if (!t) continue;
+                                        t.info.requester = interaction.user;
+                                        player.queue.add(t);
+                                        added += 1;
+                                        // Evitar colas gigantes al caer a búsqueda por texto.
+                                        if (added >= 5) break;
+                                    }
+
+                                    if (added > 0) {
+                                        await interaction.editReply({
+                                            embeds: [buildV2Notice(`Spotify API bloqueó ${kind} (${status}). Cargado automáticamente desde YouTube: ${oembedTitle} (${added} resultado${added === 1 ? '' : 's'}).`)],
+                                        });
+
+                                        if (!player.isPlaying) {
+                                            try {
+                                                const ready = await waitForVoiceHandshake(player);
+                                                if (!ready) {
+                                                    debugHelper.warn('play', 'voice handshake timeout before play (spotify restricted -> youtube fallback)', {
+                                                        guildId,
+                                                        requesterId,
+                                                        source: src,
+                                                        title: oembedTitle,
+                                                    });
+                                                }
+                                                await player.play();
+                                            } catch (ePlay) {
+                                                debugHelper.error('play', 'player.play failed (spotify restricted -> youtube fallback)', {
+                                                    guildId,
+                                                    requesterId,
+                                                    message: ePlay?.message || String(ePlay),
+                                                });
+                                            }
+                                        }
+
+                                        return;
+                                    }
+                                }
+                            }
+                        } catch (ytErr) {
+                            debugHelper.warn('play', 'spotify restricted youtube fallback failed', {
+                                guildId,
+                                requesterId,
+                                message: ytErr?.message || String(ytErr),
+                                title: oembedTitle,
                             });
                         }
 
                         return interaction.editReply({
-                            components: [buildV2Notice(`Parece público (${oembedTitle}), pero Spotify API devolvió ${status}.${marketsHint}\nEsto puede ser una restricción de Spotify. Prueba con SPOTIFY_MARKET=US o usa YouTube.`)],
-                            flags: v2Flags(),
+                            embeds: [buildV2Notice(buildSpotifyMarketRestrictionMessage({
+                                title: oembedTitle,
+                                status,
+                                markets,
+                            }))],
                         });
                     } else if (status === 401) {
                         return interaction.editReply({
-                            components: [buildV2Notice('No pude autenticar con Spotify (401).\nRevisa SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET y vuelve a intentar.')],
-                            flags: v2Flags(),
+                            embeds: [buildV2Notice('No pude autenticar con Spotify (401).\nRevisa SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET y vuelve a intentar.')],
                         });
                     } else {
                         debugHelper.warn('play', 'spotify collection fallback failed', { guildId, requesterId, status, message: e?.message || String(e) });
                         return interaction.editReply({
-                            components: [buildV2Notice(`No pude cargar ese ${kind} de Spotify ahora mismo. Intenta más tarde o usa YouTube.`)],
-                            flags: v2Flags(),
+                            embeds: [buildV2Notice(`No pude cargar ese ${kind} de Spotify ahora mismo. Intenta más tarde o usa YouTube.`)],
                         });
                     }
                 }
 
                 if (!meta || !Array.isArray(meta.tracks) || meta.tracks.length === 0) {
                     return interaction.editReply({
-                        components: [buildV2Notice(`No pude leer canciones de ese ${kind} de Spotify. Si es privado o está restringido por región, no tendré acceso.`)],
-                        flags: v2Flags(),
+                        embeds: [buildV2Notice(`No pude leer canciones de ese ${kind} de Spotify. Si es privado o está restringido por región, no tendré acceso.`)],
                     });
                 }
 
@@ -808,8 +992,7 @@ module.exports = {
 
                 if (added === 0) {
                     return interaction.editReply({
-                        components: [buildV2Notice(`No pude convertir ese ${kind} a resultados de YouTube. Prueba con otro o usa YouTube directo.`)],
-                        flags: v2Flags(),
+                        embeds: [buildV2Notice(`No pude convertir ese ${kind} a resultados de YouTube. Prueba con otro o usa YouTube directo.`)],
                     });
                 }
 
@@ -817,12 +1000,22 @@ module.exports = {
                     ? `\nNota: no pude leer la playlist original por API y usé una alternativa por título (${usedAlternative.title}).`
                     : '';
                 await interaction.editReply({
-                    components: [buildV2Notice(`Cargado desde Spotify (${kind}): ${meta.name} • ${added} canciones.${altNote}`)],
-                    flags: MessageFlags.IsComponentsV2,
+                    embeds: [buildV2Notice(`Cargado desde Spotify (${kind}): ${meta.name} • ${added} canciones.${altNote}`)],
                 });
 
                 if (!player.isPlaying) {
                     try {
+                        const ready = await waitForVoiceHandshake(player);
+                        if (!ready) {
+                            debugHelper.warn('play', 'voice handshake timeout before play (spotify collection fallback)', {
+                                guildId,
+                                requesterId,
+                                hasNodeSession: Boolean(player?.node?.sessionId),
+                                hasVoiceSession: Boolean(player?.connection?.voice?.sessionId),
+                                hasEndpoint: Boolean(player?.connection?.voice?.endpoint),
+                                hasToken: Boolean(player?.connection?.voice?.token),
+                            });
+                        }
                         await player.play();
                     } catch (e) {
                         debugHelper.error('play', 'player.play failed (spotify collection fallback)', { guildId, requesterId, message: e?.message || String(e) });
@@ -835,15 +1028,19 @@ module.exports = {
             if (isLoadFailed) {
                 debugHelper.warn('play', 'resolve failed', { guildId, requesterId });
                 if (looksLikeSpotifyPlaylist || looksLikeSpotifyAlbum || looksLikeSpotifyArtist) {
-                    return interaction.editReply({ components: [buildV2Notice('No pude cargar ese enlace de Spotify. Si es privado/restringido, no puedo acceder; si es público, revisa SPOTIFY_CLIENT_ID/SECRET y prueba con SPOTIFY_MARKET=US (o ES) o usa YouTube.')], flags: v2Flags() });
+                    return interaction.editReply({
+                        embeds: [buildV2Notice(buildSpotifyMarketRestrictionMessage({ status: '403/404' }))],
+                    });
                 }
-                return interaction.editReply({ components: [buildV2Notice(moxi.translate('MUSIC_LOAD_FAILED', lang))], flags: v2Flags() });
+                return interaction.editReply({ embeds: [buildV2Notice(moxi.translate('MUSIC_LOAD_FAILED', lang))] });
             } else if (isNoMatches) {
                 debugHelper.warn('play', 'resolve no matches', { guildId, requesterId });
                 if (looksLikeSpotifyPlaylist || looksLikeSpotifyAlbum || looksLikeSpotifyArtist) {
-                    return interaction.editReply({ components: [buildV2Notice('No pude encontrar resultados para ese enlace de Spotify. Si es privado/restringido, no puedo acceder; si es público, revisa SPOTIFY_CLIENT_ID/SECRET y prueba con SPOTIFY_MARKET=US (o ES) o usa YouTube.')], flags: v2Flags() });
+                    return interaction.editReply({
+                        embeds: [buildV2Notice(buildSpotifyMarketRestrictionMessage({ status: '403/404' }))],
+                    });
                 }
-                return interaction.editReply({ components: [buildV2Notice(moxi.translate('MUSIC_NO_SOURCE_FOUND', lang))], flags: v2Flags() });
+                return interaction.editReply({ embeds: [buildV2Notice(moxi.translate('MUSIC_NO_SOURCE_FOUND', lang))] });
             }
 
             player = Moxi.poru.createConnection({
@@ -883,8 +1080,7 @@ module.exports = {
                 }
 
                 interaction.editReply({
-                    components: [buildV2Notice(moxi.translate('MUSIC_PLAYLIST_LOADED', lang, { name: playlistName, count: playlistTracks.length }))],
-                    flags: MessageFlags.IsComponentsV2
+                    embeds: [buildV2Notice(moxi.translate('MUSIC_PLAYLIST_LOADED', lang, { name: playlistName, count: playlistTracks.length }))],
                 });
 
             } else {
@@ -894,14 +1090,25 @@ module.exports = {
                     track.info.requester = interaction.user;
                     player.queue.add(track);
                     debugHelper.log('play', 'track queued', { guildId, requesterId, title: track.info.title });
-                    interaction.editReply({ components: [buildV2Notice(moxi.translate('MUSIC_TRACK_ADDED', lang, { title: track.info.title }))], flags: MessageFlags.IsComponentsV2 });
+                    interaction.editReply({ embeds: [buildV2Notice(moxi.translate('MUSIC_TRACK_ADDED', lang, { title: track.info.title }))] });
                 } else {
                     debugHelper.warn('play', 'track invalid', { guildId, requesterId });
-                    interaction.editReply({ components: [buildV2Notice(moxi.translate('MUSIC_TRACK_INVALID', lang))], flags: MessageFlags.IsComponentsV2 })
+                    interaction.editReply({ embeds: [buildV2Notice(moxi.translate('MUSIC_TRACK_INVALID', lang))] })
                 }
             }
             if (!player.isPlaying) {
                 try {
+                    const ready = await waitForVoiceHandshake(player);
+                    if (!ready) {
+                        debugHelper.warn('play', 'voice handshake timeout before play', {
+                            guildId,
+                            requesterId,
+                            hasNodeSession: Boolean(player?.node?.sessionId),
+                            hasVoiceSession: Boolean(player?.connection?.voice?.sessionId),
+                            hasEndpoint: Boolean(player?.connection?.voice?.endpoint),
+                            hasToken: Boolean(player?.connection?.voice?.token),
+                        });
+                    }
                     await player.play();
                 } catch (e) {
                     debugHelper.error('play', 'player.play failed', { guildId, requesterId, message: e?.message || String(e) });
@@ -919,15 +1126,15 @@ module.exports = {
             if (voiceErr) return interaction.reply(voiceErr);
 
             player = Moxi.poru.players.get(interaction.guild.id);
-            if (!player) return interaction.reply({ components: [buildV2Notice(moxi.translate('MUSIC_NO_MUSIC_PLAYING', lang))], flags: v2Flags() });
+            if (!player) return interaction.reply({ embeds: [buildV2Notice(moxi.translate('MUSIC_NO_MUSIC_PLAYING', lang))], flags: v2Flags() });
             if (player.isPaused) {
                 debugHelper.warn('pause', 'already paused', { guildId, requesterId });
-                return interaction.reply({ components: [buildV2Notice(moxi.translate('MUSIC_MUSIC_PAUSED', lang))], flags: v2Flags() });
+                return interaction.reply({ embeds: [buildV2Notice(moxi.translate('MUSIC_MUSIC_PAUSED', lang))], flags: v2Flags() });
             }
 
             player.pause(true);
             debugHelper.log('pause', 'paused', { guildId, requesterId });
-            return interaction.reply({ components: [buildV2Notice(moxi.translate('MUSIC_MUSIC_PAUSED', lang))], flags: v2Flags() });
+            return interaction.reply({ embeds: [buildV2Notice(moxi.translate('MUSIC_MUSIC_PAUSED', lang))], flags: v2Flags() });
         }
 
         if (subcommand === "resume") {
@@ -936,16 +1143,16 @@ module.exports = {
             if (voiceErr) return interaction.reply(voiceErr);
 
             player = Moxi.poru.players.get(interaction.guild.id);
-            if (!player) return interaction.reply({ components: [buildV2Notice(moxi.translate('MUSIC_NO_MUSIC_PLAYING', lang))], flags: v2Flags() });
+            if (!player) return interaction.reply({ embeds: [buildV2Notice(moxi.translate('MUSIC_NO_MUSIC_PLAYING', lang))], flags: v2Flags() });
 
             if (!player.isPaused) {
                 debugHelper.warn('resume', 'not paused', { guildId, requesterId });
-                return interaction.reply({ components: [buildV2Notice(moxi.translate('MUSIC_NOT_PAUSED', lang) || 'The player is not paused')], flags: v2Flags() });
+                return interaction.reply({ embeds: [buildV2Notice(moxi.translate('MUSIC_NOT_PAUSED', lang) || 'The player is not paused')], flags: v2Flags() });
             }
 
             player.pause(false);
             debugHelper.log('resume', 'resumed', { guildId, requesterId });
-            return interaction.reply({ components: [buildV2Notice(moxi.translate('MUSIC_MUSIC_RESUMED', lang))], flags: v2Flags() });
+            return interaction.reply({ embeds: [buildV2Notice(moxi.translate('MUSIC_MUSIC_RESUMED', lang))], flags: v2Flags() });
         }
 
         if (subcommand === "skip") {
@@ -954,11 +1161,11 @@ module.exports = {
             if (voiceErr) return interaction.reply(voiceErr);
 
             const music = Moxi.poru.players.get(interaction.guild.id)
-            if (!music) return interaction.reply({ components: [buildV2Notice(moxi.translate('MUSIC_NO_MUSIC_PLAYING', lang))], flags: v2Flags() });
+            if (!music) return interaction.reply({ embeds: [buildV2Notice(moxi.translate('MUSIC_NO_MUSIC_PLAYING', lang))], flags: v2Flags() });
             player = Moxi.poru.players.get(interaction.guild.id);
             player.skip();
             debugHelper.log('skip', 'skipped', { guildId, requesterId });
-            return interaction.reply({ components: [buildV2Notice(moxi.translate('MUSIC_TRACK_SKIPPED', lang))], flags: v2Flags() });
+            return interaction.reply({ embeds: [buildV2Notice(moxi.translate('MUSIC_TRACK_SKIPPED', lang))], flags: v2Flags() });
         }
 
 
@@ -968,7 +1175,7 @@ module.exports = {
             if (voiceErr) return interaction.reply(voiceErr);
 
             const music = Moxi.poru.players.get(interaction.guild.id)
-            if (!music) return interaction.reply({ components: [buildV2Notice(moxi.translate('MUSIC_NO_MUSIC_PLAYING', lang))], flags: v2Flags() });
+            if (!music) return interaction.reply({ embeds: [buildV2Notice(moxi.translate('MUSIC_NO_MUSIC_PLAYING', lang))], flags: v2Flags() });
             player = Moxi.poru.players.get(interaction.guild.id);
             const queue =
                 player.queue.length > 5 ? player.queue.slice(0, 5) : player.queue;
@@ -981,7 +1188,7 @@ module.exports = {
             const footer = `${moxi.translate('MUSIC_QUEUE_TRACKS', lang, { count: player.queue.length })}`;
             const container = buildV2Message([nowPlaying, nextUpBlock, footer]);
             debugHelper.log('queue', 'info', { guildId, requesterId, queueLength: player.queue.length });
-            return interaction.reply({ components: [container], flags: v2Flags() });
+            return interaction.reply({ embeds: [container], flags: v2Flags() });
         }
 
         if (subcommand === "autoplay") {
@@ -991,7 +1198,7 @@ module.exports = {
 
             const plat = interaction.options.getString("platform")
             player = Moxi.poru.players.get(interaction.guild.id)
-            if (!player) return interaction.reply({ components: [buildV2Notice(moxi.translate('MUSIC_NO_MUSIC_PLAYING', lang))], flags: v2Flags() })
+            if (!player) return interaction.reply({ embeds: [buildV2Notice(moxi.translate('MUSIC_NO_MUSIC_PLAYING', lang))], flags: v2Flags() })
 
             debugHelper.log('autoplay', 'branch selected', { guildId, requesterId, platform: plat });
             if (plat === "yt") {
@@ -1004,7 +1211,7 @@ module.exports = {
 
                 if (!ytUri) {
                     debugHelper.warn('autoplay', 'yt only track', { guildId, requesterId });
-                    return interaction.editReply({ components: [buildV2Notice(moxi.translate('MUSIC_AUTOPLAY_YT_ONLY', lang))], flags: v2Flags() });
+                    return interaction.editReply({ embeds: [buildV2Notice(moxi.translate('MUSIC_AUTOPLAY_YT_ONLY', lang))] });
                 }
 
                 if (player.autoplay === true) {
@@ -1012,7 +1219,7 @@ module.exports = {
 
                     await player.queue.clear();
                     debugHelper.log('autoplay', 'yt disabled', { guildId, requesterId });
-                    return interaction.editReply({ components: [buildV2Notice(moxi.translate('MUSIC_AUTOPLAY_DISABLED', lang))], flags: v2Flags() });
+                    return interaction.editReply({ embeds: [buildV2Notice(moxi.translate('MUSIC_AUTOPLAY_DISABLED', lang))] });
                 } else {
                     player.autoplay = true;
 
@@ -1024,7 +1231,7 @@ module.exports = {
                         await player.queue.add(res.tracks[Math.floor(Math.random() * res.tracks.length) ?? 5]);
 
                         debugHelper.log('autoplay', 'yt enabled', { guildId, requesterId, playlist: res.playlistInfo?.name });
-                        return interaction.editReply({ components: [buildV2Notice(moxi.translate('MUSIC_AUTOPLAY_ENABLED', lang))], flags: v2Flags() });
+                        return interaction.editReply({ embeds: [buildV2Notice(moxi.translate('MUSIC_AUTOPLAY_ENABLED', lang))] });
                     }
                 }
 
@@ -1041,7 +1248,7 @@ module.exports = {
 
                 if (!spUri) {
                     debugHelper.warn('autoplay', 'spotify only track', { guildId, requesterId });
-                    return interaction.editReply({ components: [buildV2Notice(moxi.translate('MUSIC_AUTOPLAY_SPOTIFY_ONLY', lang))], flags: v2Flags() });
+                    return interaction.editReply({ embeds: [buildV2Notice(moxi.translate('MUSIC_AUTOPLAY_SPOTIFY_ONLY', lang))] });
                 }
 
                 // Lógica para DESACTIVAR
@@ -1049,7 +1256,7 @@ module.exports = {
                     player.autoplay = false;
                     await player.queue.clear();
                     debugHelper.log('autoplay', 'spotify disabled', { guildId, requesterId });
-                    return interaction.editReply({ components: [buildV2Notice(moxi.translate('MUSIC_AUTOPLAY_SPOTIFY_DISABLED', lang))], flags: v2Flags() });
+                    return interaction.editReply({ embeds: [buildV2Notice(moxi.translate('MUSIC_AUTOPLAY_SPOTIFY_DISABLED', lang))] });
                 }
 
                 // Lógica para ACTIVAR
@@ -1075,13 +1282,13 @@ module.exports = {
 
                         debugHelper.log('autoplay', 'spotify enabled', { guildId, requesterId });
 
-                        return interaction.editReply({ components: [buildV2Notice(moxi.translate('MUSIC_AUTOPLAY_SPOTIFY_ENABLED', lang))], flags: v2Flags() });
+                        return interaction.editReply({ embeds: [buildV2Notice(moxi.translate('MUSIC_AUTOPLAY_SPOTIFY_ENABLED', lang))] });
 
                     } catch (error) {
                         console.error(error);
                         player.autoplay = false;
                         debugHelper.warn('autoplay', 'spotify error', { guildId, requesterId, message: error?.message });
-                        return interaction.editReply({ components: [buildV2Notice(moxi.translate('MUSIC_AUTOPLAY_SPOTIFY_ERROR', lang))], flags: v2Flags() });
+                        return interaction.editReply({ embeds: [buildV2Notice(moxi.translate('MUSIC_AUTOPLAY_SPOTIFY_ERROR', lang))] });
                     }
                 }
             }
@@ -1093,7 +1300,7 @@ module.exports = {
             if (voiceErr) return interaction.reply(voiceErr);
 
             player = Moxi.poru.players.get(interaction.guild.id);
-            if (!player) return interaction.reply({ components: [buildV2Notice(moxi.translate('MUSIC_NO_MUSIC_PLAYING', lang))], flags: v2Flags() })
+            if (!player) return interaction.reply({ embeds: [buildV2Notice(moxi.translate('MUSIC_NO_MUSIC_PLAYING', lang))], flags: v2Flags() })
 
             if (!Moxi.previousMessage) return;
 
@@ -1123,7 +1330,7 @@ module.exports = {
 
             debugHelper.log('stop', 'destroyed', { guildId, requesterId });
 
-            return interaction.reply({ components: [buildV2Notice(moxi.translate('MUSIC_PLAYER_DISCONNECTED', lang))], flags: v2Flags() });
+            return interaction.reply({ embeds: [buildV2Notice(moxi.translate('MUSIC_PLAYER_DISCONNECTED', lang))], flags: v2Flags() });
 
         }
 
@@ -1134,7 +1341,7 @@ module.exports = {
 
             const num = interaction.options.getInteger("cantidad")
             const music = Moxi.poru.players.get(interaction.guild.id)
-            if (!music) return interaction.reply({ components: [buildV2Notice(moxi.translate('MUSIC_NO_MUSIC_PLAYING', lang))], flags: v2Flags() })
+            if (!music) return interaction.reply({ embeds: [buildV2Notice(moxi.translate('MUSIC_NO_MUSIC_PLAYING', lang))], flags: v2Flags() })
 
             debugHelper.log('add', 'adding tracks', { guildId, requesterId, amount: num });
             await interaction.deferReply({ flags: v2Flags() });
@@ -1146,7 +1353,7 @@ module.exports = {
 
             if (!ytUri) {
                 debugHelper.warn('add', 'not youtube track', { guildId, requesterId });
-                return interaction.editReply({ components: [buildV2Notice(moxi.translate('MUSIC_ADD_YT_ONLY', lang))], flags: v2Flags() });
+                return interaction.editReply({ embeds: [buildV2Notice(moxi.translate('MUSIC_ADD_YT_ONLY', lang))] });
             }
 
             if (ytUri) {
@@ -1160,7 +1367,7 @@ module.exports = {
                     await player.queue.add(res.tracks[randomIndex]);
                 }
                 debugHelper.log('add', 'tracks added', { guildId, requesterId, amount: num });
-                return interaction.editReply({ components: [buildV2Notice(moxi.translate('MUSIC_ADDED_TRACKS', lang, { count: num }))], flags: v2Flags() });
+                return interaction.editReply({ embeds: [buildV2Notice(moxi.translate('MUSIC_ADDED_TRACKS', lang, { count: num }))] });
             }
         }
 
@@ -1173,11 +1380,11 @@ module.exports = {
             player = Moxi.poru.players.get(interaction.guild.id);
             if (!value) {
                 debugHelper.warn('volume', 'no value provided', { guildId, requesterId, currentVolume: player?.volume });
-                return interaction.reply({ components: [buildV2Notice(moxi.translate('MUSIC_CURRENT_VOLUME', lang, { volume: player.volume }))], flags: v2Flags() });
+                return interaction.reply({ embeds: [buildV2Notice(moxi.translate('MUSIC_CURRENT_VOLUME', lang, { volume: player.volume }))], flags: v2Flags() });
             } else {
                 await player.setVolume(value);
                 debugHelper.log('volume', 'set', { guildId, requesterId, value });
-                return interaction.reply({ components: [buildV2Notice(moxi.translate('MUSIC_VOLUME_SET', lang, { volume: value }))], flags: v2Flags() });
+                return interaction.reply({ embeds: [buildV2Notice(moxi.translate('MUSIC_VOLUME_SET', lang, { volume: value }))], flags: v2Flags() });
             }
         }
     }

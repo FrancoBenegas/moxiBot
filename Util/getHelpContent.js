@@ -1,11 +1,13 @@
 // Centraliza la construcción del help (Components V2) para cualquier página/categoría
-const { StringSelectMenuBuilder, ContainerBuilder, MessageFlags, SecondaryButtonBuilder, LinkButtonBuilder } = require('discord.js');
+const { StringSelectMenuBuilder, ContainerBuilder, MessageFlags } = require('discord.js');
+const { ButtonBuilder, ButtonStyle } = require('./compatButtonBuilder');
 const moxi = require('../i18n');
 const { EMOJIS } = require('./emojis');
 const logger = require('./logger');
 const debugHelper = require('./debugHelper');
 const Config = require('../Config');
 const { Bot } = Config;
+const { withSeasonTitle, getSeasonBadge } = require('./seasonBrand');
 
 const HELP_INDEX_TTL_MS = 5 * 60 * 1000;
 let HELP_INDEX_CACHE = null;
@@ -22,6 +24,8 @@ function normalizeCategoryKey(value) {
   if (upper.includes('CATEGORY_ADMIN')) return 'Admin';
   if (upper.includes('CATEGORY_MODERATION') || upper.includes('MODERATION') || upper.includes('MODERACION')) return 'Moderation';
   if (upper.includes('CATEGORY_ROOT')) return 'Root';
+  if (upper.includes('CATEGORY_MARRIAGE') || upper.includes('MARRIAGE') || upper.includes('MATRIMONIO')) return 'Marriage';
+  if (upper.includes('CATEGORY_STREAMING') || upper.includes('STREAMING') || upper.includes('DIRECTOS') || upper.includes('DIRECTO')) return 'Streaming';
 
   // Games / Juegos
   if (upper.includes('CATEGORY_GAMES') || upper === 'GAMES') return 'Games';
@@ -42,6 +46,12 @@ function normalizeCategoryKey(value) {
   if (upper.includes('娱乐') || upper.includes('娛樂')) return 'Fun';
   if (upper.includes('مرح')) return 'Fun';
   if (upper.includes('मज़ा') || upper.includes('मजा')) return 'Fun';
+
+  // Marriage / Matrimonio
+  if (upper.includes('MARIAGE')) return 'Marriage';
+  if (upper.includes('HOCHZEIT') || upper.includes('MATRIMONIO') || upper.includes('PERNIKAHAN')) return 'Marriage';
+  if (upper.includes('結婚') || upper.includes('결혼') || upper.includes('婚')) return 'Marriage';
+  if (upper.includes('الزواج') || upper.includes('विवाह')) return 'Marriage';
 
   // Equivalentes árabes (por si el value viene ya traducido)
   if (value.includes('الأدوات')) return 'Tools';
@@ -275,12 +285,48 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
       'Root': 'HELP_CATEGORY_ROOT',
       'Tools': 'HELP_CATEGORY_TOOLS',
       'Herramientas': 'HELP_CATEGORY_TOOLS',
+      'Sistemas': 'HELP_CATEGORY_SYSTEMS',
+      'Systems': 'HELP_CATEGORY_SYSTEMS',
+      'Marriage': 'HELP_CATEGORY_MARRIAGE',
+      'Matrimonio': 'HELP_CATEGORY_MARRIAGE',
+      'Streaming': 'HELP_CATEGORY_STREAMING',
+      'Directos': 'HELP_CATEGORY_STREAMING',
       'Welcome': 'HELP_CATEGORY_WELCOME',
       'Sistema de bienvenida': 'HELP_CATEGORY_WELCOME'
     };
     const categoriaKey = categoryMap[cat] || `HELP_CATEGORY_${String(cat).toUpperCase()}`;
     const categoriaTraducida = moxi.translate(categoriaKey, lang);
     return (categoriaTraducida && categoriaTraducida !== categoriaKey) ? categoriaTraducida : String(cat);
+  };
+
+  const resolveCategoryEmoji = (cat) => {
+    const normalized = normalizeCategoryKey(cat);
+    const emojiMap = {
+      Admin: '🛡️',
+      Economy: '💰',
+      Fun: '🎉',
+      Games: '🎮',
+      Genshin: '🌸',
+      Giveaways: '🎁',
+      Marriage: '💍',
+      Moderation: '🧯',
+      Music: '🎵',
+      Root: '👑',
+      Security: '🔐',
+      Streaming: '🔴',
+      Sistemas: '⚙️',
+      Systems: '⚙️',
+      Social: '💬',
+      Tickets: '🎫',
+      Tools: '🛠️',
+      Utiility: '🧰',
+      Utility: '🧰',
+      Verification: '✅',
+      Voice: '🎙️',
+      Welcome: '👋',
+    };
+
+    return emojiMap[normalized] || '📦';
   };
 
   const renderGrid = (items, cols = 6, opts = {}) => {
@@ -350,6 +396,8 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
         key = 'HELP_CATEGORY_MUSIC_DESC';
       } else if (categoria === 'Admin') {
         key = 'HELP_CATEGORY_ADMIN_DESC';
+      } else if (categoria === 'Systems' || categoria === 'Sistemas') {
+        key = 'HELP_CATEGORY_SYSTEMS_DESC';
       } else if (categoria === 'Welcome') {
         key = 'HELP_CATEGORY_WELCOME_DESC';
       } else {
@@ -414,21 +462,7 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
   if (categoria) {
     // Estilo tipo captura: cabecera de categoría + bloque de comandos en cuadrícula.
     const categoriaLabel = resolveCategoryLabel(categoria);
-    const emoji = (categoria === 'Economy')
-      ? '💰'
-      : (categoria === 'Tools')
-        ? '🛠️'
-        : (categoria === 'Music')
-          ? '🎵'
-          : (categoria === 'Fun')
-            ? '🎉'
-            : (categoria === 'Admin')
-              ? '🛡️'
-              : (categoria === 'Moderation')
-                ? '🧯'
-                : (categoria === 'Welcome')
-                  ? '👋'
-                  : '';
+    const emoji = resolveCategoryEmoji(categoria);
 
     const header = `${emoji ? `${emoji} ` : ''}**${categoriaLabel}**`;
 
@@ -481,7 +515,7 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
         const key = 'HELP_CATEGORY_' + catKey.replace(/\s+/g, '_').toUpperCase();
         let label = moxi.translate(key, lang);
         if (label === key) label = catKey;
-        return label;
+        return `${resolveCategoryEmoji(catKey)} ${label}`;
       });
 
       // Categorías como lista (una por línea). En RTL evitamos blockquotes/underline
@@ -523,6 +557,7 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
     const { toComponentEmoji } = require('./discordEmoji');
     const container = new ContainerBuilder().setAccentColor(Bot.AccentColor);
     const safeDesc = desc || moxi.translate('HELP_NO_CONTENT', lang);
+    const seasonBadge = getSeasonBadge();
 
     if (helpDebugEnabled) {
       debugHelper.log(
@@ -532,7 +567,9 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
       );
     }
 
-    container.addTextDisplayComponents(c => c.setContent(isRtl ? `**${titulo}**` : `## ${titulo}`));
+    container.addTextDisplayComponents(c => c.setContent(isRtl ? `**${titulo}**` : withSeasonTitle(titulo)));
+    container.addSeparatorComponents(s => s.setDivider(true));
+    container.addTextDisplayComponents(c => c.setContent(`> Estación activa: **${seasonBadge}**`));
     container.addSeparatorComponents(s => s.setDivider(true));
     container.addTextDisplayComponents(c => c.setContent(safeDesc));
 
@@ -545,10 +582,11 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
         const key = 'HELP_CATEGORY_' + catKey.replace(/\s+/g, '_').toUpperCase();
         let label = moxi.translate(key, lang);
         if (label === key) label = catKey;
+        const emoji = toComponentEmoji(resolveCategoryEmoji(catKey));
         return {
           label,
           value: catKey,
-          emoji: toComponentEmoji(EMOJIS.package),
+          ...(emoji ? { emoji } : {}),
           default: categoria === catKey
         };
       }));
@@ -556,8 +594,9 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
 
     // Botones
     if (!categoria) {
-      const closeButton = new SecondaryButtonBuilder()
+      const closeButton = new ButtonBuilder()
         .setCustomId('help2_close')
+        .setStyle(ButtonStyle.Secondary)
         .setEmoji(toComponentEmoji(EMOJIS.cross));
 
       const webLabel = moxi.translate('HELP_WEB_LABEL', lang);
@@ -565,7 +604,8 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
       if (!webUrl || typeof webUrl !== 'string' || !/^https?:\/\//.test(webUrl)) {
         webUrl = 'https://moxilab.net';
       }
-      const webButton = new LinkButtonBuilder()
+      const webButton = new ButtonBuilder()
+        .setStyle(ButtonStyle.Link)
         .setLabel(webLabel)
         .setURL(webUrl);
 
@@ -574,25 +614,30 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
       const stateCat = categoria || '';
       const state = `${page}:${totalPages || 1}:${stateCat}`;
 
-      const prevButton = new SecondaryButtonBuilder()
+      const prevButton = new ButtonBuilder()
         .setCustomId(`help2_prev:${state}`)
+        .setStyle(ButtonStyle.Secondary)
         .setEmoji(toComponentEmoji(EMOJIS.arrowLeft))
         .setDisabled((totalPages || 1) <= 1 || page <= 0);
 
-      const homeButton = new SecondaryButtonBuilder()
+      const homeButton = new ButtonBuilder()
         .setCustomId(`help2_home:${state}`)
+        .setStyle(ButtonStyle.Secondary)
         .setEmoji(toComponentEmoji(EMOJIS.home));
 
-      const infoButton = new SecondaryButtonBuilder()
+      const infoButton = new ButtonBuilder()
         .setCustomId(`help2_info:${state}`)
+        .setStyle(ButtonStyle.Secondary)
         .setEmoji(toComponentEmoji(EMOJIS.info));
 
-      const closeButton = new SecondaryButtonBuilder()
+      const closeButton = new ButtonBuilder()
         .setCustomId('help2_close')
+        .setStyle(ButtonStyle.Secondary)
         .setEmoji(toComponentEmoji(EMOJIS.cross));
 
-      const nextButton = new SecondaryButtonBuilder()
+      const nextButton = new ButtonBuilder()
         .setCustomId(`help2_next:${state}`)
+        .setStyle(ButtonStyle.Secondary)
         .setEmoji(toComponentEmoji(EMOJIS.arrowRight))
         .setDisabled((totalPages || 1) <= 1 || page >= (totalPages || 1) - 1);
 
@@ -601,7 +646,7 @@ async function getHelpContent({ page = 0, totalPages, tipo = 'main', categoria =
 
     // Footer/thanks
     container.addSeparatorComponents(s => s.setDivider(true));
-    container.addTextDisplayComponents(c => c.setContent(moxi.translate('HELP_THANKS_FOOTER', lang, { botName: Moxi?.user?.username || 'BOT' })));
+    container.addTextDisplayComponents(c => c.setContent(`${moxi.translate('HELP_THANKS_FOOTER', lang, { botName: Moxi?.user?.username || 'BOT' })}\n${seasonBadge}`));
 
     return { content: '', components: [container], flags: MessageFlags.IsComponentsV2 };
   }

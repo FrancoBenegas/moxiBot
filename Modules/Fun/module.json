@@ -1,0 +1,33 @@
+{
+  "author": "MoxiLab",
+  "description": "Módulo Fun",
+  "name": "Fun",
+  "version": "1.0.0",
+  "enabled": true,
+  "names": {
+    "en-US": "Fun",
+    "es-ES": "Diversión",
+    "de-DE": "Spaß",
+    "fr-FR": "Amusement",
+    "ar-SA": "متعة",
+    "hi-IN": "मनोरंजन",
+    "id-ID": "Hiburan",
+    "it-IT": "Divertimento",
+    "ja-JP": "楽しみ",
+    "ko-KR": "재미",
+    "zh-CN": "娱乐"
+  },
+  "descriptions": {
+    "en-US": "Fun and entertainment commands.",
+    "es-ES": "Comandos de diversión y entretenimiento.",
+    "de-DE": "Spaß- und Unterhaltungsbefehle.",
+    "fr-FR": "Commandes de divertissement.",
+    "ar-SA": "أوامر المتعة والترفيه.",
+    "hi-IN": "मजे और मनोरंजन के आदेश।",
+    "id-ID": "Perintah hiburan.",
+    "it-IT": "Comandi divertenti.",
+    "ja-JP": "楽しみと娯楽のコマンド。",
+    "ko-KR": "재미 및 엔터테인먼트 명령.",
+    "zh-CN": "娱乐命令。"
+  }
+}

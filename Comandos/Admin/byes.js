@@ -94,7 +94,10 @@ function getByesTemplateForLang(cfg, lang) {
 module.exports = {
     name: 'byes',
     alias: ['bye', 'despedida', 'despedidas'],
-    Category: (lang = 'es-ES') => moxi.translate('HELP_CATEGORY_WELCOME', lang),
+    Category: function (lang) {
+        lang = lang || 'es-ES';
+        return moxi.translate('commands:CATEGORY_SISTEMAS', lang) || 'Sistemas';
+    },
     usage: 'byes set #canal | byes off | byes style [sylphacard|discord-arts|canvacard] | byes message <texto> | byes message <lang> <texto> | byes message clear [lang] | byes test',
     description: () => 'Configura el sistema de despedidas (byes) (sylphacard, discord-arts o canvacard).',
     permissions: {

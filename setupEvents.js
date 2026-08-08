@@ -15,7 +15,8 @@ const validEvents = [
     'guildMemberAdd', 'guildMemberRemove', 'guildMemberUpdate',
     'messageCreate', 'messageDelete', 'messageDeleteBulk', 'messageBulkDelete', 'messageUpdate',
     'roleCreate', 'roleDelete', 'roleUpdate', 
-    'inviteCreate', 'inviteDelete', 'inviteUpdate', 
+    'inviteCreate', 'inviteDelete', 'inviteUpdate',
+    'voiceStateUpdate',
 ];
 
 

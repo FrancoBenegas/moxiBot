@@ -106,8 +106,19 @@ require('colors');
 // Importante: cargar handlers/eventos DESPUÉS de exportar el client,
 // para evitar dependencias circulares (eventos hacen require("../index")).
 require('./Handlers');
+
+// Inicializar Sistema Modular (carga módulos, comandos, slash commands y eventos)
+const initializeModules = require('./Handlers/initializeModules');
+initializeModules(client).catch(e => logger.error('Error en initializeModules:', e));
+
 require('./setupEvents.js');
 require('./anticrash/antiCrash.js')();
+
+// API interna para el servidor web (sirve /api/commands sin MongoDB)
+const { startWebApi } = require('./Handlers/webApi');
+client.once('clientReady', () => {
+    startWebApi(client);
+});
 
 const discordToken = (process.env.TOKEN && String(process.env.TOKEN).trim())
     ? String(process.env.TOKEN).trim()

@@ -104,6 +104,152 @@ const UserSchema = new Schema(
         updatedAt: {
             type: Date,
             default: Date.now
+        },
+
+        // User profile customization
+        profile: {
+            phrase: {
+                type: String,
+                default: ''
+            },
+            stats: {
+                pats: {
+                    type: Number,
+                    default: 0
+                },
+                charisma: {
+                    type: Number,
+                    default: 0
+                },
+                deaths: {
+                    type: Number,
+                    default: 0
+                }
+            },
+            birthday: {
+                day: {
+                    type: Number,
+                    default: null
+                },
+                month: {
+                    type: Number,
+                    default: null
+                }
+            },
+            birthdayConfig: {
+                blockedGuilds: {
+                    type: [String],
+                    default: []
+                },
+                lastSetAt: {
+                    type: Date,
+                    default: null
+                }
+            },
+            genshin: {
+                uid: {
+                    type: String,
+                    default: null
+                },
+                region: {
+                    type: String,
+                    default: null
+                },
+                linkedAt: {
+                    type: Date,
+                    default: null
+                },
+                manualRoster: {
+                    type: [String],
+                    default: []
+                },
+                manualRosterUpdatedAt: {
+                    type: Date,
+                    default: null
+                }
+            }
+        },
+
+        // Marriage System
+        marriage: {
+            spouse: {
+                type: String,
+                default: null
+            },
+            anniversaryDate: {
+                type: Date,
+                default: null
+            },
+            marriedAt: {
+                type: Date,
+                default: null
+            }
+        },
+
+        // Marriage Proposals
+        marriageProposal: {
+            from: {
+                type: String,
+                default: null
+            },
+            anniversaryDate: {
+                type: Date,
+                default: null
+            },
+            createdAt: {
+                type: Date,
+                default: null
+            }
+        },
+
+        // Extra Relationships (amigo, hermano, crush, rival, etc.)
+        relationships: {
+            type: [{
+                userId: { type: String },
+                type: { type: String, default: 'amigo' },
+                since: { type: Date, default: Date.now }
+            }],
+            default: []
+        },
+
+        // Social progression (Fase 1)
+        socialProgress: {
+            compatChecks: {
+                type: Number,
+                default: 0
+            },
+            relationshipsCreated: {
+                type: Number,
+                default: 0
+            },
+            marriagesCount: {
+                type: Number,
+                default: 0
+            },
+            anniversariesCelebrated: {
+                type: Number,
+                default: 0
+            },
+            firstRelationshipAt: {
+                type: Date,
+                default: null
+            },
+            lastRelationshipAt: {
+                type: Date,
+                default: null
+            },
+            lastCompatibilityAt: {
+                type: Date,
+                default: null
+            },
+            lastMarriageAt: {
+                type: Date,
+                default: null
+            },
+            lastAnniversaryAt: {
+                type: Date,
+                default: null
+            }
         }
     },
     {

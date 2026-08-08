@@ -1,4 +1,22 @@
+const { EmbedBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
+const moxi = require('../i18n');
+const { Bot } = require('../Config');
+const { EMOJIS } = require('./emojis');
+const { ButtonBuilder } = require('./compatButtonBuilder');
 const { permissionInfoEmbed } = require('./auditPermissionEmbeds');
+
+function neutralizeMentions(value) {
+    return String(value || '')
+        .replace(/<@!?(\d+)>/g, 'ID usuario: $1')
+        .replace(/<@&(\d+)>/g, 'ID rol: $1')
+        .replace(/<#(\d+)>/g, 'ID canal: $1')
+        .replace(/@/g, '@\u200b');
+}
+
+function userLabelFromId(id) {
+    return id ? `ID usuario: ${id}` : '-';
+}
+
 // Permite registrar avisos informativos de permisos insuficientes en el canal de auditoría
 async function sendPermissionInfoLog({ client, guild, guildId, moderatorId, reason, fallbackLang = 'es-ES' }) {
     const gid = String(guildId || guild?.id || '');
@@ -15,14 +33,34 @@ async function sendPermissionInfoLog({ client, guild, guildId, moderatorId, reas
 
     const now = new Date();
     const timeStr = now.toISOString().replace('T', ' ').replace('Z', ' UTC');
-    const embed = permissionInfoEmbed({ moderatorId, reason, timeStr });
-    await ch.send({ embeds: [embed] }).catch(() => null);
+    const embed = permissionInfoEmbed({
+        moderatorId,
+        reason: neutralizeMentions(reason || ''),
+        timeStr,
+    });
+
+    const components = [];
+    const normalizedModeratorId = moderatorId ? String(moderatorId).trim() : '';
+    if (/^\d{15,30}$/.test(normalizedModeratorId)) {
+        components.push(
+            new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setLabel('Ver perfil del moderador')
+                    .setStyle(ButtonStyle.Link)
+                    .setEmoji('👤')
+                    .setURL(`https://discord.com/users/${normalizedModeratorId}`)
+            )
+        );
+    }
+
+    await ch.send({
+        content: '',
+        embeds: [embed],
+        components,
+        allowedMentions: { parse: [] },
+    }).catch(() => null);
     return true;
 }
-const { ContainerBuilder, MessageFlags, MediaGalleryBuilder, MediaGalleryItemBuilder } = require('discord.js');
-const moxi = require('../i18n');
-const { Bot } = require('../Config');
-const { EMOJIS } = require('./emojis');
 
 function actionLabel(action, lang) {
     const keyByAction = {
@@ -142,32 +180,47 @@ async function sendAuditLog({ client, guild, guildId, action, moderatorId, targe
         ? `https://cdn.discordapp.com/banners/${targetUser.id}/${targetUser.banner}.${String(targetUser.banner).startsWith('a_') ? 'gif' : 'png'}?size=2048`
         : null;
 
-    const safeReason = (reason && String(reason).trim()) ? String(reason).trim() : moxi.translate('audit:AUDIT_REASON_NONE', lang);
+    const safeReasonRaw = (reason && String(reason).trim()) ? String(reason).trim() : moxi.translate('audit:AUDIT_REASON_NONE', lang);
+    const safeReason = neutralizeMentions(safeReasonRaw);
     const now = new Date();
     const timeStr = now.toISOString().replace('T', ' ').replace('Z', ' UTC');
 
-    const container = new ContainerBuilder()
-        .setAccentColor(Bot.AccentColor)
-        .addTextDisplayComponents(c => c.setContent(`# ${moxi.translate('audit:AUDIT_LOG_TITLE', lang)}`))
-        .addSeparatorComponents(s => s.setDivider(true))
-        .addTextDisplayComponents(c => c.setContent(
+    const embed = new EmbedBuilder()
+        .setColor(Bot.AccentColor)
+        .setTitle(moxi.translate('audit:AUDIT_LOG_TITLE', lang))
+        .setDescription(
             [
                 `${EMOJIS.shield || ''} ${moxi.translate('audit:AUDIT_LINE_ACTION', lang, { action: actionLabel(action, lang) })}`.trim(),
-                `${EMOJIS.user || ''} ${moxi.translate('audit:AUDIT_LINE_TARGET', lang, { target: targetId ? `<@${targetId}>` : '-' })}`.trim(),
-                `${EMOJIS.user || ''} ${moxi.translate('audit:AUDIT_LINE_MODERATOR', lang, { moderator: moderatorId ? `<@${moderatorId}>` : '-' })}`.trim(),
+                `${EMOJIS.user || ''} ${moxi.translate('audit:AUDIT_LINE_TARGET', lang, { target: userLabelFromId(targetId) })}`.trim(),
+                `${EMOJIS.user || ''} ${moxi.translate('audit:AUDIT_LINE_MODERATOR', lang, { moderator: userLabelFromId(moderatorId) })}`.trim(),
                 `${EMOJIS.edit || ''} ${moxi.translate('audit:AUDIT_LINE_REASON', lang, { reason: safeReason })}`.trim(),
                 `${EMOJIS.time || ''} ${moxi.translate('audit:AUDIT_LINE_TIME', lang, { time: timeStr })}`.trim(),
             ].filter(Boolean).join('\n')
-        ));
+        );
 
-    const mediaItems = [];
-    if (bannerUrl) mediaItems.push(new MediaGalleryItemBuilder().setURL(bannerUrl));
-    if (avatarUrl) mediaItems.push(new MediaGalleryItemBuilder().setURL(avatarUrl));
-    if (mediaItems.length) {
-        container.addMediaGalleryComponents(new MediaGalleryBuilder().addItems(...mediaItems));
+    if (avatarUrl) embed.setThumbnail(avatarUrl);
+    if (bannerUrl) embed.setImage(bannerUrl);
+
+    const components = [];
+    const normalizedModeratorId = moderatorId ? String(moderatorId).trim() : '';
+    if (/^\d{15,30}$/.test(normalizedModeratorId)) {
+        components.push(
+            new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setLabel('Mostrar perfil del moderador')
+                    .setStyle(ButtonStyle.Link)
+                    .setEmoji('👤')
+                    .setURL(`https://discord.com/users/${normalizedModeratorId}`)
+            )
+        );
     }
 
-    await ch.send({ content: '', components: [container], flags: MessageFlags.IsComponentsV2 }).catch(() => null);
+    await ch.send({
+        content: '',
+        embeds: [embed],
+        components,
+        allowedMentions: { parse: [] },
+    }).catch(() => null);
     return true;
 }
 

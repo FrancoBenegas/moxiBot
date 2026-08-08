@@ -3,6 +3,8 @@ const mentionPanel = require('../Client/mentionPanel');
 const Config = require('../../Config');
 
 const { getGuildSettingsCached } = require('../../Util/guildSettings');
+const { touchGuildMusicPanelActivity } = require('../../Util/guildSettings');
+const { getUserPrefix } = require('../../Util/userPrefix');
 const { getSettings: getBugSettings } = require('../../Util/bugStorage');
 const moxi = require('../../i18n');
 const logger = require('../../Util/logger');
@@ -19,6 +21,8 @@ const { maybeAutoReplyWithAi } = require('../../Util/aiAutoReply');
 const { isOwnerWithClient } = require('../../Util/ownerPermissions');
 const { maybeHandleAiChatConfigMessage } = require('../../Util/aiChatConfig');
 const { isWeatherQuestion, getWeatherForText, formatWeatherReplyEs } = require('../../Util/weather');
+const { resolveBlacklistBlock, logBlacklistHit } = require('../../Util/blacklistStorage');
+const { processMessage: processModerationMessage } = require('../../Util/moderationEngine');
 
 const AFK_OVERRIDE_GIF = process.env.AFK_GIF_URL;
 const AFK_MENTION_GIF_URL = process.env.AFK_MENTION_GIF_URL || AFK_OVERRIDE_GIF;
@@ -308,6 +312,8 @@ Moxi.on("messageCreate", async (message) => {
     : globalPrefixes[0];
 
   let prefix = globalPrefixes[0];
+  let serverPrefix = globalPrefixes[0];
+  let userPrefix = '';
   let settings = null;
   try {
     settings = await getGuildSettingsCached(message.guild.id);
@@ -318,11 +324,15 @@ Moxi.on("messageCreate", async (message) => {
     const langForTranslate = await moxi.userLang(message.guild.id, message.author?.id, fallbackLang);
     message.lang = langForTranslate;
     message.translate = (key, vars = {}) => moxi.translate(key, langForTranslate, vars);
-    // Prefijo efectivo: env por defecto, o personalizado por servidor si se cambió.
-    prefix = await moxi.guildPrefix(message.guild.id, envPrefix);
+    // Prefijos efectivos: por servidor y por usuario.
+    serverPrefix = await moxi.guildPrefix(message.guild.id, envPrefix);
+    userPrefix = await getUserPrefix(message.guild.id, message.author?.id, '').catch(() => '');
+    prefix = userPrefix || serverPrefix;
   } catch {
     // fallback al prefijo de entorno
     prefix = envPrefix;
+    serverPrefix = envPrefix;
+    userPrefix = '';
     const fallbackLang = process.env.DEFAULT_LANG || 'es-ES';
     const langForTranslate = await moxi.userLang(message.guild.id, message.author?.id, fallbackLang).catch(() => fallbackLang);
     message.lang = langForTranslate;
@@ -330,11 +340,53 @@ Moxi.on("messageCreate", async (message) => {
   }
 
   const raw = settings?.Prefix;
-  debugHelper.log('prefix', `guildId=${message.guild.id} global=${JSON.stringify(globalPrefixes)} settings.Prefix=${JSON.stringify(raw)} resolved=${prefix}`);
+  debugHelper.log('prefix', `guildId=${message.guild.id} global=${JSON.stringify(globalPrefixes)} settings.Prefix=${JSON.stringify(raw)} server=${serverPrefix} user=${userPrefix || '-'} resolved=${prefix}`);
 
-  // Responder solo al prefijo efectivo (env o personalizado).
-  const prefixesToUse = uniqStrings([prefix]);
+  // Construir lista de prefijos efectivos: personal, servidor, globales (moxi, mx, etc.) y mención.
+  const botMentionPrefix = Moxi?.user?.id ? `<@${Moxi.user.id}>` : null;
+  const prefixesToUse = uniqStrings([
+    userPrefix,
+    serverPrefix,
+    prefix,
+    ...globalPrefixes,
+    'moxi',
+    'mx',
+    botMentionPrefix,
+  ]);
   const matched = matchPrefix(message.content, prefixesToUse);
+
+  if (!matched) {
+    const guildId = message.guild?.id || null;
+    const userId = message.author?.id || null;
+    if (guildId && userId) {
+      const roleIds = Array.from(message?.member?.roles?.cache?.keys?.() || []);
+      const block = await resolveBlacklistBlock({
+        guildId,
+        userId,
+        action: 'message',
+        roleIds,
+      });
+      if (block?.blocked && block.entry) {
+        await logBlacklistHit({
+          client: Moxi,
+          userId,
+          guildId,
+          action: 'message',
+          source: 'message',
+          commandName: null,
+          entry: block.entry,
+        });
+        return;
+      }
+    }
+  }
+
+  try {
+    const modResult = await processModerationMessage({ client: Moxi, message });
+    if (modResult?.handled) return;
+  } catch (err) {
+    debugHelper?.error?.('automod', 'processModerationMessage failed', err);
+  }
 
   // IMPORTANTE: no queremos que ciertos comandos (p.ej. say) quiten el estado AFK del usuario.
   let skipAfkCleanup = false;
@@ -357,7 +409,7 @@ Moxi.on("messageCreate", async (message) => {
   // Responder a la mención del bot (solo si el mensaje es SOLO la mención)
   if (message.mentions.has(Moxi.user) && message.content.trim().replace(/<@!?\d+>/g, '').length === 0) {
     // prefix ya resuelto desde settings/cache arriba
-    const panelResult = await mentionPanel({ client: Moxi, message, prefix });
+    const panelResult = await mentionPanel({ client: Moxi, message, prefix, serverPrefix: serverPrefix || null, userPrefix: userPrefix || null });
     // Si el resultado es nulo, undefined o no tiene contenido ni embeds, no enviar nada
     if (!panelResult) return;
     if (
@@ -373,6 +425,13 @@ Moxi.on("messageCreate", async (message) => {
   // Sistema de niveles (usa ClvlsSchema): solo otorgar XP si NO es un comando.
   // Importante: esto ocurre después de resolver settings/prefix para poder detectar comandos.
   if (!matched) {
+    try {
+      const handledByMusicPanel = await maybeHandleFixedMusicPanelInput({ message, settings, Moxi });
+      if (handledByMusicPanel) return;
+    } catch (err) {
+      debugHelper?.warn?.('music-panel', `fixed panel handler failed: ${err?.message || err}`);
+    }
+
     try {
       await awardXpForMessage(message);
     } catch (err) {
@@ -615,11 +674,20 @@ async function handleBugThreadStatus(message) {
 
 async function handleAfkCleanup(message) {
   if (!message || !message.author) return;
-  const wasAfk = await afkStorage.clearAfk(message.author.id, { botId: Moxi?.user?.id });
-  if (!wasAfk) return;
+  const cleared = await afkStorage.clearAfkForContext(
+    message.author.id,
+    message.guild?.id,
+    { botId: Moxi?.user?.id }
+  );
+  if (!cleared?.latestEntry) return;
+  const lang = message.lang || (process.env.DEFAULT_LANG || 'es-ES');
+  const entry = cleared.latestEntry;
   const container = buildAfkContainer({
     title: message.translate('AFK_CLEARED_TITLE'),
-    lines: [message.translate('AFK_CLEARED_DETAIL', { user: message.author.tag })],
+    lines: [
+      message.translate('AFK_CLEARED_DETAIL', { user: message.author.tag }),
+      message.translate('AFK_DURATION', { duration: formatAfkDuration(entry.createdAt, lang) }),
+    ],
     gifUrl: await resolveAfkGif(AFK_CLEARED_GIF_URL),
   });
   const response = await message.reply({
@@ -647,15 +715,14 @@ async function handleAfkMentions(message) {
   const lines = [];
   for (let index = 0; index < limit; index += 1) {
     const { user, entry } = entries[index];
-    if (entry.scope === 'guild') {
-      lines.push(`${EMOJIS.person} ${user.toString()} · ${user.tag}`);
-      lines.push(message.translate('AFK_SCOPE_GUILD'));
-      lines.push(message.translate('AFK_MESSAGE_LINE', { message: entry.message || message.translate('AFK_DEFAULT_MESSAGE') }));
-      lines.push(message.translate('AFK_DURATION', { duration: formatAfkDuration(entry.createdAt, lang) }));
-      lines.push(message.translate('AFK_SINCE', { since: formatAfkTimestamp(entry.createdAt, lang) }));
-      if (index < limit - 1) {
-        lines.push('');
-      }
+    const scopeKey = entry.scope === 'global' ? 'AFK_SCOPE_GLOBAL' : 'AFK_SCOPE_GUILD';
+    lines.push(`${EMOJIS.person} ${user.toString()} · ${user.tag}`);
+    lines.push(message.translate(scopeKey));
+    lines.push(message.translate('AFK_MESSAGE_LINE', { message: entry.message || message.translate('AFK_DEFAULT_MESSAGE') }));
+    lines.push(message.translate('AFK_DURATION', { duration: formatAfkDuration(entry.createdAt, lang) }));
+    lines.push(message.translate('AFK_SINCE', { since: formatAfkTimestamp(entry.createdAt, lang) }));
+    if (index < limit - 1) {
+      lines.push('');
     }
   }
   const container = buildAfkContainer({
@@ -678,4 +745,57 @@ function scheduleAutoDelete(response, channel) {
   if (!response) return;
   if (!channel || channel.type === 'dm') return;
   setTimeout(() => response.delete().catch(() => null), AFK_RESPONSE_LIFETIME_MS);
+}
+
+function isLikelyCommandText(content) {
+  const text = String(content || '').trim();
+  if (!text) return false;
+  return /^[.!/$#?]/.test(text);
+}
+
+async function maybeHandleFixedMusicPanelInput({ message, settings, Moxi }) {
+  if (!message?.guild || !message?.channel) return false;
+  if (!settings?.MusicFixedPanelEnabled) return false;
+
+  const panelChannelId = String(settings?.MusicFixedPanelChannelId || '');
+  if (!panelChannelId || panelChannelId !== String(message.channel.id)) return false;
+
+  const content = String(message.content || '').trim();
+  if (!content) return false;
+  if (isLikelyCommandText(content)) return false;
+
+  const botMember = message.guild?.members?.me;
+  const memberVoiceId = message.member?.voice?.channelId;
+  const botVoiceId = botMember?.voice?.channelId;
+
+  if (!memberVoiceId) {
+    await message.reply({
+      content: message.translate ? message.translate('MUSIC_JOIN_VOICE') : 'Debes entrar a un canal de voz.',
+      allowedMentions: { repliedUser: false, parse: [] },
+    }).catch(() => null);
+    return true;
+  }
+
+  if (botVoiceId && botVoiceId !== memberVoiceId) {
+    await message.reply({
+      content: message.translate ? message.translate('MUSIC_SAME_VOICE_CHANNEL') : 'Debes estar en el mismo canal de voz del bot.',
+      allowedMentions: { repliedUser: false, parse: [] },
+    }).catch(() => null);
+    return true;
+  }
+
+  const lang = message.lang || await moxi.guildLang(message.guild?.id, process.env.DEFAULT_LANG || 'es-ES');
+  const playCmd = resolvePrefixCommandByToken({ token: 'play', lang });
+  if (!playCmd) return false;
+
+  const args = content.split(/\s+/g).filter(Boolean);
+  if (!args.length) return false;
+
+  const handleCommand = require('../../Util/commandHandler');
+  await touchGuildMusicPanelActivity(message.guild.id, { active: true }).catch(() => null);
+  await handleCommand(Moxi, message, args, playCmd);
+
+  // Mantener limpio el canal del panel: solo se edita el panel fijo.
+  await message.delete().catch(() => null);
+  return true;
 }

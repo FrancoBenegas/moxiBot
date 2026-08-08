@@ -10,6 +10,8 @@ module.exports = async function selectMenuController(interaction, Moxi, logger) 
   const zonesSelectMenu = require('./buttons/zones');
   const craftSelectMenu = require('./selectMenus/craft');
   const crimeSelectMenu = require('./selectMenus/crime');
+  const profileSelectMenu = require('./selectMenus/profile');
+  const musicFilterSelectMenu = require('./selectMenus/musicFilter');
 
   // Pet menus
   if (await petSelectMenu(interaction, Moxi, logger)) return;
@@ -33,4 +35,8 @@ module.exports = async function selectMenuController(interaction, Moxi, logger) 
   if (await craftSelectMenu(interaction, Moxi, logger)) return;
   // Crime menus
   if (await crimeSelectMenu(interaction, Moxi, logger)) return;
+  // Profile menus
+  if (await profileSelectMenu(interaction, Moxi, logger)) return;
+  // Music filter panel menu
+  if (await musicFilterSelectMenu(interaction, Moxi, logger)) return;
 };

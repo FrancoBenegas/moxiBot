@@ -41,17 +41,17 @@ async function setAfk({ userId, guildId, message, scope = SCOPE_GUILD, botId = n
         scope: normalizedScope,
         guildId: normalizedScope === SCOPE_GUILD ? safeGuildId : null,
         message: normalizeDbText(message, { maxLen: 500 }),
+        createdAt: now,
         updatedAt: now,
     };
     const update = {
         $set: doc,
-        $setOnInsert: { createdAt: now },
     };
     const result = await collection.findOneAndUpdate(filter, update, {
         upsert: true,
         returnDocument: 'after',
     });
-    return result.value || { ...doc, createdAt: now };
+    return result || { ...doc, createdAt: now };
 }
 
 async function getAfkEntry(userId, guildId, { botId = null } = {}) {
@@ -71,15 +71,68 @@ async function clearAfk(userId, { botId = null } = {}) {
     const collection = await getCollection();
     const resolvedBotId = resolveBotId(botId);
     const safeUserId = normalizeDiscordId(userId);
-    if (!safeUserId) return false;
-    const result = await collection.deleteMany({ userId: safeUserId, botId: resolvedBotId });
-    return result.deletedCount > 0;
+    if (!safeUserId) return null;
+
+    const entries = await collection
+        .find({ userId: safeUserId, botId: resolvedBotId })
+        .sort({ createdAt: -1, updatedAt: -1 })
+        .toArray();
+
+    if (!entries.length) return null;
+
+    await collection.deleteMany({ userId: safeUserId, botId: resolvedBotId });
+
+    return {
+        deletedCount: entries.length,
+        latestEntry: entries[0],
+        entries,
+    };
+}
+
+// Borra solo el AFK relevante para el contexto donde el usuario escribió:
+// Si hay AFK de servidor para ese guild → borra solo ese.
+// Si no, si hay AFK global → borra ese.
+// Si no hay ninguno → retorna null (no mostrar mensaje de vuelta).
+async function clearAfkForContext(userId, guildId, { botId = null } = {}) {
+    const collection = await getCollection();
+    const resolvedBotId = resolveBotId(botId);
+    const safeUserId = normalizeDiscordId(userId);
+    const safeGuildId = normalizeDiscordId(guildId);
+    if (!safeUserId) return null;
+
+    // Prioridad 1: AFK de servidor para este guild
+    if (safeGuildId) {
+        const guildEntry = await collection.findOne({
+            userId: safeUserId,
+            botId: resolvedBotId,
+            scope: SCOPE_GUILD,
+            guildId: safeGuildId,
+        });
+        if (guildEntry) {
+            await collection.deleteOne({ _id: guildEntry._id });
+            return { deletedCount: 1, latestEntry: guildEntry, entries: [guildEntry] };
+        }
+    }
+
+    // Prioridad 2: AFK global
+    const globalEntry = await collection.findOne({
+        userId: safeUserId,
+        botId: resolvedBotId,
+        scope: SCOPE_GLOBAL,
+    });
+    if (globalEntry) {
+        await collection.deleteOne({ _id: globalEntry._id });
+        return { deletedCount: 1, latestEntry: globalEntry, entries: [globalEntry] };
+    }
+
+    return null;
 }
 
 module.exports = {
     setAfk,
     getAfkEntry,
     clearAfk,
+    clearAfkForContext,
     SCOPE_GLOBAL,
     SCOPE_GUILD,
 };

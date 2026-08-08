@@ -3,8 +3,8 @@ const { EMOJIS } = require('../Util/emojis');
 
 const ClvlsSchema = new Schema({
     guildID: { type: String, required: true, unique: true },
-    minXpPerMessage: { type: Number, default: 5 },
-    maxXpPerMessage: { type: Number, default: 25 },
+    minXpPerMessage: { type: Number, default: 15 },
+    maxXpPerMessage: { type: Number, default: 40 },
     xpCooldown: { type: Number, default: 60 },
     prestigeEnabled: { type: Boolean, default: false },
     levelRequiredForPrestige: { type: Number, default: 50 },
@@ -23,7 +23,7 @@ const ClvlsSchema = new Schema({
         byRole: [{ roleID: String, multiplier: Number }],
         byChannel: [{ channelID: String, multiplier: Number }]
     },
-    minCharactersForXp: { type: Number, default: 10 }
+    minCharactersForXp: { type: Number, default: 5 }
 }, {
     timestamps: true,
     collection: 'clvls'

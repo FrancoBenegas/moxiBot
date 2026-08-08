@@ -12,6 +12,7 @@ const handlers = [
   require('./buttons/ping'),
   require('./buttons/helpV2'),
   require('./buttons/helpLegacy'),
+  require('./buttons/userPrefix'),
   require('./buttons/userPerms'),
   require('./buttons/timer'),
   require('./buttons/channel'),
@@ -32,6 +33,8 @@ const handlers = [
   require('./buttons/workApply'),
   require('./buttons/suggest'),
   require('./buttons/craft'),
+  require('./buttons/marriage'), // <-- Añadido para marriage
+  require('./buttons/botProfile'),
 ];
 
 module.exports = async function buttonController(interaction, Moxi, logger) {

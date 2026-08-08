@@ -10,6 +10,7 @@ const { buildNoticeContainer, asV2MessageOptions } = require('../../Util/v2Notic
 const getHelpContent = require('../../Util/getHelpContent');
 const { enqueuePlaygroundJobInstant } = require('../../Util/playgroundJobs');
 const { formatDuration } = require('../../Util/economyCore');
+const { withSeasonTitle, formatGlobalFooter } = require('../../Util/seasonBrand');
 
 function splitUsageVariants(usage) {
     const raw = String(usage || '').trim();
@@ -167,6 +168,11 @@ function normalizeCategoryQuery(input) {
 
     // Fun / Diversión
     if (raw === 'fun' || raw.includes('diver') || raw.includes('entreten') || raw.includes('divert')) return 'Fun';
+
+    // Streaming / Directos
+    if (raw.includes('stream')) return 'Streaming';
+    if (raw.includes('direct')) return 'Streaming';
+    if (raw.includes('live')) return 'Streaming';
 
     return null;
 }
@@ -555,7 +561,7 @@ module.exports = {
                 container.addTextDisplayComponents(c => c.setContent(`## ${title}\n${b}`));
             };
 
-            addBlock(`# ${tOr('HELP_COMMAND_TITLE', lang, 'Comando')} ${displayName}`);
+            addBlock(withSeasonTitle(`${tOr('HELP_COMMAND_TITLE', lang, 'Comando')} ${displayName}`));
             addBlock(`> ${desc}`);
             if (helpText) addBlock(helpText);
 
@@ -588,7 +594,7 @@ module.exports = {
                 .addActionRowComponents(row => row.addComponents(webButton))
                 .addSeparatorComponents(s => s.setDivider(true))
                 .addTextDisplayComponents(c =>
-                    c.setContent(`${EMOJIS.copyright} ${Moxi.user.username} • ${new Date().getFullYear()}`)
+                    c.setContent(formatGlobalFooter(Moxi.user.username, new Date().getFullYear()))
                 );
 
             return message.reply({ content: '', components: [container], flags: MessageFlags.IsComponentsV2 });

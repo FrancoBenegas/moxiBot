@@ -18,6 +18,15 @@ function safeGuildId(guildId) {
   return normalizeDiscordId(guildId);
 }
 
+function normalizeModuleStateKey(moduleId) {
+  const raw = normalizeDbText(moduleId, { maxLen: 64, fallback: '' })
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return raw || null;
+}
+
 async function setGuildEconomyEnabled(guildId, enabled) {
   guildId = safeGuildId(guildId);
   if (!guildId) return false;
@@ -69,6 +78,108 @@ async function setGuildEconomyExclusive(guildId, exclusive) {
   };
   const options = { upsert: true };
   const result = await db.collection(collectionName).updateOne(query, update, options);
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function setGuildMusicPanelConfig(guildId, patch = {}) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+
+  const safePatch = {};
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'enabled')) {
+    safePatch.MusicFixedPanelEnabled = !!patch.enabled;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'channelId')) {
+    const clean = normalizeDiscordId(patch.channelId);
+    if (clean) safePatch.MusicFixedPanelChannelId = clean;
+    else safePatch.MusicFixedPanelChannelId = null;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'messageId')) {
+    const clean = normalizeDiscordId(patch.messageId);
+    if (clean) safePatch.MusicFixedPanelMessageId = clean;
+    else safePatch.MusicFixedPanelMessageId = null;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'active')) {
+    safePatch.MusicFixedPanelActive = !!patch.active;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'imageUrl')) {
+    const raw = normalizeDbText(patch.imageUrl, { maxLen: 2000, fallback: '' }) || null;
+    safePatch.MusicFixedPanelImageUrl = raw;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'lastActiveAt')) {
+    const dateValue = patch.lastActiveAt ? new Date(patch.lastActiveAt) : null;
+    safePatch.MusicFixedPanelLastActiveAt = dateValue;
+  }
+
+  const update = {
+    $set: safePatch,
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function touchGuildMusicPanelActivity(guildId, { active = true } = {}) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+
+  const update = {
+    $set: {
+      MusicFixedPanelLastActiveAt: new Date(),
+      MusicFixedPanelActive: !!active,
+    },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function setGuildMusicPanelActive(guildId, active) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: {
+      MusicFixedPanelActive: !!active,
+      MusicFixedPanelLastActiveAt: new Date(),
+    },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function setGuildModuleEnabled(guildId, moduleId, enabled) {
+  guildId = safeGuildId(guildId);
+  const moduleKey = normalizeModuleStateKey(moduleId);
+  if (!guildId || !moduleKey) return false;
+
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: {
+      [`ModuleStates.${moduleKey}`]: !!enabled,
+    },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
   return result.matchedCount > 0 || result.upsertedCount > 0;
 }
 
@@ -240,13 +351,431 @@ async function setGuildAuditEnabled(guildId, enabled) {
   return setAuditEnabled(guildId, enabled);
 }
 
+async function setGuildStreamAlertsChannel(guildId, channelId) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const cleanId = normalizeDiscordId(channelId);
+  const update = cleanId
+    ? {
+      $set: { StreamAlertsChannelId: cleanId },
+      $setOnInsert: { guildID: guildId, id: guildId },
+    }
+    : {
+      $unset: { StreamAlertsChannelId: '' },
+      $setOnInsert: { guildID: guildId, id: guildId },
+    };
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function setGuildStreamAlertsEnabled(guildId, enabled) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { StreamAlertsEnabled: !!enabled },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function setGuildStreamAlertEventEnabled(guildId, eventName, enabled) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const eventKeyMap = {
+    start: 'StreamAlertsNotifyStart',
+    live: 'StreamAlertsNotifyLive',
+    end: 'StreamAlertsNotifyEnd',
+  };
+  const field = eventKeyMap[String(eventName || '').trim().toLowerCase()];
+  if (!field) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { [field]: !!enabled },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function setGuildMarriageEnabled(guildId, enabled) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { MarriageEnabled: !!enabled },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const r = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return r.matchedCount > 0 || r.upsertedCount > 0;
+}
+
+async function setGuildMarriageChannel(guildId, channelId) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const cleanId = normalizeDiscordId(channelId);
+  const update = cleanId
+    ? { $set: { MarriageChannelId: cleanId }, $setOnInsert: { guildID: guildId, id: guildId } }
+    : { $unset: { MarriageChannelId: '' }, $setOnInsert: { guildID: guildId, id: guildId } };
+  const r = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return r.matchedCount > 0 || r.upsertedCount > 0;
+}
+
+async function setGuildMarriageExclusive(guildId, exclusive) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { MarriageExclusive: !!exclusive },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const r = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return r.matchedCount > 0 || r.upsertedCount > 0;
+}
+
+async function setGuildMarriageProposalsEnabled(guildId, enabled) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { MarriageProposalsEnabled: !!enabled },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const r = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return r.matchedCount > 0 || r.upsertedCount > 0;
+}
+
+async function setGuildMarriageProposalTimeout(guildId, hours) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const h = Math.max(1, Math.min(168, parseInt(hours, 10) || 48));
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { MarriageProposalTimeoutHours: h },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const r = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return r.matchedCount > 0 || r.upsertedCount > 0;
+}
+
+async function setGuildMarriageCustomAnniversaryEnabled(guildId, enabled) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { MarriageCustomAnniversaryEnabled: !!enabled },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const r = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return r.matchedCount > 0 || r.upsertedCount > 0;
+}
+
+async function setGuildMarriageAnniversariesEnabled(guildId, enabled) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { MarriageAnniversariesEnabled: !!enabled },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const r = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return r.matchedCount > 0 || r.upsertedCount > 0;
+}
+
+async function setGuildMarriageAnnounceAnniversaries(guildId, enabled) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { MarriageAnnounceAnniversaries: !!enabled },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const r = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return r.matchedCount > 0 || r.upsertedCount > 0;
+}
+
+async function setGuildMarriageTreeEnabled(guildId, enabled) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { MarriageTreeEnabled: !!enabled },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const r = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return r.matchedCount > 0 || r.upsertedCount > 0;
+}
+
+async function setGuildMarriageDivorcesEnabled(guildId, enabled) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { MarriageDivorcesEnabled: !!enabled },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const r = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return r.matchedCount > 0 || r.upsertedCount > 0;
+}
+
+async function setGuildMarriageDivorceMutualConfirm(guildId, enabled) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { MarriageDivorceMutualConfirm: !!enabled },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const r = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return r.matchedCount > 0 || r.upsertedCount > 0;
+}
+
+async function setGuildStreamLiveReminderMinutes(guildId, minutes) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const parsed = Number.parseInt(String(minutes || '').trim(), 10);
+  if (!Number.isFinite(parsed) || parsed < 5) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { StreamAlertsLiveReminderMinutes: parsed },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function setGuildUpdatesChannel(guildId, channelId) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const cleanId = normalizeDiscordId(channelId);
+  const update = cleanId
+    ? {
+      $set: { UpdateChannelId: cleanId },
+      $setOnInsert: { guildID: guildId, id: guildId },
+    }
+    : {
+      $unset: { UpdateChannelId: '' },
+      $setOnInsert: { guildID: guildId, id: guildId },
+    };
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function setGuildUpdatesAutoEnabled(guildId, enabled) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { UpdateAutoEnabled: !!enabled },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function setGuildUpdatesLastAnnouncedVersion(guildId, version) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const cleanVersion = normalizeDbText(version, { maxLen: 32, fallback: '' });
+  if (!cleanVersion) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { UpdateLastAnnouncedVersion: cleanVersion },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function setGuildUpdatesLastAnnouncedCommit(guildId, commitHash) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const cleanHash = normalizeDbText(commitHash, { maxLen: 64, fallback: '' });
+  if (!cleanHash) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { UpdateLastAnnouncedCommit: cleanHash },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function setGuildAutoPurgeConfig(guildId, patch = {}) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+
+  const $set = {};
+  const $unset = {};
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'enabled')) {
+    $set.AutoPurgeEnabled = !!patch.enabled;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'intervalHours')) {
+    const raw = Number.parseInt(String(patch.intervalHours ?? '').trim(), 10);
+    const interval = Number.isFinite(raw) ? Math.max(1, Math.min(168, raw)) : 24;
+    $set.AutoPurgeIntervalHours = interval;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'channels')) {
+    const channels = Array.isArray(patch.channels)
+      ? patch.channels.map((id) => normalizeDiscordId(id)).filter(Boolean)
+      : [];
+    $set.AutoPurgeChannels = [...new Set(channels)];
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'lastRunAt')) {
+    if (patch.lastRunAt) {
+      const dateValue = new Date(patch.lastRunAt);
+      if (Number.isFinite(dateValue.getTime())) {
+        $set.AutoPurgeLastRunAt = dateValue;
+      }
+    } else {
+      $unset.AutoPurgeLastRunAt = '';
+    }
+  }
+
+  const update = {
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  if (Object.keys($set).length) update.$set = $set;
+  if (Object.keys($unset).length) update.$unset = $unset;
+
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function setGuildUpdatesChannel(guildId, channelId) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const cleanId = normalizeDiscordId(channelId);
+  const update = cleanId
+    ? {
+      $set: { UpdateChannelId: cleanId },
+      $setOnInsert: { guildID: guildId, id: guildId },
+    }
+    : {
+      $unset: { UpdateChannelId: '' },
+      $setOnInsert: { guildID: guildId, id: guildId },
+    };
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function setGuildUpdatesAutoEnabled(guildId, enabled) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { UpdateAutoEnabled: !!enabled },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
+async function setGuildUpdatesLastAnnouncedVersion(guildId, version) {
+  guildId = safeGuildId(guildId);
+  if (!guildId) return false;
+  const cleanVersion = normalizeDbText(version, { maxLen: 32, fallback: '' });
+  if (!cleanVersion) return false;
+  const connection = await ensureMongoConnection();
+  const db = connection.db;
+  const query = { $or: [{ guildID: guildId }, { guildId: guildId }, { id: guildId }] };
+  const update = {
+    $set: { UpdateLastAnnouncedVersion: cleanVersion },
+    $setOnInsert: { guildID: guildId, id: guildId },
+  };
+  const result = await db.collection(collectionName).updateOne(query, update, { upsert: true });
+  return result.matchedCount > 0 || result.upsertedCount > 0;
+}
+
 module.exports = {
   setGuildLanguage,
   getGuildSettings,
   setGuildPrefix,
   setGuildAuditChannel,
   setGuildAuditEnabled,
+  setGuildStreamAlertsChannel,
+  setGuildStreamAlertsEnabled,
+  setGuildStreamAlertEventEnabled,
+  setGuildStreamLiveReminderMinutes,
   setGuildEconomyEnabled,
   setGuildEconomyChannel,
   setGuildEconomyExclusive,
+  setGuildMarriageEnabled,
+  setGuildMarriageChannel,
+  setGuildMarriageExclusive,
+  setGuildMarriageProposalsEnabled,
+  setGuildMarriageProposalTimeout,
+  setGuildMarriageCustomAnniversaryEnabled,
+  setGuildMarriageAnniversariesEnabled,
+  setGuildMarriageAnnounceAnniversaries,
+  setGuildMarriageTreeEnabled,
+  setGuildMarriageDivorcesEnabled,
+  setGuildMarriageDivorceMutualConfirm,
+  setGuildModuleEnabled,
+  setGuildMusicPanelConfig,
+  touchGuildMusicPanelActivity,
+  setGuildMusicPanelActive,
+  setGuildUpdatesChannel,
+  setGuildUpdatesAutoEnabled,
+  setGuildUpdatesLastAnnouncedVersion,
+  setGuildUpdatesLastAnnouncedCommit,
+  setGuildAutoPurgeConfig,
+  setGuildUpdatesChannel,
+  setGuildUpdatesAutoEnabled,
+  setGuildUpdatesLastAnnouncedVersion,
 };

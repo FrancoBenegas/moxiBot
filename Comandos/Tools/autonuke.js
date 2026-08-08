@@ -6,9 +6,29 @@ const {
     ContainerBuilder,
     MessageFlags,
 } = require('discord.js');
+const path = require('node:path');
 const { ButtonBuilder } = require('../../Util/compatButtonBuilder');
 const moxi = require('../../i18n');
 const { Bot } = require('../../Config');
+
+function loadV2Component(componentFileName) {
+    const relativeCandidates = [
+        path.join('..', '..', 'Components', 'V2', componentFileName),
+        path.join('..', '..', '..', 'Components', 'V2', componentFileName),
+    ];
+
+    let lastError = null;
+    for (const candidate of relativeCandidates) {
+        try {
+            return require(candidate);
+        } catch (error) {
+            if (error?.code !== 'MODULE_NOT_FOUND') throw error;
+            lastError = error;
+        }
+    }
+
+    throw lastError || new Error(`No se pudo cargar ${componentFileName}`);
+}
 
 module.exports = {
     name: "autonuke",
@@ -60,7 +80,7 @@ module.exports = {
             .setLabel(moxi.translate('AUTONUKE_CANCEL', lang) || moxi.translate('AUTONUKE_CANCEL', 'es-ES') || 'Cancelar')
             .setStyle(2); // Secondary
         const row = new ActionRowBuilder().addComponents(confirmBtn, cancelBtn);
-        const buildAutonukeConfirmEmbed = require('../../Components/V2/autonukeConfirmEmbed');
+        const buildAutonukeConfirmEmbed = loadV2Component('autonukeConfirmEmbed');
         const confirmContainer = buildAutonukeConfirmEmbed({ lang, channelId: channel.id });
         const replyPayload = {
             content: '',
@@ -95,7 +115,7 @@ module.exports = {
                     return;
                 }
 
-                const buildAutonukeEmbed = require('../../Components/V2/autonukeEmbed');
+                const buildAutonukeEmbed = loadV2Component('autonukeEmbed');
                 let cloneOptions = { name: channel.name, parent: channel.parent };
                 if (channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement) {
                     cloneOptions = {

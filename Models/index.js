@@ -19,6 +19,7 @@ const SuggestionsSchema = require('./SuggestionsSchema');
 const CommandRegistry = require('./CommandsSchema');
 const Jobs = require('./JobsSchema');
 const PlaygroundJobs = require('./PlaygroundJobsSchema');
+const StreamAlertSubscription = require('./StreamAlertSubscriptionSchema');
 
 // Export all models individually
 module.exports = {
@@ -40,6 +41,7 @@ module.exports = {
     CommandRegistry,
     Jobs,
     PlaygroundJobs,
+    StreamAlertSubscription,
     // Also export them as named exports for destructuring
     Audit: AuditSchema,
     Bugs: Bug,
@@ -59,4 +61,5 @@ module.exports = {
     CommandsRegistry: CommandRegistry,
     JobsQueue: Jobs,
     PlaygroundJobsQueue: PlaygroundJobs,
+    StreamAlerts: StreamAlertSubscription,
 };

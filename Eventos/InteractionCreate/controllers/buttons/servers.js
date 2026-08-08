@@ -13,18 +13,18 @@ module.exports = async function serversButtons(interaction, Moxi, logger) {
     const ownerUserId = parts[3] || '';
 
     if (interaction.user?.id !== ownerUserId) {
-        await interaction.reply({ content: 'Solo quien abrió esta lista puede usar los botones.', flags: MessageFlags.Ephemeral });
+        await interaction.reply({ content: 'Solo quien abrio esta lista puede usar los botones.', flags: MessageFlags.Ephemeral });
         return true;
     }
 
     const session = getSession(token);
     if (!session) {
-        await interaction.reply({ content: 'Esta lista ha expirado. Ejecuta `/servers` otra vez.', flags: MessageFlags.Ephemeral });
+        await interaction.reply({ content: 'Esta lista ha expirado. Ejecuta el comando `servers` otra vez.', flags: MessageFlags.Ephemeral });
         return true;
     }
 
     if (String(session.userId) !== String(ownerUserId)) {
-        await interaction.reply({ content: 'Sesión inválida. Ejecuta `/servers` otra vez.', flags: MessageFlags.Ephemeral });
+        await interaction.reply({ content: 'Sesion invalida. Ejecuta el comando `servers` otra vez.', flags: MessageFlags.Ephemeral });
         return true;
     }
 
@@ -37,11 +37,10 @@ module.exports = async function serversButtons(interaction, Moxi, logger) {
 
     const dir = parts[4] || 'next';
 
-    // Intentar inferir página actual desde el texto (fallback). Si no, usar 0.
     let page = 0;
     try {
         const text = interaction.message?.components?.[0]?.components?.map((c) => c?.content).filter(Boolean).join('\n') || '';
-        const match = String(text).match(/Página\s*\*\*(\d+)\/(\d+)\*\*/i);
+        const match = String(text).match(/Pagina\s*\*\*(\d+)\/(\d+)\*\*/i) || String(text).match(/P.gina\s*\*\*(\d+)\/(\d+)\*\*/i);
         if (match) page = Math.max(0, Number(match[1]) - 1);
     } catch { }
 

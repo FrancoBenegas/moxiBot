@@ -31,9 +31,10 @@ function parseLogLevel() {
   if (raw) {
     const key = raw.toLowerCase();
 
-    // En desarrollo solemos querer ver más logs. Si DEBUG (global o por flags)
-    // está activo y LOG_LEVEL=info viene desde .env, elevamos a debug.
-    if (key === 'info' && anyDebugEnvEnabled()) return LEVELS.debug;
+    // Si cualquier flag de debug está activa, los logs debug deben verse aunque
+    // LOG_LEVEL venga configurado a warn/info/error en el .env.
+    // Solo respetamos silent como opt-out explícito.
+    if (key !== 'silent' && anyDebugEnvEnabled()) return LEVELS.debug;
 
     if (Object.prototype.hasOwnProperty.call(LEVELS, key)) return LEVELS[key];
     const asNum = Number(key);
@@ -104,7 +105,12 @@ async function sendLogToDiscordChannel(levelName, prefix, color, ...msg) {
       const client = getClient();
       if (client && client.channels) {
         const channel = await client.channels.fetch(channelId).catch(() => null);
-        if (channel) channel.send({ embeds: [embed] }).catch(() => { });
+        if (channel) {
+          channel.send({
+            embeds: [embed],
+            allowedMentions: { parse: [] },
+          }).catch(() => { });
+        }
       }
     }
     // Enviar a webhook si está configurado
@@ -114,6 +120,7 @@ async function sendLogToDiscordChannel(levelName, prefix, color, ...msg) {
         username: botName + ' Logger',
         avatarURL: 'https://i.imgur.com/1Q9Z1Zm.png',
         embeds: [embed],
+        allowed_mentions: { parse: [] },
       });
     }
   } catch { }

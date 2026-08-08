@@ -31,6 +31,8 @@ const logger = require("../Util/logger");
 // Logs de Poru (activar con PORU_DEBUG=1 o DEBUG_FLAGS=poru)
 try {
   Moxi.poru.on("debug", (...args) => {
+    if (!logger.isDebugFlagEnabled('poru')) return;
+
     // Poru suele emitir (scope, message) pero puede variar.
     const text = args
       .map((a) => (typeof a === 'string' ? a : ''))
